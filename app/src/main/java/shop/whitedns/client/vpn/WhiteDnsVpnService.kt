@@ -75,6 +75,12 @@ class WhiteDnsVpnService : VpnService() {
         return when (intent?.action) {
             ActionStop -> {
                 startJob?.cancel()
+                WhiteDnsRuntimeStateStore.markDisconnecting(
+                    context = applicationContext,
+                    mode = WhiteDnsRuntimeStateStore.ModeVpn,
+                    sessionId = currentSessionId,
+                    message = "VPN service stopping",
+                )
                 stopVpn()
                 exitForeground()
                 stopSelf()
@@ -98,6 +104,12 @@ class WhiteDnsVpnService : VpnService() {
 
     override fun onDestroy() {
         startJob?.cancel()
+        WhiteDnsRuntimeStateStore.markDisconnecting(
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeVpn,
+            sessionId = currentSessionId,
+            message = "VPN service stopping",
+        )
         stopVpn()
         exitForeground()
         serviceScope.cancel()

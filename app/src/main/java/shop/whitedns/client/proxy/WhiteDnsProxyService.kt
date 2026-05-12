@@ -68,6 +68,12 @@ class WhiteDnsProxyService : Service() {
             ActionStop -> {
                 stopping = true
                 startJob?.cancel()
+                WhiteDnsRuntimeStateStore.markDisconnecting(
+                    context = applicationContext,
+                    mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                    sessionId = currentSessionId,
+                    message = "Proxy service stopping",
+                )
                 stopProxyRuntime()
                 runtimeReady = false
                 lastTrafficNotificationUpdateMillis = 0L
@@ -100,6 +106,12 @@ class WhiteDnsProxyService : Service() {
     override fun onDestroy() {
         stopping = true
         startJob?.cancel()
+        WhiteDnsRuntimeStateStore.markDisconnecting(
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeProxy,
+            sessionId = currentSessionId,
+            message = "Proxy service stopping",
+        )
         stopProxyRuntime()
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L

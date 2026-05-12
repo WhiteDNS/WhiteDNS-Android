@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
                             }
                             ConnectionStatus.CONNECTING,
                             ConnectionStatus.CONNECTED -> viewModel.disconnect()
+                            ConnectionStatus.DISCONNECTING -> Unit
                         }
                     },
                     onSettingsChange = viewModel::updateSettings,

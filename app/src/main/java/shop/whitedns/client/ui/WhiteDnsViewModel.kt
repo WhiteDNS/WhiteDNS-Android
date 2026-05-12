@@ -299,7 +299,6 @@ class WhiteDnsViewModel(
 
             activeServerProfile = serverProfile
             val runtimeSettings = settings.runtimeConnectionSettings()
-            val sessionId = UUID.randomUUID().toString()
             uiState = uiState.copy(
                 settings = settings,
                 activeConnectionProfileId = connectionProfile.id,
@@ -377,31 +376,48 @@ class WhiteDnsViewModel(
     }
 
     fun disconnect() {
+        if (uiState.connectionStatus == ConnectionStatus.DISCONNECTED ||
+            uiState.connectionStatus == ConnectionStatus.DISCONNECTING
+        ) {
+            return
+        }
+        val disconnectMode = uiState.settings.resolve().connectionMode
+        val disconnectPort = activeProxyListenPort
+        val disconnectSessionId = activeRuntimeSessionId
         connectJob?.cancel()
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
-        viewModelScope.launch(Dispatchers.IO) {
-            stopAllRuntimeServices()
-            if (uiState.settings.resolve().connectionMode == "vpn") {
-                delay(VpnStopBeforeStormDnsStopDelayMillis)
+        uiState = uiState.copy(
+            connectionStatus = ConnectionStatus.DISCONNECTING,
+            connectionProgress = ConnectionProgressState(phase = "runtime", percent = 95),
+            connectionVerification = ConnectionVerificationState(),
+        )
+        appendLog("Disconnecting")
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            val stopped = withContext(Dispatchers.IO) {
+                stopAllRuntimeServices()
+                if (disconnectMode == WhiteDnsRuntimeStateStore.ModeVpn) {
+                    delay(VpnStopBeforeStormDnsStopDelayMillis)
+                }
+                waitForRuntimeStopped(
+                    mode = disconnectMode,
+                    port = disconnectPort,
+                    sessionId = disconnectSessionId,
+                )
+            }
+            markRuntimeDisconnected(
+                if (stopped) {
+                    "Disconnected"
+                } else {
+                    "Disconnected after stop timeout"
+                },
+                stopServices = false,
+            )
+            if (!stopped) {
+                appendLogOnMain("Runtime stop timed out; local state was reset")
             }
         }
-        activeProxyListenPort = WhiteDnsRuntimeProxy.ListenPortInt
-        activeVpnTrafficInterfaceName = null
-        activeRuntimeSessionId = ""
-        latestStormDnsTrafficStats = null
-        resetSocksStreamTracker()
-        resetRuntimeUiThrottles()
-        appendLog("Disconnected")
-        uiState = uiState.copy(
-            connectionStatus = ConnectionStatus.DISCONNECTED,
-            connectionStats = ConnectionStats(),
-            resolverRuntimeState = ResolverRuntimeState(),
-            connectionProgress = ConnectionProgressState(),
-            connectionVerification = ConnectionVerificationState(),
-            activeConnectionProfileId = null,
-        )
     }
 
     private fun startStatsMonitor() {
@@ -585,6 +601,7 @@ class WhiteDnsViewModel(
 
     private fun shouldHandleRuntimeEvent(expectedConnectionMode: String): Boolean {
         return uiState.connectionStatus != ConnectionStatus.DISCONNECTED &&
+            uiState.connectionStatus != ConnectionStatus.DISCONNECTING &&
             uiState.settings.resolve().connectionMode == expectedConnectionMode
     }
 
@@ -667,15 +684,18 @@ class WhiteDnsViewModel(
         startConnectionVerification(state.mode)
     }
 
-    private fun markRuntimeDisconnected(message: String) {
+    private fun markRuntimeDisconnected(message: String, stopServices: Boolean = true) {
         connectJob?.cancel()
         statsJob?.cancel()
         verificationJob?.cancel()
-        viewModelScope.launch(Dispatchers.IO) {
-            stopAllRuntimeServices()
+        if (stopServices) {
+            viewModelScope.launch(Dispatchers.IO) {
+                stopAllRuntimeServices()
+            }
         }
         activeProxyListenPort = WhiteDnsRuntimeProxy.ListenPortInt
         activeVpnTrafficInterfaceName = null
+        activeRuntimeSessionId = ""
         latestStormDnsTrafficStats = null
         resetSocksStreamTracker()
         resetRuntimeUiThrottles()
@@ -689,6 +709,32 @@ class WhiteDnsViewModel(
             activeConnectionProfileId = null,
             connectionLogs = prependConnectionLog(message),
         )
+    }
+
+    private suspend fun waitForRuntimeStopped(
+        mode: String,
+        port: Int,
+        sessionId: String,
+    ): Boolean {
+        val deadlineMillis = System.currentTimeMillis() + RuntimeStopTimeoutMillis
+        while (System.currentTimeMillis() < deadlineMillis) {
+            val state = WhiteDnsRuntimeStateStore.read(appContext, mode)
+            val stateBelongsToSession = sessionId.isBlank() ||
+                state?.sessionId.isNullOrBlank() ||
+                state?.sessionId == sessionId
+            val stateStopped = state != null &&
+                stateBelongsToSession &&
+                state.status in setOf(
+                    WhiteDnsRuntimeStateStore.StatusStopped,
+                    WhiteDnsRuntimeStateStore.StatusFailed,
+                )
+            val portClosed = port <= 0 || !canConnectToLocalPort(port)
+            if (stateStopped && portClosed) {
+                return true
+            }
+            delay(RuntimeStopPollMillis)
+        }
+        return false
     }
 
     private fun prependConnectionLog(message: String): List<String> {
@@ -1171,6 +1217,8 @@ class WhiteDnsViewModel(
         const val RuntimeResolverUiUpdateIntervalMillis = 500L
         const val EstablishedTcpState = "01"
         const val VpnStopBeforeStormDnsStopDelayMillis = 1_500L
+        const val RuntimeStopTimeoutMillis = 5_000L
+        const val RuntimeStopPollMillis = 100L
         const val SocksStreamTrackingTtlMillis = 120_000L
         const val EmptyTrafficSource = "none"
         const val BatteryOptimizationRefreshAttempts = 8

@@ -26,6 +26,7 @@ object WhiteDnsRuntimeStateStore {
     const val ModeVpn = "vpn"
     const val StatusStarting = "starting"
     const val StatusReady = "ready"
+    const val StatusDisconnecting = "disconnecting"
     const val StatusStopped = "stopped"
     const val StatusFailed = "failed"
 
@@ -35,6 +36,10 @@ object WhiteDnsRuntimeStateStore {
 
     fun markReady(context: Context, settings: WhiteDnsSettings, sessionId: String, message: String = "") {
         writeSettingsState(context, settings, sessionId, StatusReady, message)
+    }
+
+    fun markDisconnecting(context: Context, mode: String, sessionId: String = "", message: String = "") {
+        writeModeState(context, mode, sessionId, StatusDisconnecting, message)
     }
 
     fun markStopped(context: Context, mode: String, sessionId: String = "", message: String = "") {

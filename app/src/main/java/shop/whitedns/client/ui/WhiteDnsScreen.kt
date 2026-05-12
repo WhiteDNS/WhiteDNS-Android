@@ -451,7 +451,8 @@ private fun ConnectTabContent(
             ConnectButton(
                 status = uiState.connectionStatus,
                 progressState = uiState.connectionProgress,
-                enabled = uiState.connectionStatus != ConnectionStatus.DISCONNECTED || hasResolvers,
+                enabled = uiState.connectionStatus != ConnectionStatus.DISCONNECTING &&
+                    (uiState.connectionStatus != ConnectionStatus.DISCONNECTED || hasResolvers),
                 onClick = {
                     if (uiState.connectionStatus == ConnectionStatus.DISCONNECTED && !hasResolvers) {
                         showResolverRequiredMessage = true
@@ -465,7 +466,8 @@ private fun ConnectTabContent(
                 },
             )
             AnimatedVisibility(
-                visible = uiState.connectionStatus != ConnectionStatus.CONNECTED,
+                visible = uiState.connectionStatus != ConnectionStatus.CONNECTED &&
+                    uiState.connectionStatus != ConnectionStatus.DISCONNECTING,
                 enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(180)),
                 exit = fadeOut(animationSpec = tween(140)) + shrinkVertically(animationSpec = tween(140)),
             ) {
@@ -552,7 +554,7 @@ private fun ConnectTabContent(
                         } else {
                             null
                         },
-                        actionsEnabled = uiState.connectionStatus != ConnectionStatus.CONNECTING,
+                        actionsEnabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
                         onAddConnectionClick = onAddConnectionClick,
                         onAddResolverProfileClick = onAddResolverProfileClick,
                     )
@@ -1974,7 +1976,7 @@ private fun ConnectionProfilesSettings(
     var dragStartIndex by remember { mutableStateOf(0) }
     var dragOffsetY by remember { mutableStateOf(0f) }
     var measuredItemHeightPx by remember { mutableStateOf(0) }
-    val canManageProfiles = connectionStatus != ConnectionStatus.CONNECTING
+    val canManageProfiles = connectionStatus == ConnectionStatus.DISCONNECTED
     val draggedIndex = draggedProfileId?.let { profileId ->
         customProfiles.indexOfFirst { it.id == profileId }.takeIf { it >= 0 }
     }
@@ -2220,7 +2222,7 @@ private fun ResolverProfilesSettings(
     val selectedProfile = settings.selectedResolverProfile()
     var dialogProfile by remember { mutableStateOf<ResolverProfile?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
-    val canChangeProfiles = connectionStatus != ConnectionStatus.CONNECTING
+    val canChangeProfiles = connectionStatus == ConnectionStatus.DISCONNECTED
     var draggedProfileId by remember { mutableStateOf<String?>(null) }
     var dragStartIndex by remember { mutableStateOf(0) }
     var dragOffsetY by remember { mutableStateOf(0f) }
@@ -4263,6 +4265,7 @@ private fun ConnectButton(
             ConnectionStatus.DISCONNECTED -> if (enabled) WhiteDnsPalette.Accent else WhiteDnsPalette.Divider
             ConnectionStatus.CONNECTING -> WhiteDnsPalette.AccentPressed
             ConnectionStatus.CONNECTED -> WhiteDnsPalette.Success
+            ConnectionStatus.DISCONNECTING -> WhiteDnsPalette.WarningText
         },
         animationSpec = tween(400),
         label = "connectRingColor",
@@ -4272,6 +4275,7 @@ private fun ConnectButton(
             ConnectionStatus.DISCONNECTED -> if (enabled) WhiteDnsPalette.Accent else WhiteDnsPalette.Disabled
             ConnectionStatus.CONNECTING -> WhiteDnsPalette.AccentPressed
             ConnectionStatus.CONNECTED -> WhiteDnsPalette.WarningText
+            ConnectionStatus.DISCONNECTING -> WhiteDnsPalette.WarningText
         },
         animationSpec = tween(400),
         label = "connectIconColor",
@@ -4305,6 +4309,7 @@ private fun ConnectButton(
             ConnectionStatus.CONNECTING -> progressState.fraction.coerceIn(0.03f, 0.99f)
             ConnectionStatus.CONNECTED -> 1f
             ConnectionStatus.DISCONNECTED -> 0f
+            ConnectionStatus.DISCONNECTING -> 1f
         },
         animationSpec = tween(300),
         label = "connectProgressFraction",
@@ -4315,10 +4320,12 @@ private fun ConnectButton(
         ConnectionStatus.DISCONNECTED -> "CONNECT"
         ConnectionStatus.CONNECTING -> "CONNECTING"
         ConnectionStatus.CONNECTED -> "STOP"
+        ConnectionStatus.DISCONNECTING -> "STOPPING"
     }
     val labelColor = when (status) {
         ConnectionStatus.CONNECTED -> WhiteDnsPalette.WarningText
         ConnectionStatus.DISCONNECTED -> if (enabled) WhiteDnsPalette.Accent else WhiteDnsPalette.Disabled
+        ConnectionStatus.DISCONNECTING -> WhiteDnsPalette.WarningText
         else -> WhiteDnsPalette.AccentPressed
     }
 
@@ -4337,7 +4344,10 @@ private fun ConnectButton(
                 val color = if (status == ConnectionStatus.CONNECTING) {
                     WhiteDnsPalette.Accent.copy(alpha = pulseAlpha)
                 } else {
-                    ringColor.copy(alpha = if (status == ConnectionStatus.CONNECTED) 0.30f else 0.15f)
+                    ringColor.copy(alpha = if (
+                        status == ConnectionStatus.CONNECTED ||
+                        status == ConnectionStatus.DISCONNECTING
+                    ) 0.30f else 0.15f)
                 }
                 drawCircle(
                     color = color,
@@ -4355,7 +4365,8 @@ private fun ConnectButton(
                 val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
 
                 when (status) {
-                    ConnectionStatus.CONNECTING -> {
+                    ConnectionStatus.CONNECTING,
+                    ConnectionStatus.DISCONNECTING -> {
                         drawArc(
                             color = WhiteDnsPalette.Border.copy(alpha = 0.65f),
                             startAngle = -90f,
@@ -4366,7 +4377,11 @@ private fun ConnectButton(
                             style = Stroke(width = strokeWidth),
                         )
                         drawArc(
-                            color = WhiteDnsPalette.Accent,
+                            color = if (status == ConnectionStatus.DISCONNECTING) {
+                                WhiteDnsPalette.WarningText
+                            } else {
+                                WhiteDnsPalette.Accent
+                            },
                             startAngle = -90f,
                             sweepAngle = 360f * progressFraction,
                             useCenter = false,
@@ -4416,6 +4431,7 @@ private fun ConnectButton(
                     .clip(CircleShape)
                     .background(if (enabled) WhiteDnsPalette.Surface else WhiteDnsPalette.SurfaceAlt)
                     .clickable(
+                        enabled = enabled,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onClick,
@@ -4445,10 +4461,10 @@ private fun ConnectButton(
                             color = labelColor,
                         ),
                     )
-                    if (status == ConnectionStatus.CONNECTING) {
+                    if (status == ConnectionStatus.CONNECTING || status == ConnectionStatus.DISCONNECTING) {
                         Spacer(modifier = Modifier.height(5.dp))
                         Text(
-                            text = progressState.label,
+                            text = if (status == ConnectionStatus.DISCONNECTING) "Closing runtime" else progressState.label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodyMedium.copy(
@@ -4464,7 +4480,11 @@ private fun ConnectButton(
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = WhiteDnsPalette.Accent,
+                                color = if (status == ConnectionStatus.DISCONNECTING) {
+                                    WhiteDnsPalette.WarningText
+                                } else {
+                                    WhiteDnsPalette.Accent
+                                },
                             ),
                         )
                     }

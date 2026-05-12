@@ -7,6 +7,7 @@ enum class ConnectionStatus {
     DISCONNECTED,
     CONNECTING,
     CONNECTED,
+    DISCONNECTING,
 }
 
 data class Choice<T>(
