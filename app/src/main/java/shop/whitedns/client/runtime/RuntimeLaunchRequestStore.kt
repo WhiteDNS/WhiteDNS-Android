@@ -1,7 +1,10 @@
 package shop.whitedns.client.runtime
 
 import android.content.Context
+import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONObject
 import shop.whitedns.client.model.ConnectionProfile
@@ -19,6 +22,7 @@ data class RuntimeLaunchRequest(
 object RuntimeLaunchRequestStore {
     private const val DirectoryName = "runtime-launch"
     private const val Extension = ".json"
+    private const val MaxRequestAgeMillis = 24L * 60L * 60L * 1_000L
     private val SafeIdRegex = Regex("[A-Za-z0-9._-]+")
 
     fun save(
@@ -33,8 +37,8 @@ object RuntimeLaunchRequestStore {
             serverProfile = serverProfile,
             settings = settings.runtimeConnectionSettings().syncSelectedConnectionProfileFields(),
         )
-        launchDirectory(context).mkdirs()
-        requestFile(context, requestId).writeText(encode(request).toString(), Charsets.UTF_8)
+        cleanupStale(context)
+        writeAtomically(requestFile(context, requestId), encode(request).toString())
         return request
     }
 
@@ -57,12 +61,56 @@ object RuntimeLaunchRequestStore {
         }
     }
 
+    fun cleanupStale(
+        context: Context,
+        nowMillis: Long = System.currentTimeMillis(),
+        maxAgeMillis: Long = MaxRequestAgeMillis,
+    ) {
+        cleanupStaleDirectory(
+            launchDirectory = launchDirectory(context),
+            nowMillis = nowMillis,
+            maxAgeMillis = maxAgeMillis,
+        )
+    }
+
+    internal fun cleanupStaleDirectory(
+        launchDirectory: File,
+        nowMillis: Long = System.currentTimeMillis(),
+        maxAgeMillis: Long = MaxRequestAgeMillis,
+    ) {
+        launchDirectory.listFiles()
+            ?.asSequence()
+            ?.filter { file ->
+                file.isFile &&
+                    file.name.endsWith(Extension) &&
+                    file.nameWithoutExtension.isSafeRequestId() &&
+                    nowMillis - file.lastModified() > maxAgeMillis
+            }
+            ?.forEach { file ->
+                runCatching { file.delete() }
+            }
+    }
+
     private fun launchDirectory(context: Context): File {
         return File(context.noBackupFilesDir, DirectoryName)
     }
 
     private fun requestFile(context: Context, requestId: String): File {
         return File(launchDirectory(context), "$requestId$Extension")
+    }
+
+    private fun writeAtomically(file: File, text: String) {
+        file.parentFile?.mkdirs()
+        val atomicFile = AtomicFile(file)
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (error: IOException) {
+            stream?.let(atomicFile::failWrite)
+            throw error
+        }
     }
 
     private fun encode(request: RuntimeLaunchRequest): JSONObject {
