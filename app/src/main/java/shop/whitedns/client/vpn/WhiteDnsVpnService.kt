@@ -42,6 +42,7 @@ import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.proxy.WhiteDnsProxyService
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
+import shop.whitedns.client.runtime.RuntimeReconnectGuard
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.formatTrafficNotificationText
@@ -208,39 +209,85 @@ class WhiteDnsVpnService : VpnService() {
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
             currentSessionId = sessionId
-            try {
-                val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
-                    ?: throw IllegalStateException("Runtime launch request is missing")
-                val settings = launchRequest.settings.runtimeConnectionSettings()
-                val resolvedSettings = settings.resolve()
-                if (resolvedSettings.connectionMode != "vpn") {
-                    throw IllegalStateException("VPN mode is not enabled")
-                }
-                if (resolvedSettings.resolverEntries.isEmpty()) {
-                    throw IllegalStateException("Resolvers are required to connect")
-                }
-                val serverProfile = launchRequest.serverProfile
+            var startedOnce = false
+            var restartDelayMillis = VpnRestartInitialDelayMillis
+            var runtimeStartedAtMillis = 0L
+            val reconnectGuard = RuntimeReconnectGuard(
+                maxFailures = VpnRestartMaxFailures,
+                windowMillis = VpnRestartFailureWindowMillis,
+            )
+            while (isActive && !stopping) {
+                try {
+                    val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
+                        ?: throw IllegalStateException("Runtime launch request is missing")
+                    val settings = launchRequest.settings.runtimeConnectionSettings()
+                    val resolvedSettings = settings.resolve()
+                    if (resolvedSettings.connectionMode != "vpn") {
+                        throw IllegalStateException("VPN mode is not enabled")
+                    }
+                    if (resolvedSettings.resolverEntries.isEmpty()) {
+                        throw IllegalStateException("Resolvers are required to connect")
+                    }
+                    val serverProfile = launchRequest.serverProfile
+                    val runtimeFailure = AtomicReference<String?>(null)
 
-                stopVpn()
-                WhiteDnsProxyService.stop(applicationContext)
-                waitForLocalPortToClose(resolvedSettings.listenPort)
-                stopping = false
-                runtimeReady = false
-                lastTrafficNotificationUpdateMillis = 0L
-                WhiteDnsRuntimeStateStore.markStarting(
-                    context = applicationContext,
-                    settings = settings,
-                    sessionId = sessionId,
-                    message = "Starting full-device VPN",
-                )
-                logInfo("Using custom StormDNS server")
-                logInfo("Starting internal SOCKS bridge")
-                startStormDnsAndVpn(sessionId, serverProfile, settings, resolvedSettings)
-            } catch (error: CancellationException) {
-                stopVpn()
-                throw error
-            } catch (error: Exception) {
-                failAndStopVpn("Failed to start WhiteDNS VPN", error)
+                    stopVpn()
+                    WhiteDnsProxyService.stop(applicationContext)
+                    waitForLocalPortToClose(resolvedSettings.listenPort)
+                    stopping = false
+                    runtimeReady = false
+                    lastTrafficNotificationUpdateMillis = 0L
+                    WhiteDnsRuntimeStateStore.markStarting(
+                        context = applicationContext,
+                        settings = settings,
+                        sessionId = sessionId,
+                        message = if (startedOnce) "Recovering full-device VPN" else "Starting full-device VPN",
+                    )
+                    logInfo("Using custom StormDNS server")
+                    logInfo("Starting internal SOCKS bridge")
+                    startStormDnsAndVpn(sessionId, serverProfile, settings, resolvedSettings, runtimeFailure)
+                    startedOnce = true
+                    restartDelayMillis = VpnRestartInitialDelayMillis
+                    runtimeStartedAtMillis = System.currentTimeMillis()
+                    monitorRuntimeProcesses(runtimeFailure)
+                } catch (error: CancellationException) {
+                    stopVpn()
+                    throw error
+                } catch (error: Exception) {
+                    stopVpn()
+                    runtimeReady = false
+                    lastTrafficNotificationUpdateMillis = 0L
+                    if (!startedOnce) {
+                        failAndStopVpn("Failed to start WhiteDNS VPN", error)
+                        return@launch
+                    }
+                    if (stopping || !isActive) {
+                        return@launch
+                    }
+                    if (runtimeStartedAtMillis > 0L &&
+                        System.currentTimeMillis() - runtimeStartedAtMillis >= VpnRestartHealthyResetMillis
+                    ) {
+                        reconnectGuard.reset()
+                    }
+                    val reconnectAllowed = reconnectGuard.recordFailure()
+                    val failureCount = reconnectGuard.failureCount()
+                    if (!reconnectAllowed) {
+                        failAndStopVpn("WhiteDNS VPN stopped after repeated runtime failures", error)
+                        return@launch
+                    }
+                    val failureMessage = "WhiteDNS VPN runtime stopped: ${error.message ?: error::class.java.simpleName}"
+                    WhiteDnsRuntimeStateStore.markFailed(
+                        context = applicationContext,
+                        mode = WhiteDnsRuntimeStateStore.ModeVpn,
+                        sessionId = sessionId,
+                        message = "VPN reconnect attempt $failureCount/$VpnRestartMaxFailures after: " +
+                            (error.message ?: error::class.java.simpleName),
+                    )
+                    updateForegroundNotification("VPN reconnecting")
+                    logWarning("$failureMessage. Restarting in ${restartDelayMillis / 1_000}s")
+                    delay(restartDelayMillis)
+                    restartDelayMillis = (restartDelayMillis * 2).coerceAtMost(VpnRestartMaxDelayMillis)
+                }
             }
         }
     }
@@ -250,6 +297,7 @@ class WhiteDnsVpnService : VpnService() {
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
         resolvedSettings: ResolvedWhiteDnsSettings,
+        runtimeFailure: AtomicReference<String?>,
     ) {
         val startupFailure = AtomicReference<String?>(null)
         stormDnsProcessManager.start(serverProfile, settings) { line ->
@@ -263,8 +311,7 @@ class WhiteDnsVpnService : VpnService() {
             startupFailure = { startupFailure.get() },
         )
         logInfo("SOCKS proxy is ready")
-        startVpnRouting(settings, resolvedSettings)
-        monitorStormDnsProcess()
+        startVpnRouting(sessionId, settings, resolvedSettings, runtimeFailure)
     }
 
     private suspend fun waitForProxyPort(
@@ -318,8 +365,11 @@ class WhiteDnsVpnService : VpnService() {
         }
     }
 
-    private suspend fun monitorStormDnsProcess() {
+    private suspend fun monitorRuntimeProcesses(runtimeFailure: AtomicReference<String?>) {
         while (true) {
+            runtimeFailure.get()?.let { failure ->
+                throw IllegalStateException(failure)
+            }
             if (!stormDnsProcessManager.isRunning()) {
                 val exitCode = stormDnsProcessManager.exitCodeOrNull()
                 throw IllegalStateException(
@@ -331,8 +381,10 @@ class WhiteDnsVpnService : VpnService() {
     }
 
     private fun startVpnRouting(
+        sessionId: String,
         settings: WhiteDnsSettings,
         resolvedSettings: ResolvedWhiteDnsSettings,
+        runtimeFailure: AtomicReference<String?>,
     ) {
         try {
             val socksHost = selectVpnSocksHost(resolvedSettings.listenIp)
@@ -382,10 +434,7 @@ class WhiteDnsVpnService : VpnService() {
                     if (stopping) {
                         Log.i(Tag, "tun2proxy stopped with code $exitCode")
                     } else {
-                        val message = "tun2proxy exited with code $exitCode"
-                        serviceScope.launch {
-                            failAndStopVpn(message)
-                        }
+                        runtimeFailure.compareAndSet(null, "tun2proxy exited with code $exitCode")
                     }
                 },
             )
@@ -651,6 +700,11 @@ class WhiteDnsVpnService : VpnService() {
         private const val TunIpv4PrefixLength = 30
         private const val TunDnsServer = "172.19.0.2"
         private const val VpnMtu = 1500
+        private const val VpnRestartInitialDelayMillis = 2_000L
+        private const val VpnRestartMaxDelayMillis = 30_000L
+        private const val VpnRestartMaxFailures = 3
+        private const val VpnRestartFailureWindowMillis = 2 * 60 * 1_000L
+        private const val VpnRestartHealthyResetMillis = 5 * 60 * 1_000L
         private const val Tun2proxyStopGracePeriodMillis = 5_000L
         private const val PreviousRuntimeStopTimeoutMillis = 3_000L
         private const val PreviousRuntimeStopPollMillis = 100L

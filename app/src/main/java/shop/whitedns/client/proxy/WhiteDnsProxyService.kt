@@ -36,6 +36,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
+import shop.whitedns.client.runtime.RuntimeReconnectGuard
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.formatTrafficNotificationText
@@ -135,6 +136,11 @@ class WhiteDnsProxyService : Service() {
             stopping = false
             var startedOnce = false
             var restartDelayMillis = RestartInitialDelayMillis
+            var runtimeStartedAtMillis = 0L
+            val reconnectGuard = RuntimeReconnectGuard(
+                maxFailures = RestartMaxFailures,
+                windowMillis = RestartFailureWindowMillis,
+            )
             while (isActive && !stopping) {
                 try {
                     val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
@@ -168,6 +174,7 @@ class WhiteDnsProxyService : Service() {
                     startStormDns(sessionId, serverProfile, settings, resolvedSettings)
                     startedOnce = true
                     restartDelayMillis = RestartInitialDelayMillis
+                    runtimeStartedAtMillis = System.currentTimeMillis()
                     runtimeReady = true
                     startTrafficKeepalive(resolvedSettings)
                     updateForegroundNotification("Local proxy is active")
@@ -196,6 +203,33 @@ class WhiteDnsProxyService : Service() {
                     if (stopping || !isActive) {
                         return@launch
                     }
+                    if (runtimeStartedAtMillis > 0L &&
+                        System.currentTimeMillis() - runtimeStartedAtMillis >= RestartHealthyResetMillis
+                    ) {
+                        reconnectGuard.reset()
+                    }
+                    val reconnectAllowed = reconnectGuard.recordFailure()
+                    val failureCount = reconnectGuard.failureCount()
+                    if (!reconnectAllowed) {
+                        val breakerMessage = "WhiteDNS proxy stopped after repeated runtime failures"
+                        logError(breakerMessage, error)
+                        WhiteDnsRuntimeStateStore.markFailed(
+                            context = applicationContext,
+                            mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                            sessionId = sessionId,
+                            message = breakerMessage,
+                        )
+                        exitForeground()
+                        stopSelf()
+                        return@launch
+                    }
+                    WhiteDnsRuntimeStateStore.markFailed(
+                        context = applicationContext,
+                        mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                        sessionId = sessionId,
+                        message = "Proxy reconnect attempt $failureCount/$RestartMaxFailures after: " +
+                            (error.message ?: error::class.java.simpleName),
+                    )
                     logWarning(
                         "StormDNS stopped unexpectedly: ${error.message ?: error::class.java.simpleName}. " +
                             "Restarting in ${restartDelayMillis / 1_000}s",
@@ -521,6 +555,9 @@ class WhiteDnsProxyService : Service() {
         private const val ExtraSessionId = "shop.whitedns.client.proxy.extra.SESSION_ID"
         private const val RestartInitialDelayMillis = 2_000L
         private const val RestartMaxDelayMillis = 30_000L
+        private const val RestartMaxFailures = 3
+        private const val RestartFailureWindowMillis = 2 * 60 * 1_000L
+        private const val RestartHealthyResetMillis = 5 * 60 * 1_000L
         private const val PreviousRuntimeStopTimeoutMillis = 3_000L
         private const val PreviousRuntimeStopPollMillis = 100L
         private const val TrafficNotificationUpdateIntervalMillis = 1_000L
