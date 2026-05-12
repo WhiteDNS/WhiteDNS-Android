@@ -112,9 +112,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -170,7 +168,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import java.io.File
 import java.util.Locale
+import androidx.core.content.FileProvider
 
 @Composable
 fun WhiteDnsScreen(
@@ -3855,7 +3855,7 @@ private fun openWhiteDnsTelegram(context: Context) {
 private fun DonationDialog(
     onDismiss: () -> Unit,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -3892,7 +3892,12 @@ private fun DonationDialog(
                     label = wallet.label,
                     address = wallet.address,
                     onCopy = {
-                        clipboardManager.setText(AnnotatedString(wallet.address))
+                        copyTextToClipboard(
+                            context = context,
+                            label = wallet.label,
+                            text = wallet.address,
+                            sensitive = false,
+                        )
                     },
                 )
                 if (index != DonationWallets.lastIndex) {
@@ -4807,7 +4812,7 @@ private fun ResolverRuntimeDialog(
     resolvers: List<String>,
     onDismiss: () -> Unit,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val resolverText = resolvers.joinToString("\n")
 
     Dialog(onDismissRequest = onDismiss) {
@@ -4856,7 +4861,12 @@ private fun ResolverRuntimeDialog(
                     emphasized = true,
                     enabled = resolverText.isNotBlank(),
                     onClick = {
-                        clipboardManager.setText(AnnotatedString(resolverText))
+                        copyTextToClipboard(
+                            context = context,
+                            label = "WhiteDNS resolvers",
+                            text = resolverText,
+                            sensitive = false,
+                        )
                     },
                 )
             }
@@ -5325,21 +5335,75 @@ private fun LogActionButton(
 }
 
 private fun shareProfileLink(context: Context, link: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "WhiteDNS profile")
-        putExtra(Intent.EXTRA_TEXT, link)
-    }
-    context.startActivity(Intent.createChooser(intent, "Export WhiteDNS profile"))
+    shareTextExport(
+        context = context,
+        fileName = "whitedns-profile.txt",
+        subject = "WhiteDNS profile",
+        chooserTitle = "Export WhiteDNS profile",
+        text = link,
+    )
 }
 
 private fun shareClientConfigToml(context: Context, toml: String) {
+    shareTextExport(
+        context = context,
+        fileName = "client_config.toml",
+        subject = "client_config.toml",
+        chooserTitle = "Export client_config.toml",
+        text = toml,
+    )
+}
+
+private fun shareTextExport(
+    context: Context,
+    fileName: String,
+    subject: String,
+    chooserTitle: String,
+    text: String,
+) {
+    val exportFile = writeCacheExportFile(
+        context = context,
+        fileName = fileName,
+        text = text,
+    )
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        exportFile,
+    )
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "client_config.toml")
-        putExtra(Intent.EXTRA_TEXT, toml)
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(intent, "Export client_config.toml"))
+    context.startActivity(Intent.createChooser(intent, chooserTitle))
+}
+
+private fun writeCacheExportFile(
+    context: Context,
+    fileName: String,
+    text: String,
+): File {
+    val exportDir = File(context.cacheDir, CacheExportDirectory).apply {
+        mkdirs()
+    }
+    cleanOldCacheExports(exportDir)
+    val safeName = fileName
+        .replace(Regex("""[^A-Za-z0-9._-]"""), "_")
+        .ifBlank { "whitedns-export.txt" }
+    val exportFile = File(exportDir, safeName)
+    exportFile.writeText(text, Charsets.UTF_8)
+    return exportFile
+}
+
+private fun cleanOldCacheExports(exportDir: File) {
+    val now = System.currentTimeMillis()
+    exportDir.listFiles()?.forEach { file ->
+        if (file.isFile && now - file.lastModified() > CacheExportMaxAgeMillis) {
+            runCatching { file.delete() }
+        }
+    }
 }
 
 private fun copyTextToClipboard(
@@ -6083,3 +6147,6 @@ private fun filterDecimalInput(value: String): String {
         }
     }
 }
+
+private const val CacheExportDirectory = "exports"
+private const val CacheExportMaxAgeMillis = 60L * 60L * 1_000L
