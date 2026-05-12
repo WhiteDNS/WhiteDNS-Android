@@ -53,6 +53,8 @@ import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.runtime.parseStormDnsResolverStateLine
 import shop.whitedns.client.runtime.parseStormDnsTrafficStatsLine
+import shop.whitedns.client.security.RedactionSecrets
+import shop.whitedns.client.security.SecretRedactor
 import shop.whitedns.client.storm.StormDnsBuiltInPool
 import shop.whitedns.client.vpn.WhiteDnsVpnService
 import shop.whitedns.client.vpn.WhiteDnsVpnEvent
@@ -662,7 +664,7 @@ class WhiteDnsViewModel(
         val cleanMessage = message
             .replace(Regex("\\u001B\\[[;\\d]*m"), "")
             .trim()
-            .redactRouteDetails()
+            .redactRuntimeSecrets()
         if (cleanMessage.isEmpty()) {
             return uiState.connectionLogs
         }
@@ -1120,7 +1122,7 @@ class WhiteDnsViewModel(
         val cleanMessage = message
             .replace(Regex("\\u001B\\[[;\\d]*m"), "")
             .trim()
-            .redactRouteDetails()
+            .redactRuntimeSecrets()
         if (cleanMessage.isEmpty()) {
             return
         }
@@ -1148,14 +1150,22 @@ class WhiteDnsViewModel(
         val SafeNetworkInterfaceNameRegex = Regex("""[A-Za-z0-9_.:-]+""")
     }
 
-    private fun String.redactRouteDetails(): String {
-        val profiles = activeServerProfile
+    private fun String.redactRuntimeSecrets(): String {
+        val connectionProfiles = uiState.settings.normalizedConnectionProfiles()
+        val activeProfiles = activeServerProfile
             ?.let { uiState.serverPool + it }
             ?: uiState.serverPool
-        return profiles.fold(this) { message, profile ->
-            message
-                .replace(profile.domain, "[server route]")
-        }
+        val resolvedSettings = uiState.settings.runtimeConnectionSettings().resolve()
+        return SecretRedactor.redact(
+            text = this,
+            secrets = RedactionSecrets(
+                serverRoutes = connectionProfiles.map { it.customServerDomain } + activeProfiles.map { it.domain },
+                encryptionKeys = connectionProfiles.map { it.customServerEncryptionKey } +
+                    activeProfiles.map { it.encryptionKey },
+                socksUsers = listOf(resolvedSettings.socksUsername),
+                socksPasswords = listOf(resolvedSettings.socksPassword),
+            ),
+        )
     }
 
     private data class TrafficSnapshot(

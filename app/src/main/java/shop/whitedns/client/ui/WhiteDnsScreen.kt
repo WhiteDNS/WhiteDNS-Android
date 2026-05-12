@@ -1,8 +1,11 @@
 package shop.whitedns.client.ui
 
-import android.graphics.Bitmap
-import android.content.Intent
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 
@@ -160,6 +163,8 @@ import shop.whitedns.client.model.updateManualResolverText
 import shop.whitedns.client.model.upsertConnectionProfile
 import shop.whitedns.client.model.upsertResolverProfile
 import shop.whitedns.client.model.validateResolverText
+import shop.whitedns.client.security.RedactionSecrets
+import shop.whitedns.client.security.SecretRedactor
 import shop.whitedns.client.storm.StormDnsConfigRenderer
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -702,6 +707,7 @@ private fun ConnectTabContent(
                 fieldLabel = "client_config.toml",
                 placeholder = "client_config.toml",
                 showQr = false,
+                redactionSecrets = settings.redactionSecrets(),
                 linkResult = remember(settings, selectedConnectionProfile, showConnectionTomlDialog) {
                     runCatching {
                         StormDnsConfigRenderer.renderClientToml(
@@ -2168,6 +2174,7 @@ private fun ConnectionProfilesSettings(
         ConnectionProfileExportDialog(
             title = "EXPORT CONNECTION",
             fieldLabel = "Profile Link",
+            redactionSecrets = settings.redactionSecrets(),
             linkResult = remember(settings, profile) {
                 runCatching { settings.exportStormDnsProfileLink(profile) }
             },
@@ -2182,6 +2189,7 @@ private fun ConnectionProfilesSettings(
         ConnectionProfileExportDialog(
             title = "EXPORT ALL CONNECTIONS",
             fieldLabel = "Profile Links",
+            redactionSecrets = settings.redactionSecrets(),
             linkResult = remember(settings, showExportAllDialog) {
                 runCatching { settings.exportAllStormDnsProfileLinks() }
             },
@@ -2717,8 +2725,10 @@ private fun ConnectionProfileExportDialog(
     onShare: (String) -> Unit,
     placeholder: String = "stormdns://...",
     showQr: Boolean = true,
+    redactionSecrets: RedactionSecrets = RedactionSecrets(),
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    var pendingFullExport by remember { mutableStateOf<FullExportAction?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -2741,13 +2751,16 @@ private fun ConnectionProfileExportDialog(
             Spacer(modifier = Modifier.height(14.dp))
             val link = linkResult.getOrNull()
             if (link != null) {
-                if (showQr && !link.contains('\n')) {
-                    ProfileQrPreview(link = link)
+                val redactedLink = remember(link, redactionSecrets) {
+                    SecretRedactor.redact(link, redactionSecrets)
+                }
+                if (showQr && !redactedLink.contains('\n')) {
+                    ProfileQrPreview(link = redactedLink)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 WhiteDnsTextField(
                     label = fieldLabel,
-                    value = link,
+                    value = redactedLink,
                     onValueChange = {},
                     placeholder = placeholder,
                     singleLine = false,
@@ -2772,7 +2785,12 @@ private fun ConnectionProfileExportDialog(
                         emphasized = false,
                         enabled = true,
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(link))
+                            copyTextToClipboard(
+                                context = context,
+                                label = fieldLabel,
+                                text = redactedLink,
+                                sensitive = false,
+                            )
                         },
                     )
                     CompactActionButton(
@@ -2781,10 +2799,20 @@ private fun ConnectionProfileExportDialog(
                         emphasized = true,
                         enabled = true,
                         onClick = {
-                            onShare(link)
+                            pendingFullExport = FullExportAction.Share
                         },
                     )
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                CompactActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "COPY FULL",
+                    emphasized = false,
+                    enabled = true,
+                    onClick = {
+                        pendingFullExport = FullExportAction.Copy
+                    },
+                )
             } else {
                 Text(
                     text = linkResult.exceptionOrNull()?.message ?: "Unable to export profile",
@@ -2800,6 +2828,88 @@ private fun ConnectionProfileExportDialog(
                     emphasized = true,
                     enabled = true,
                     onClick = onDismiss,
+                )
+            }
+        }
+    }
+
+    pendingFullExport?.let { action ->
+        SensitiveExportConfirmationDialog(
+            actionLabel = if (action == FullExportAction.Copy) "COPY FULL" else "SHARE FULL",
+            onDismiss = { pendingFullExport = null },
+            onConfirm = {
+                val fullValue = linkResult.getOrNull() ?: return@SensitiveExportConfirmationDialog
+                when (action) {
+                    FullExportAction.Copy -> copyTextToClipboard(
+                        context = context,
+                        label = fieldLabel,
+                        text = fullValue,
+                        sensitive = true,
+                    )
+                    FullExportAction.Share -> onShare(fullValue)
+                }
+                pendingFullExport = null
+            },
+        )
+    }
+}
+
+private enum class FullExportAction {
+    Copy,
+    Share,
+}
+
+@Composable
+private fun SensitiveExportConfirmationDialog(
+    actionLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(WhiteDnsPalette.Surface)
+                .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(22.dp))
+                .padding(18.dp),
+        ) {
+            Text(
+                text = "SENSITIVE EXPORT",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.sp,
+                    color = WhiteDnsPalette.Ink,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.1.sp,
+                ),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "This includes connection secrets such as server keys, profile links, or proxy credentials.",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = WhiteDnsPalette.Description,
+                ),
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CompactActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = "CANCEL",
+                    emphasized = false,
+                    enabled = true,
+                    onClick = onDismiss,
+                )
+                CompactActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = actionLabel,
+                    emphasized = true,
+                    enabled = true,
+                    onClick = onConfirm,
                 )
             }
         }
@@ -5106,8 +5216,11 @@ private fun ConnectionLogsBlock(
 ) {
     val logs = uiState.connectionLogs
     val visibleLogs = if (expanded) logs else logs.take(10)
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val redactionSecrets = uiState.settings.redactionSecrets()
+    val redactedLogs = remember(logs, redactionSecrets) {
+        SecretRedactor.redact(logs.joinToString(separator = "\n"), redactionSecrets)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -5131,16 +5244,22 @@ private fun ConnectionLogsBlock(
                 LogActionButton(
                     label = "COPY",
                     onClick = {
-                        clipboardManager.setText(
-                            AnnotatedString(logs.joinToString(separator = "\n")),
+                        copyTextToClipboard(
+                            context = context,
+                            label = "WhiteDNS logs",
+                            text = redactedLogs,
+                            sensitive = false,
                         )
                     },
                 )
                 LogActionButton(
                     label = "DIAGNOSTICS",
                     onClick = {
-                        clipboardManager.setText(
-                            AnnotatedString(buildDiagnosticsText(context, uiState)),
+                        copyTextToClipboard(
+                            context = context,
+                            label = "WhiteDNS diagnostics",
+                            text = buildDiagnosticsText(context, uiState),
+                            sensitive = false,
                         )
                     },
                 )
@@ -5223,6 +5342,33 @@ private fun shareClientConfigToml(context: Context, toml: String) {
     context.startActivity(Intent.createChooser(intent, "Export client_config.toml"))
 }
 
+private fun copyTextToClipboard(
+    context: Context,
+    label: String,
+    text: String,
+    sensitive: Boolean,
+) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+    val clip = ClipData.newPlainText(label, text)
+    if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        clip.description.extras = (clip.description.extras ?: android.os.PersistableBundle()).apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        }
+    }
+    clipboard.setPrimaryClip(clip)
+}
+
+private fun WhiteDnsSettings.redactionSecrets(): RedactionSecrets {
+    val connectionProfiles = normalizedConnectionProfiles()
+    val resolvedSettings = runtimeConnectionSettings().resolve()
+    return RedactionSecrets(
+        serverRoutes = connectionProfiles.map { it.customServerDomain },
+        encryptionKeys = connectionProfiles.map { it.customServerEncryptionKey },
+        socksUsers = listOf(resolvedSettings.socksUsername, socksUsername),
+        socksPasswords = listOf(resolvedSettings.socksPassword, socksPassword),
+    )
+}
+
 private fun buildDiagnosticsText(
     context: Context,
     uiState: WhiteDnsUiState,
@@ -5269,17 +5415,11 @@ private fun buildDiagnosticsText(
         appendLine()
         appendLine("Recent logs:")
         uiState.connectionLogs.forEach { log ->
-            appendLine(log.redactDiagnosticSecrets(selectedProfile))
+            appendLine(log)
         }
-    }.trimEnd()
-}
-
-private fun String.redactDiagnosticSecrets(profile: ConnectionProfile): String {
-    var redacted = this
-    if (profile.customServerDomain.isNotBlank()) {
-        redacted = redacted.replace(profile.customServerDomain, "[server route]")
+    }.trimEnd().let { diagnostics ->
+        SecretRedactor.redact(diagnostics, settings.redactionSecrets())
     }
-    return redacted.replace(Regex("""(?i)(password|pass|secret)\s*[:=]\s*\S+"""), "\$1=[redacted]")
 }
 
 private fun readResolverTextFromUri(context: Context, uri: Uri): Result<String> {
