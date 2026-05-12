@@ -31,6 +31,7 @@ class StormDnsProcessManager(
         val runtimeDir = File(context.noBackupFilesDir, "stormdns/runtime").apply {
             mkdirs()
         }
+        cleanupStaleLaunchFiles(runtimeDir)
         val binaryFile = binaryInstaller.installExecutable()
         val launchId = UUID.randomUUID().toString()
         val configFile = File(runtimeDir, ".wd-$launchId.toml")
@@ -93,6 +94,11 @@ class StormDnsProcessManager(
         }
         if (activeProcess.isAlive) {
             activeProcess.destroyForcibly()
+            try {
+                activeProcess.waitFor(gracePeriodMillis, TimeUnit.MILLISECONDS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
         }
         process = null
         cleanupLaunchFiles()
@@ -112,7 +118,10 @@ class StormDnsProcessManager(
         return if (activeProcess.isAlive) {
             null
         } else {
-            activeProcess.exitValue()
+            val exitCode = activeProcess.exitValue()
+            process = null
+            cleanupLaunchFiles()
+            exitCode
         }
     }
 
@@ -135,6 +144,28 @@ class StormDnsProcessManager(
             } catch (_: IOException) {
                 // Destroying the process closes this stream on another thread during normal shutdown.
             }
+        }
+    }
+
+    companion object {
+        private const val StaleLaunchFileMaxAgeMillis = 24L * 60L * 60L * 1_000L
+        private val LaunchFileRegex = Regex("""\.wd-[A-Za-z0-9-]+\.(toml|resolvers)""")
+
+        internal fun cleanupStaleLaunchFiles(
+            runtimeDir: File,
+            nowMillis: Long = System.currentTimeMillis(),
+            maxAgeMillis: Long = StaleLaunchFileMaxAgeMillis,
+        ) {
+            runtimeDir.listFiles()
+                ?.asSequence()
+                ?.filter { file ->
+                    file.isFile &&
+                        LaunchFileRegex.matches(file.name) &&
+                        nowMillis - file.lastModified() > maxAgeMillis
+                }
+                ?.forEach { file ->
+                    runCatching { file.delete() }
+                }
         }
     }
 }

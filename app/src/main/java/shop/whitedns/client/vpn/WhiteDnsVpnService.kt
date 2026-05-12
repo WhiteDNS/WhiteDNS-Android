@@ -240,22 +240,18 @@ class WhiteDnsVpnService : VpnService() {
         resolvedSettings: ResolvedWhiteDnsSettings,
     ) {
         val startupFailure = AtomicReference<String?>(null)
-        try {
-            stormDnsProcessManager.start(serverProfile, settings) { line ->
-                logInfo(line)
-                detectStormDnsStartupFailure(line)?.let { failure ->
-                    startupFailure.compareAndSet(null, failure)
-                }
+        stormDnsProcessManager.start(serverProfile, settings) { line ->
+            logInfo(line)
+            detectStormDnsStartupFailure(line)?.let { failure ->
+                startupFailure.compareAndSet(null, failure)
             }
-            waitForProxyPort(
-                listenPort = resolvedSettings.listenPort,
-                startupFailure = { startupFailure.get() },
-            )
-            logInfo("SOCKS proxy is ready")
-            startVpnRouting(settings, resolvedSettings)
-        } finally {
-            stormDnsProcessManager.cleanupLaunchFiles()
         }
+        waitForProxyPort(
+            listenPort = resolvedSettings.listenPort,
+            startupFailure = { startupFailure.get() },
+        )
+        logInfo("SOCKS proxy is ready")
+        startVpnRouting(settings, resolvedSettings)
         monitorStormDnsProcess()
     }
 
