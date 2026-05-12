@@ -11,6 +11,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.selectedConnectionProfile
 
 data class WhiteDnsRuntimeState(
+    val sessionId: String,
     val mode: String,
     val status: String,
     val connectionProfileId: String,
@@ -28,20 +29,20 @@ object WhiteDnsRuntimeStateStore {
     const val StatusStopped = "stopped"
     const val StatusFailed = "failed"
 
-    fun markStarting(context: Context, settings: WhiteDnsSettings, message: String = "") {
-        writeSettingsState(context, settings, StatusStarting, message)
+    fun markStarting(context: Context, settings: WhiteDnsSettings, sessionId: String, message: String = "") {
+        writeSettingsState(context, settings, sessionId, StatusStarting, message)
     }
 
-    fun markReady(context: Context, settings: WhiteDnsSettings, message: String = "") {
-        writeSettingsState(context, settings, StatusReady, message)
+    fun markReady(context: Context, settings: WhiteDnsSettings, sessionId: String, message: String = "") {
+        writeSettingsState(context, settings, sessionId, StatusReady, message)
     }
 
-    fun markStopped(context: Context, mode: String, message: String = "") {
-        writeModeState(context, mode, StatusStopped, message)
+    fun markStopped(context: Context, mode: String, sessionId: String = "", message: String = "") {
+        writeModeState(context, mode, sessionId, StatusStopped, message)
     }
 
-    fun markFailed(context: Context, mode: String, message: String) {
-        writeModeState(context, mode, StatusFailed, message)
+    fun markFailed(context: Context, mode: String, message: String, sessionId: String = "") {
+        writeModeState(context, mode, sessionId, StatusFailed, message)
     }
 
     fun read(context: Context, mode: String): WhiteDnsRuntimeState? {
@@ -66,6 +67,7 @@ object WhiteDnsRuntimeStateStore {
     private fun writeSettingsState(
         context: Context,
         settings: WhiteDnsSettings,
+        sessionId: String,
         status: String,
         message: String,
     ) {
@@ -74,6 +76,7 @@ object WhiteDnsRuntimeStateStore {
         writeState(
             context = context,
             state = WhiteDnsRuntimeState(
+                sessionId = sessionId,
                 mode = resolvedSettings.connectionMode,
                 status = status,
                 connectionProfileId = connectionProfile.id,
@@ -88,6 +91,7 @@ object WhiteDnsRuntimeStateStore {
     private fun writeModeState(
         context: Context,
         mode: String,
+        sessionId: String,
         status: String,
         message: String,
     ) {
@@ -95,6 +99,7 @@ object WhiteDnsRuntimeStateStore {
         writeState(
             context = context,
             state = WhiteDnsRuntimeState(
+                sessionId = sessionId.ifBlank { previous?.sessionId.orEmpty() },
                 mode = mode,
                 status = status,
                 connectionProfileId = previous?.connectionProfileId.orEmpty(),
@@ -129,6 +134,7 @@ object WhiteDnsRuntimeStateStore {
 
     private fun encode(state: WhiteDnsRuntimeState): JSONObject {
         return JSONObject()
+            .put("sessionId", state.sessionId)
             .put("mode", state.mode)
             .put("status", state.status)
             .put("connectionProfileId", state.connectionProfileId)
@@ -140,6 +146,7 @@ object WhiteDnsRuntimeStateStore {
 
     private fun decode(json: JSONObject): WhiteDnsRuntimeState {
         return WhiteDnsRuntimeState(
+            sessionId = json.optString("sessionId"),
             mode = json.optString("mode"),
             status = json.optString("status"),
             connectionProfileId = json.optString("connectionProfileId"),

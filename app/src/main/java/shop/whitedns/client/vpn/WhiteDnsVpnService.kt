@@ -55,6 +55,7 @@ class WhiteDnsVpnService : VpnService() {
     private var keepaliveJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
+    private var currentSessionId = ""
     @Volatile
     private var stopping = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -193,10 +194,12 @@ class WhiteDnsVpnService : VpnService() {
 
     private fun startVpn(intent: Intent?) {
         val previousJob = startJob
+        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
         val requestedServerProfile = intent?.serverProfileExtra()
         val requestedSettings = intent?.settingsExtra()?.runtimeConnectionSettings()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
+            currentSessionId = sessionId
             try {
                 val settings = requestedSettings ?: settingsStore.load().runtimeConnectionSettings()
                 val resolvedSettings = settings.resolve()
@@ -217,13 +220,14 @@ class WhiteDnsVpnService : VpnService() {
                 runtimeReady = false
                 lastTrafficNotificationUpdateMillis = 0L
                 WhiteDnsRuntimeStateStore.markStarting(
-                    applicationContext,
-                    settings,
-                    "Starting full-device VPN",
+                    context = applicationContext,
+                    settings = settings,
+                    sessionId = sessionId,
+                    message = "Starting full-device VPN",
                 )
                 logInfo("Using custom StormDNS server")
                 logInfo("Starting internal SOCKS bridge")
-                startStormDnsAndVpn(serverProfile, settings, resolvedSettings)
+                startStormDnsAndVpn(sessionId, serverProfile, settings, resolvedSettings)
             } catch (error: CancellationException) {
                 stopVpn()
                 throw error
@@ -234,6 +238,7 @@ class WhiteDnsVpnService : VpnService() {
     }
 
     private suspend fun startStormDnsAndVpn(
+        sessionId: String,
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
         resolvedSettings: ResolvedWhiteDnsSettings,
@@ -383,9 +388,10 @@ class WhiteDnsVpnService : VpnService() {
             updateForegroundNotification("Full-device VPN is active")
             runtimeReady = true
             WhiteDnsRuntimeStateStore.markReady(
-                applicationContext,
-                settings,
-                "Full-device VPN routing started",
+                context = applicationContext,
+                settings = settings,
+                sessionId = sessionId,
+                message = "Full-device VPN routing started",
             )
             reportReady("Full-device VPN routing started")
             startTrafficKeepalive(resolvedSettings)
@@ -423,9 +429,10 @@ class WhiteDnsVpnService : VpnService() {
             Log.w(Tag, "Failed to stop StormDNS", error)
         }
         WhiteDnsRuntimeStateStore.markStopped(
-            applicationContext,
-            WhiteDnsRuntimeStateStore.ModeVpn,
-            "VPN service stopped",
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeVpn,
+            sessionId = currentSessionId,
+            message = "VPN service stopped",
         )
     }
 
@@ -594,14 +601,14 @@ class WhiteDnsVpnService : VpnService() {
     private fun logInfo(message: String) {
         Log.i(Tag, message)
         updateTrafficNotification(message)
-        WhiteDnsVpnEvents.log(message)
+        WhiteDnsVpnEvents.log(currentSessionId, message)
         sendVpnEvent(BroadcastTypeLog, message)
     }
 
     private fun logWarning(message: String) {
         Log.w(Tag, message)
         updateTrafficNotification(message)
-        WhiteDnsVpnEvents.log(message)
+        WhiteDnsVpnEvents.log(currentSessionId, message)
         sendVpnEvent(BroadcastTypeLog, message)
     }
 
@@ -637,9 +644,10 @@ class WhiteDnsVpnService : VpnService() {
             "$message: ${error.message ?: error::class.java.simpleName}"
         }
         WhiteDnsRuntimeStateStore.markFailed(
-            applicationContext,
-            WhiteDnsRuntimeStateStore.ModeVpn,
-            failureMessage,
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeVpn,
+            sessionId = currentSessionId,
+            message = failureMessage,
         )
         updateForegroundNotification("VPN disconnected")
         reportFailure(failureMessage)
@@ -649,13 +657,13 @@ class WhiteDnsVpnService : VpnService() {
     }
 
     private fun reportFailure(message: String) {
-        WhiteDnsVpnEvents.failed(message)
+        WhiteDnsVpnEvents.failed(currentSessionId, message)
         sendVpnEvent(BroadcastTypeFailed, message)
     }
 
     private fun reportReady(message: String) {
         Log.i(Tag, message)
-        WhiteDnsVpnEvents.ready(message)
+        WhiteDnsVpnEvents.ready(currentSessionId, message)
         sendVpnEvent(BroadcastTypeReady, message)
     }
 
@@ -664,6 +672,7 @@ class WhiteDnsVpnService : VpnService() {
             Intent(BroadcastAction)
                 .setPackage(packageName)
                 .putExtra(BroadcastExtraType, type)
+                .putExtra(BroadcastExtraSessionId, currentSessionId)
                 .putExtra(BroadcastExtraMessage, message),
         )
     }
@@ -672,6 +681,7 @@ class WhiteDnsVpnService : VpnService() {
         private const val Tag = "WhiteDnsVpnService"
         const val BroadcastAction = "shop.whitedns.client.vpn.EVENT"
         const val BroadcastExtraType = "shop.whitedns.client.vpn.extra.TYPE"
+        const val BroadcastExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"
         const val BroadcastExtraMessage = "shop.whitedns.client.vpn.extra.MESSAGE"
         const val BroadcastTypeLog = "log"
         const val BroadcastTypeReady = "ready"
@@ -683,6 +693,7 @@ class WhiteDnsVpnService : VpnService() {
         private const val ExtraServerDomain = "shop.whitedns.client.vpn.extra.SERVER_DOMAIN"
         private const val ExtraServerEncryptionKey = "shop.whitedns.client.vpn.extra.SERVER_ENCRYPTION_KEY"
         private const val ExtraServerEncryptionMethod = "shop.whitedns.client.vpn.extra.SERVER_ENCRYPTION_METHOD"
+        private const val ExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"
         private const val ExtraSettings = "shop.whitedns.client.vpn.extra.SETTINGS"
         const val TunIpv4Address = "172.19.0.1"
         private const val TunIpv4PrefixLength = 30
@@ -698,11 +709,13 @@ class WhiteDnsVpnService : VpnService() {
 
         fun start(
             context: Context,
+            sessionId: String,
             serverProfile: StormDnsServerProfile? = null,
             settings: WhiteDnsSettings? = null,
         ) {
             val intent = Intent(context, WhiteDnsVpnService::class.java)
                 .setAction(ActionStart)
+                .putExtra(ExtraSessionId, sessionId)
             if (settings != null) {
                 intent.putExtra(ExtraSettings, settings)
             }

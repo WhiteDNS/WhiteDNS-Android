@@ -3,9 +3,9 @@ package shop.whitedns.client.proxy
 import java.util.concurrent.CopyOnWriteArraySet
 
 sealed class WhiteDnsProxyEvent {
-    data class Log(val message: String) : WhiteDnsProxyEvent()
-    data class Ready(val message: String) : WhiteDnsProxyEvent()
-    data class Failed(val message: String) : WhiteDnsProxyEvent()
+    data class Log(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
+    data class Ready(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
+    data class Failed(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
 }
 
 object WhiteDnsProxyEvents {
@@ -19,16 +19,16 @@ object WhiteDnsProxyEvents {
         listeners.remove(listener)
     }
 
-    fun log(message: String) {
-        emit(WhiteDnsProxyEvent.Log(message))
+    fun log(sessionId: String, message: String) {
+        emit(WhiteDnsProxyEvent.Log(sessionId, message))
     }
 
-    fun ready(message: String) {
-        emit(WhiteDnsProxyEvent.Ready(message))
+    fun ready(sessionId: String, message: String) {
+        emit(WhiteDnsProxyEvent.Ready(sessionId, message))
     }
 
-    fun failed(message: String) {
-        emit(WhiteDnsProxyEvent.Failed(message))
+    fun failed(sessionId: String, message: String) {
+        emit(WhiteDnsProxyEvent.Failed(sessionId, message))
     }
 
     private fun emit(event: WhiteDnsProxyEvent) {

@@ -49,6 +49,7 @@ class WhiteDnsProxyService : Service() {
     private var keepaliveJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
+    private var currentSessionId = ""
     @Volatile
     private var stopping = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -73,9 +74,10 @@ class WhiteDnsProxyService : Service() {
                 runtimeReady = false
                 lastTrafficNotificationUpdateMillis = 0L
                 WhiteDnsRuntimeStateStore.markStopped(
-                    applicationContext,
-                    WhiteDnsRuntimeStateStore.ModeProxy,
-                    "Proxy service stopped",
+                    context = applicationContext,
+                    mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                    sessionId = currentSessionId,
+                    message = "Proxy service stopped",
                 )
                 exitForeground()
                 stopSelf()
@@ -104,9 +106,10 @@ class WhiteDnsProxyService : Service() {
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
         WhiteDnsRuntimeStateStore.markStopped(
-            applicationContext,
-            WhiteDnsRuntimeStateStore.ModeProxy,
-            "Proxy service stopped",
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeProxy,
+            sessionId = currentSessionId,
+            message = "Proxy service stopped",
         )
         exitForeground()
         serviceScope.cancel()
@@ -115,10 +118,12 @@ class WhiteDnsProxyService : Service() {
 
     private fun startProxy(intent: Intent?) {
         val previousJob = startJob
+        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
         val requestedServerProfile = intent?.serverProfileExtra()
         val requestedSettings = intent?.settingsExtra()?.runtimeConnectionSettings()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
+            currentSessionId = sessionId
             stopping = false
             var startedOnce = false
             var restartDelayMillis = RestartInitialDelayMillis
@@ -142,16 +147,17 @@ class WhiteDnsProxyService : Service() {
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
                     WhiteDnsRuntimeStateStore.markStarting(
-                        applicationContext,
-                        settings,
-                        "Starting local proxy",
+                        context = applicationContext,
+                        settings = settings,
+                        sessionId = sessionId,
+                        message = "Starting local proxy",
                     )
                     logInfo("Using custom StormDNS server")
                     logInfo("Starting SOCKS listener on ${resolvedSettings.listenIp}:${resolvedSettings.listenPort}")
                     if (resolvedSettings.localDnsEnabled) {
                         logInfo("Starting tunneled DNS listener on 127.0.0.1:${resolvedSettings.localDnsPort}")
                     }
-                    startStormDns(serverProfile, settings, resolvedSettings)
+                    startStormDns(sessionId, serverProfile, settings, resolvedSettings)
                     startedOnce = true
                     restartDelayMillis = RestartInitialDelayMillis
                     runtimeReady = true
@@ -168,9 +174,10 @@ class WhiteDnsProxyService : Service() {
                     updateForegroundNotification("Local proxy reconnecting")
                     val failureMessage = "Failed to start WhiteDNS proxy: ${error.message ?: error::class.java.simpleName}"
                     WhiteDnsRuntimeStateStore.markFailed(
-                        applicationContext,
-                        WhiteDnsRuntimeStateStore.ModeProxy,
-                        failureMessage,
+                        context = applicationContext,
+                        mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                        sessionId = sessionId,
+                        message = failureMessage,
                     )
                     if (!startedOnce) {
                         logError("Failed to start WhiteDNS proxy", error)
@@ -193,6 +200,7 @@ class WhiteDnsProxyService : Service() {
     }
 
     private suspend fun startStormDns(
+        sessionId: String,
         serverProfile: StormDnsServerProfile,
         settings: WhiteDnsSettings,
         resolvedSettings: ResolvedWhiteDnsSettings,
@@ -211,9 +219,10 @@ class WhiteDnsProxyService : Service() {
             )
             startHttpProxyBridge(resolvedSettings)
             WhiteDnsRuntimeStateStore.markReady(
-                applicationContext,
-                settings,
-                "SOCKS proxy is ready",
+                context = applicationContext,
+                settings = settings,
+                sessionId = sessionId,
+                message = "SOCKS proxy is ready",
             )
             reportReady("SOCKS proxy is ready")
         } finally {
@@ -490,14 +499,14 @@ class WhiteDnsProxyService : Service() {
     private fun logInfo(message: String) {
         Log.i(Tag, message)
         updateTrafficNotification(message)
-        WhiteDnsProxyEvents.log(message)
+        WhiteDnsProxyEvents.log(currentSessionId, message)
         sendProxyEvent(BroadcastTypeLog, message)
     }
 
     private fun logWarning(message: String) {
         Log.w(Tag, message)
         updateTrafficNotification(message)
-        WhiteDnsProxyEvents.log(message)
+        WhiteDnsProxyEvents.log(currentSessionId, message)
         sendProxyEvent(BroadcastTypeLog, message)
     }
 
@@ -520,13 +529,13 @@ class WhiteDnsProxyService : Service() {
     }
 
     private fun reportFailure(message: String) {
-        WhiteDnsProxyEvents.failed(message)
+        WhiteDnsProxyEvents.failed(currentSessionId, message)
         sendProxyEvent(BroadcastTypeFailed, message)
     }
 
     private fun reportReady(message: String) {
         Log.i(Tag, message)
-        WhiteDnsProxyEvents.ready(message)
+        WhiteDnsProxyEvents.ready(currentSessionId, message)
         sendProxyEvent(BroadcastTypeReady, message)
     }
 
@@ -535,6 +544,7 @@ class WhiteDnsProxyService : Service() {
             Intent(BroadcastAction)
                 .setPackage(packageName)
                 .putExtra(BroadcastExtraType, type)
+                .putExtra(BroadcastExtraSessionId, currentSessionId)
                 .putExtra(BroadcastExtraMessage, message),
         )
     }
@@ -543,6 +553,7 @@ class WhiteDnsProxyService : Service() {
         private const val Tag = "WhiteDnsProxyService"
         const val BroadcastAction = "shop.whitedns.client.proxy.EVENT"
         const val BroadcastExtraType = "shop.whitedns.client.proxy.extra.TYPE"
+        const val BroadcastExtraSessionId = "shop.whitedns.client.proxy.extra.SESSION_ID"
         const val BroadcastExtraMessage = "shop.whitedns.client.proxy.extra.MESSAGE"
         const val BroadcastTypeLog = "log"
         const val BroadcastTypeReady = "ready"
@@ -554,6 +565,7 @@ class WhiteDnsProxyService : Service() {
         private const val ExtraServerDomain = "shop.whitedns.client.proxy.extra.SERVER_DOMAIN"
         private const val ExtraServerEncryptionKey = "shop.whitedns.client.proxy.extra.SERVER_ENCRYPTION_KEY"
         private const val ExtraServerEncryptionMethod = "shop.whitedns.client.proxy.extra.SERVER_ENCRYPTION_METHOD"
+        private const val ExtraSessionId = "shop.whitedns.client.proxy.extra.SESSION_ID"
         private const val ExtraSettings = "shop.whitedns.client.proxy.extra.SETTINGS"
         private const val RestartInitialDelayMillis = 2_000L
         private const val RestartMaxDelayMillis = 30_000L
@@ -566,11 +578,13 @@ class WhiteDnsProxyService : Service() {
 
         fun start(
             context: Context,
+            sessionId: String,
             serverProfile: StormDnsServerProfile? = null,
             settings: WhiteDnsSettings? = null,
         ) {
             val intent = Intent(context, WhiteDnsProxyService::class.java)
                 .setAction(ActionStart)
+                .putExtra(ExtraSessionId, sessionId)
             if (settings != null) {
                 intent.putExtra(ExtraSettings, settings)
             }

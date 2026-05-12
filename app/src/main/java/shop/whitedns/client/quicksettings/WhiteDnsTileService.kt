@@ -7,6 +7,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.core.app.NotificationManagerCompat
+import java.util.UUID
 import shop.whitedns.client.MainActivity
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
@@ -48,6 +49,7 @@ class WhiteDnsTileService : TileService() {
             openApp()
             return
         }
+        val sessionId = UUID.randomUUID().toString()
 
         when (resolvedSettings.connectionMode) {
             WhiteDnsRuntimeStateStore.ModeVpn -> {
@@ -61,6 +63,7 @@ class WhiteDnsTileService : TileService() {
                 }
                 WhiteDnsVpnService.start(
                     context = applicationContext,
+                    sessionId = sessionId,
                     serverProfile = serverProfile,
                     settings = settings,
                 )
@@ -69,6 +72,7 @@ class WhiteDnsTileService : TileService() {
             else -> {
                 WhiteDnsProxyService.start(
                     context = applicationContext,
+                    sessionId = sessionId,
                     serverProfile = serverProfile,
                     settings = settings,
                 )

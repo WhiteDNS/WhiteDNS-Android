@@ -3,9 +3,9 @@ package shop.whitedns.client.vpn
 import java.util.concurrent.CopyOnWriteArraySet
 
 sealed class WhiteDnsVpnEvent {
-    data class Log(val message: String) : WhiteDnsVpnEvent()
-    data class Ready(val message: String) : WhiteDnsVpnEvent()
-    data class Failed(val message: String) : WhiteDnsVpnEvent()
+    data class Log(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
+    data class Ready(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
+    data class Failed(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
 }
 
 object WhiteDnsVpnEvents {
@@ -19,16 +19,16 @@ object WhiteDnsVpnEvents {
         listeners.remove(listener)
     }
 
-    fun log(message: String) {
-        emit(WhiteDnsVpnEvent.Log(message))
+    fun log(sessionId: String, message: String) {
+        emit(WhiteDnsVpnEvent.Log(sessionId, message))
     }
 
-    fun ready(message: String) {
-        emit(WhiteDnsVpnEvent.Ready(message))
+    fun ready(sessionId: String, message: String) {
+        emit(WhiteDnsVpnEvent.Ready(sessionId, message))
     }
 
-    fun failed(message: String) {
-        emit(WhiteDnsVpnEvent.Failed(message))
+    fun failed(sessionId: String, message: String) {
+        emit(WhiteDnsVpnEvent.Failed(sessionId, message))
     }
 
     private fun emit(event: WhiteDnsVpnEvent) {
