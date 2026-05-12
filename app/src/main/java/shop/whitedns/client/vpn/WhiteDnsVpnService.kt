@@ -41,6 +41,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.proxy.WhiteDnsProxyService
+import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.formatTrafficNotificationText
@@ -59,9 +60,6 @@ class WhiteDnsVpnService : VpnService() {
     @Volatile
     private var stopping = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val settingsStore by lazy {
-        WhiteDnsSettingsStore(applicationContext)
-    }
     private val stormDnsProcessManager by lazy {
         StormDnsProcessManager(applicationContext)
     }
@@ -86,7 +84,7 @@ class WhiteDnsVpnService : VpnService() {
                 try {
                     enterForeground("Preparing StormDNS")
                     startVpn(intent)
-                    START_STICKY
+                    START_REDELIVER_INTENT
                 } catch (error: Exception) {
                     logError("Failed to start foreground VPN service", error)
                     stopVpn()
@@ -195,13 +193,13 @@ class WhiteDnsVpnService : VpnService() {
     private fun startVpn(intent: Intent?) {
         val previousJob = startJob
         val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
-        val requestedServerProfile = intent?.serverProfileExtra()
-        val requestedSettings = intent?.settingsExtra()?.runtimeConnectionSettings()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
             currentSessionId = sessionId
             try {
-                val settings = requestedSettings ?: settingsStore.load().runtimeConnectionSettings()
+                val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
+                    ?: throw IllegalStateException("Runtime launch request is missing")
+                val settings = launchRequest.settings.runtimeConnectionSettings()
                 val resolvedSettings = settings.resolve()
                 if (resolvedSettings.connectionMode != "vpn") {
                     throw IllegalStateException("VPN mode is not enabled")
@@ -209,9 +207,7 @@ class WhiteDnsVpnService : VpnService() {
                 if (resolvedSettings.resolverEntries.isEmpty()) {
                     throw IllegalStateException("Resolvers are required to connect")
                 }
-                val serverProfile = requestedServerProfile
-                    ?: selectServerProfile(settings)
-                    ?: throw IllegalStateException("No StormDNS server profile configured")
+                val serverProfile = launchRequest.serverProfile
 
                 stopVpn()
                 WhiteDnsProxyService.stop(applicationContext)
@@ -469,58 +465,12 @@ class WhiteDnsVpnService : VpnService() {
         keepaliveJob = null
     }
 
-    private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
-        val connectionProfile = settings.selectedConnectionProfile()
-        val domain = connectionProfile.customServerDomain
-            .trim()
-            .trimEnd('.')
-        val encryptionKey = connectionProfile.customServerEncryptionKey.trim()
-        if (domain.isBlank() || encryptionKey.isBlank()) {
-            return null
-        }
-        return StormDnsServerProfile(
-            id = "custom",
-            label = "Custom StormDNS Server",
-            domain = domain,
-            encryptionKey = encryptionKey,
-            encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
-        )
-    }
-
     private fun selectVpnSocksHost(listenIp: String): String {
         val host = listenIp.trim().removeSurrounding("[", "]")
         return when (host) {
             "", "0.0.0.0" -> "127.0.0.1"
             "::" -> "::1"
             else -> host
-        }
-    }
-
-    private fun Intent.serverProfileExtra(): StormDnsServerProfile? {
-        val domain = getStringExtra(ExtraServerDomain)
-            ?.trim()
-            ?.trimEnd('.')
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        val encryptionKey = getStringExtra(ExtraServerEncryptionKey)
-            ?.trim()
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        return StormDnsServerProfile(
-            id = getStringExtra(ExtraServerId)?.takeIf(String::isNotBlank) ?: "custom",
-            label = getStringExtra(ExtraServerLabel)?.takeIf(String::isNotBlank) ?: "StormDNS Server",
-            domain = domain,
-            encryptionKey = encryptionKey,
-            encryptionMethod = getIntExtra(ExtraServerEncryptionMethod, 1).coerceIn(0, 5),
-        )
-    }
-
-    private fun Intent.settingsExtra(): WhiteDnsSettings? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getSerializableExtra(ExtraSettings, WhiteDnsSettings::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            getSerializableExtra(ExtraSettings) as? WhiteDnsSettings
         }
     }
 
@@ -688,13 +638,7 @@ class WhiteDnsVpnService : VpnService() {
         const val BroadcastTypeFailed = "failed"
         private const val ActionStart = "shop.whitedns.client.vpn.START"
         private const val ActionStop = "shop.whitedns.client.vpn.STOP"
-        private const val ExtraServerId = "shop.whitedns.client.vpn.extra.SERVER_ID"
-        private const val ExtraServerLabel = "shop.whitedns.client.vpn.extra.SERVER_LABEL"
-        private const val ExtraServerDomain = "shop.whitedns.client.vpn.extra.SERVER_DOMAIN"
-        private const val ExtraServerEncryptionKey = "shop.whitedns.client.vpn.extra.SERVER_ENCRYPTION_KEY"
-        private const val ExtraServerEncryptionMethod = "shop.whitedns.client.vpn.extra.SERVER_ENCRYPTION_METHOD"
         private const val ExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"
-        private const val ExtraSettings = "shop.whitedns.client.vpn.extra.SETTINGS"
         const val TunIpv4Address = "172.19.0.1"
         private const val TunIpv4PrefixLength = 30
         private const val TunDnsServer = "172.19.0.2"
@@ -713,21 +657,38 @@ class WhiteDnsVpnService : VpnService() {
             serverProfile: StormDnsServerProfile? = null,
             settings: WhiteDnsSettings? = null,
         ) {
+            val launchSettings = settings ?: WhiteDnsSettingsStore(context).load()
+            val launchServerProfile = serverProfile
+                ?: selectServerProfile(launchSettings)
+                ?: throw IllegalStateException("No StormDNS server profile configured")
+            RuntimeLaunchRequestStore.save(
+                context = context,
+                requestId = sessionId,
+                serverProfile = launchServerProfile,
+                settings = launchSettings,
+            )
             val intent = Intent(context, WhiteDnsVpnService::class.java)
                 .setAction(ActionStart)
                 .putExtra(ExtraSessionId, sessionId)
-            if (settings != null) {
-                intent.putExtra(ExtraSettings, settings)
-            }
-            if (serverProfile != null) {
-                intent
-                    .putExtra(ExtraServerId, serverProfile.id)
-                    .putExtra(ExtraServerLabel, serverProfile.label)
-                    .putExtra(ExtraServerDomain, serverProfile.domain)
-                    .putExtra(ExtraServerEncryptionKey, serverProfile.encryptionKey)
-                    .putExtra(ExtraServerEncryptionMethod, serverProfile.encryptionMethod)
-            }
             ContextCompat.startForegroundService(context, intent)
+        }
+
+        private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
+            val connectionProfile = settings.selectedConnectionProfile()
+            val domain = connectionProfile.customServerDomain
+                .trim()
+                .trimEnd('.')
+            val encryptionKey = connectionProfile.customServerEncryptionKey.trim()
+            if (domain.isBlank() || encryptionKey.isBlank()) {
+                return null
+            }
+            return StormDnsServerProfile(
+                id = "custom",
+                label = "Custom StormDNS Server",
+                domain = domain,
+                encryptionKey = encryptionKey,
+                encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
+            )
         }
 
         fun stop(context: Context) {

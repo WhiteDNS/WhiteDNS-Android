@@ -299,6 +299,7 @@ class WhiteDnsViewModel(
 
             activeServerProfile = serverProfile
             val runtimeSettings = settings.runtimeConnectionSettings()
+            val sessionId = UUID.randomUUID().toString()
             uiState = uiState.copy(
                 settings = settings,
                 activeConnectionProfileId = connectionProfile.id,

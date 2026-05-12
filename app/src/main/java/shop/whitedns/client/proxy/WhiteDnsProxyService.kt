@@ -35,6 +35,7 @@ import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
+import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.formatTrafficNotificationText
@@ -53,9 +54,6 @@ class WhiteDnsProxyService : Service() {
     @Volatile
     private var stopping = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val settingsStore by lazy {
-        WhiteDnsSettingsStore(applicationContext)
-    }
     private val stormDnsProcessManager by lazy {
         StormDnsProcessManager(applicationContext)
     }
@@ -87,7 +85,7 @@ class WhiteDnsProxyService : Service() {
                 try {
                     enterForeground("Starting local proxy")
                     startProxy(intent)
-                    START_STICKY
+                    START_REDELIVER_INTENT
                 } catch (error: Exception) {
                     logError("Failed to start proxy service", error)
                     stopProxyRuntime()
@@ -119,8 +117,6 @@ class WhiteDnsProxyService : Service() {
     private fun startProxy(intent: Intent?) {
         val previousJob = startJob
         val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
-        val requestedServerProfile = intent?.serverProfileExtra()
-        val requestedSettings = intent?.settingsExtra()?.runtimeConnectionSettings()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
             currentSessionId = sessionId
@@ -129,7 +125,9 @@ class WhiteDnsProxyService : Service() {
             var restartDelayMillis = RestartInitialDelayMillis
             while (isActive && !stopping) {
                 try {
-                    val settings = requestedSettings ?: settingsStore.load().runtimeConnectionSettings()
+                    val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
+                        ?: throw IllegalStateException("Runtime launch request is missing")
+                    val settings = launchRequest.settings.runtimeConnectionSettings()
                     val resolvedSettings = settings.resolve()
                     if (resolvedSettings.connectionMode != "proxy") {
                         throw IllegalStateException("Proxy mode is not enabled")
@@ -137,9 +135,7 @@ class WhiteDnsProxyService : Service() {
                     if (resolvedSettings.resolverEntries.isEmpty()) {
                         throw IllegalStateException("Resolvers are required to connect")
                     }
-                    val serverProfile = requestedServerProfile
-                        ?: selectServerProfile(settings)
-                        ?: throw IllegalStateException("No StormDNS server profile configured")
+                    val serverProfile = launchRequest.serverProfile
 
                     stopProxyRuntime()
                     WhiteDnsVpnService.stop(applicationContext)
@@ -450,52 +446,6 @@ class WhiteDnsProxyService : Service() {
             .build()
     }
 
-    private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
-        val connectionProfile = settings.selectedConnectionProfile()
-        val domain = connectionProfile.customServerDomain
-            .trim()
-            .trimEnd('.')
-        val encryptionKey = connectionProfile.customServerEncryptionKey.trim()
-        if (domain.isBlank() || encryptionKey.isBlank()) {
-            return null
-        }
-        return StormDnsServerProfile(
-            id = "custom",
-            label = "Custom StormDNS Server",
-            domain = domain,
-            encryptionKey = encryptionKey,
-            encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
-        )
-    }
-
-    private fun Intent.serverProfileExtra(): StormDnsServerProfile? {
-        val domain = getStringExtra(ExtraServerDomain)
-            ?.trim()
-            ?.trimEnd('.')
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        val encryptionKey = getStringExtra(ExtraServerEncryptionKey)
-            ?.trim()
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        return StormDnsServerProfile(
-            id = getStringExtra(ExtraServerId)?.takeIf(String::isNotBlank) ?: "custom",
-            label = getStringExtra(ExtraServerLabel)?.takeIf(String::isNotBlank) ?: "StormDNS Server",
-            domain = domain,
-            encryptionKey = encryptionKey,
-            encryptionMethod = getIntExtra(ExtraServerEncryptionMethod, 1).coerceIn(0, 5),
-        )
-    }
-
-    private fun Intent.settingsExtra(): WhiteDnsSettings? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getSerializableExtra(ExtraSettings, WhiteDnsSettings::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            getSerializableExtra(ExtraSettings) as? WhiteDnsSettings
-        }
-    }
-
     private fun logInfo(message: String) {
         Log.i(Tag, message)
         updateTrafficNotification(message)
@@ -560,13 +510,7 @@ class WhiteDnsProxyService : Service() {
         const val BroadcastTypeFailed = "failed"
         private const val ActionStart = "shop.whitedns.client.proxy.START"
         private const val ActionStop = "shop.whitedns.client.proxy.STOP"
-        private const val ExtraServerId = "shop.whitedns.client.proxy.extra.SERVER_ID"
-        private const val ExtraServerLabel = "shop.whitedns.client.proxy.extra.SERVER_LABEL"
-        private const val ExtraServerDomain = "shop.whitedns.client.proxy.extra.SERVER_DOMAIN"
-        private const val ExtraServerEncryptionKey = "shop.whitedns.client.proxy.extra.SERVER_ENCRYPTION_KEY"
-        private const val ExtraServerEncryptionMethod = "shop.whitedns.client.proxy.extra.SERVER_ENCRYPTION_METHOD"
         private const val ExtraSessionId = "shop.whitedns.client.proxy.extra.SESSION_ID"
-        private const val ExtraSettings = "shop.whitedns.client.proxy.extra.SETTINGS"
         private const val RestartInitialDelayMillis = 2_000L
         private const val RestartMaxDelayMillis = 30_000L
         private const val PreviousRuntimeStopTimeoutMillis = 3_000L
@@ -582,21 +526,38 @@ class WhiteDnsProxyService : Service() {
             serverProfile: StormDnsServerProfile? = null,
             settings: WhiteDnsSettings? = null,
         ) {
+            val launchSettings = settings ?: WhiteDnsSettingsStore(context).load()
+            val launchServerProfile = serverProfile
+                ?: selectServerProfile(launchSettings)
+                ?: throw IllegalStateException("No StormDNS server profile configured")
+            RuntimeLaunchRequestStore.save(
+                context = context,
+                requestId = sessionId,
+                serverProfile = launchServerProfile,
+                settings = launchSettings,
+            )
             val intent = Intent(context, WhiteDnsProxyService::class.java)
                 .setAction(ActionStart)
                 .putExtra(ExtraSessionId, sessionId)
-            if (settings != null) {
-                intent.putExtra(ExtraSettings, settings)
-            }
-            if (serverProfile != null) {
-                intent
-                    .putExtra(ExtraServerId, serverProfile.id)
-                    .putExtra(ExtraServerLabel, serverProfile.label)
-                    .putExtra(ExtraServerDomain, serverProfile.domain)
-                    .putExtra(ExtraServerEncryptionKey, serverProfile.encryptionKey)
-                    .putExtra(ExtraServerEncryptionMethod, serverProfile.encryptionMethod)
-            }
             ContextCompat.startForegroundService(context, intent)
+        }
+
+        private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
+            val connectionProfile = settings.selectedConnectionProfile()
+            val domain = connectionProfile.customServerDomain
+                .trim()
+                .trimEnd('.')
+            val encryptionKey = connectionProfile.customServerEncryptionKey.trim()
+            if (domain.isBlank() || encryptionKey.isBlank()) {
+                return null
+            }
+            return StormDnsServerProfile(
+                id = "custom",
+                label = "Custom StormDNS Server",
+                domain = domain,
+                encryptionKey = encryptionKey,
+                encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
+            )
         }
 
         fun stop(context: Context) {
