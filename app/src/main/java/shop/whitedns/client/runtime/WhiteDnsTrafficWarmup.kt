@@ -8,11 +8,34 @@ import kotlin.math.min
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 
 object WhiteDnsTrafficWarmup {
+    const val RecentRealTrafficSuppressMillis = 30_000L
+    const val ConstrainedKeepaliveBackoffMultiplier = 3
+
     fun runProbe(settings: ResolvedWhiteDnsSettings): Boolean {
         if (!settings.trafficWarmupEnabled) {
             return false
         }
         return runSocksHttpProbe(settings)
+    }
+
+    fun shouldSkipKeepaliveProbe(
+        nowMillis: Long,
+        lastRealTrafficSeenMillis: Long,
+    ): Boolean {
+        return lastRealTrafficSeenMillis > 0 &&
+            nowMillis - lastRealTrafficSeenMillis < RecentRealTrafficSuppressMillis
+    }
+
+    fun keepaliveDelayMillis(
+        settings: ResolvedWhiteDnsSettings,
+        constrained: Boolean,
+    ): Long {
+        val baseDelay = settings.trafficKeepaliveIntervalSeconds.coerceAtLeast(1) * 1_000L
+        return if (constrained) {
+            baseDelay * ConstrainedKeepaliveBackoffMultiplier
+        } else {
+            baseDelay
+        }
     }
 
     fun verifySocksRoute(settings: ResolvedWhiteDnsSettings): Boolean {

@@ -119,6 +119,7 @@ data class AdvancedSettingsProfile(
     val localDnsPort: String,
     val startupMode: String,
     val pingWatchdogSeconds: String,
+    val trafficWarmupMode: String,
     val trafficWarmupEnabled: Boolean,
     val trafficWarmupProbeCount: String,
     val trafficKeepaliveIntervalSeconds: String,
@@ -195,6 +196,7 @@ data class AdvancedSettingsProfile(
                 localDnsPort = settings.localDnsPort,
                 startupMode = settings.startupMode,
                 pingWatchdogSeconds = settings.pingWatchdogSeconds,
+                trafficWarmupMode = settings.trafficWarmupMode,
                 trafficWarmupEnabled = settings.trafficWarmupEnabled,
                 trafficWarmupProbeCount = settings.trafficWarmupProbeCount,
                 trafficKeepaliveIntervalSeconds = settings.trafficKeepaliveIntervalSeconds,
@@ -279,6 +281,7 @@ data class WhiteDnsSettings(
     val localDnsPort: String = "53",
     val startupMode: String = "resolvers",
     val pingWatchdogSeconds: String = "300",
+    val trafficWarmupMode: String = WhiteDnsOptions.TrafficWarmupBalanced,
     val trafficWarmupEnabled: Boolean = true,
     val trafficWarmupProbeCount: String = "4",
     val trafficKeepaliveIntervalSeconds: String = "5",
@@ -342,6 +345,7 @@ data class ResolvedWhiteDnsSettings(
     val localDnsPort: Int,
     val startupMode: String,
     val pingWatchdogSeconds: Int,
+    val trafficWarmupMode: String,
     val trafficWarmupEnabled: Boolean,
     val trafficWarmupProbeCount: Int,
     val trafficKeepaliveIntervalSeconds: Int,
@@ -447,6 +451,11 @@ object WhiteDnsOptions {
     const val VpnMtuPreset1400 = "1400"
     const val VpnMtuPreset1500 = "1500"
     const val VpnMtuPresetCustom = "custom"
+    const val TrafficWarmupOff = "off"
+    const val TrafficWarmupStartupOnly = "startup_only"
+    const val TrafficWarmupBalanced = "balanced"
+    const val TrafficWarmupAggressive = "aggressive"
+    const val TrafficWarmupCustom = "custom"
 
     val connectionModes = listOf(
         Choice("proxy", "Proxy Mode"),
@@ -470,6 +479,14 @@ object WhiteDnsOptions {
         Choice(VpnMtuPreset1400, "1400"),
         Choice(VpnMtuPreset1500, "1500"),
         Choice(VpnMtuPresetCustom, "Custom"),
+    )
+
+    val trafficWarmupModes = listOf(
+        Choice(TrafficWarmupOff, "Off"),
+        Choice(TrafficWarmupStartupOnly, "Startup Only"),
+        Choice(TrafficWarmupBalanced, "Balanced"),
+        Choice(TrafficWarmupAggressive, "Aggressive"),
+        Choice(TrafficWarmupCustom, "Custom"),
     )
 
     val encryptionMethods = listOf(
@@ -714,6 +731,7 @@ fun WhiteDnsSettings.applyAdvancedProfile(profile: AdvancedSettingsProfile): Whi
         localDnsPort = profile.localDnsPort,
         startupMode = profile.startupMode,
         pingWatchdogSeconds = profile.pingWatchdogSeconds,
+        trafficWarmupMode = profile.trafficWarmupMode,
         trafficWarmupEnabled = profile.trafficWarmupEnabled,
         trafficWarmupProbeCount = profile.trafficWarmupProbeCount,
         trafficKeepaliveIntervalSeconds = profile.trafficKeepaliveIntervalSeconds,
@@ -1031,6 +1049,7 @@ fun WhiteDnsSettings.resetAdvancedSettings(): WhiteDnsSettings {
         localDnsPort = defaults.localDnsPort,
         startupMode = defaults.startupMode,
         pingWatchdogSeconds = defaults.pingWatchdogSeconds,
+        trafficWarmupMode = defaults.trafficWarmupMode,
         trafficWarmupEnabled = defaults.trafficWarmupEnabled,
         trafficWarmupProbeCount = defaults.trafficWarmupProbeCount,
         trafficKeepaliveIntervalSeconds = defaults.trafficKeepaliveIntervalSeconds,
@@ -1233,6 +1252,20 @@ private fun normalizeConnectionMode(raw: String): String {
     }
 }
 
+private fun normalizeTrafficWarmupMode(raw: String, legacyEnabled: Boolean): String {
+    if (!legacyEnabled) {
+        return WhiteDnsOptions.TrafficWarmupOff
+    }
+    return when (raw) {
+        WhiteDnsOptions.TrafficWarmupOff,
+        WhiteDnsOptions.TrafficWarmupStartupOnly,
+        WhiteDnsOptions.TrafficWarmupBalanced,
+        WhiteDnsOptions.TrafficWarmupAggressive,
+        WhiteDnsOptions.TrafficWarmupCustom -> raw
+        else -> WhiteDnsOptions.TrafficWarmupBalanced
+    }
+}
+
 private fun normalizePackageNames(raw: List<String>): List<String> {
     return raw
         .asSequence()
@@ -1316,6 +1349,28 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
     val resolvedSocks5Authentication = socks5Authentication &&
         resolvedSocksUsername.isNotBlank() &&
         resolvedSocksPassword.isNotBlank()
+    val resolvedTrafficWarmupMode = normalizeTrafficWarmupMode(trafficWarmupMode, trafficWarmupEnabled)
+    val customWarmupProbeCount = boundedInt(trafficWarmupProbeCount, defaultValue = 4, minValue = 0, maxValue = 10)
+    val customKeepaliveIntervalSeconds = boundedInt(
+        trafficKeepaliveIntervalSeconds,
+        defaultValue = 30,
+        minValue = 2,
+        maxValue = 300,
+    )
+    val resolvedTrafficWarmupProbeCount = when (resolvedTrafficWarmupMode) {
+        WhiteDnsOptions.TrafficWarmupOff -> 0
+        WhiteDnsOptions.TrafficWarmupStartupOnly -> 2
+        WhiteDnsOptions.TrafficWarmupBalanced -> 3
+        WhiteDnsOptions.TrafficWarmupAggressive -> 6
+        else -> customWarmupProbeCount
+    }
+    val resolvedTrafficKeepaliveIntervalSeconds = when (resolvedTrafficWarmupMode) {
+        WhiteDnsOptions.TrafficWarmupOff,
+        WhiteDnsOptions.TrafficWarmupStartupOnly -> 0
+        WhiteDnsOptions.TrafficWarmupBalanced -> 30
+        WhiteDnsOptions.TrafficWarmupAggressive -> 5
+        else -> customKeepaliveIntervalSeconds
+    }
 
     return ResolvedWhiteDnsSettings(
         connectionMode = when (connectionMode) {
@@ -1449,14 +1504,10 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
             else -> "resolvers"
         },
         pingWatchdogSeconds = boundedInt(pingWatchdogSeconds, defaultValue = 300, minValue = 0, maxValue = 3600),
-        trafficWarmupEnabled = trafficWarmupEnabled,
-        trafficWarmupProbeCount = boundedInt(trafficWarmupProbeCount, defaultValue = 4, minValue = 0, maxValue = 10),
-        trafficKeepaliveIntervalSeconds = boundedInt(
-            trafficKeepaliveIntervalSeconds,
-            defaultValue = 5,
-            minValue = 2,
-            maxValue = 300,
-        ),
+        trafficWarmupMode = resolvedTrafficWarmupMode,
+        trafficWarmupEnabled = resolvedTrafficWarmupMode != WhiteDnsOptions.TrafficWarmupOff,
+        trafficWarmupProbeCount = resolvedTrafficWarmupProbeCount,
+        trafficKeepaliveIntervalSeconds = resolvedTrafficKeepaliveIntervalSeconds,
         vpnIpv6Strategy = resolvedVpnIpv6Strategy,
         vpnMtuPreset = resolvedVpnMtuPreset,
         vpnMtu = resolvedVpnMtu,

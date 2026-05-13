@@ -319,6 +319,7 @@ class WhiteDnsModelsTest {
     @Test
     fun resolveBoundsTrafficWarmupSettings() {
         val settings = WhiteDnsSettings(
+            trafficWarmupMode = WhiteDnsOptions.TrafficWarmupCustom,
             trafficWarmupProbeCount = "99",
             trafficKeepaliveIntervalSeconds = "1",
         )
@@ -328,6 +329,34 @@ class WhiteDnsModelsTest {
         assertEquals(true, resolvedSettings.trafficWarmupEnabled)
         assertEquals(10, resolvedSettings.trafficWarmupProbeCount)
         assertEquals(2, resolvedSettings.trafficKeepaliveIntervalSeconds)
+    }
+
+    @Test
+    fun resolveAppliesAdaptiveTrafficWarmupModes() {
+        val offSettings = WhiteDnsSettings(
+            trafficWarmupMode = WhiteDnsOptions.TrafficWarmupOff,
+            trafficWarmupProbeCount = "9",
+            trafficKeepaliveIntervalSeconds = "9",
+        ).resolve()
+        val startupOnlySettings = WhiteDnsSettings(
+            trafficWarmupMode = WhiteDnsOptions.TrafficWarmupStartupOnly,
+        ).resolve()
+        val balancedSettings = WhiteDnsSettings(
+            trafficWarmupMode = WhiteDnsOptions.TrafficWarmupBalanced,
+        ).resolve()
+        val aggressiveSettings = WhiteDnsSettings(
+            trafficWarmupMode = WhiteDnsOptions.TrafficWarmupAggressive,
+        ).resolve()
+
+        assertEquals(false, offSettings.trafficWarmupEnabled)
+        assertEquals(0, offSettings.trafficWarmupProbeCount)
+        assertEquals(0, offSettings.trafficKeepaliveIntervalSeconds)
+        assertEquals(2, startupOnlySettings.trafficWarmupProbeCount)
+        assertEquals(0, startupOnlySettings.trafficKeepaliveIntervalSeconds)
+        assertEquals(3, balancedSettings.trafficWarmupProbeCount)
+        assertEquals(30, balancedSettings.trafficKeepaliveIntervalSeconds)
+        assertEquals(6, aggressiveSettings.trafficWarmupProbeCount)
+        assertEquals(5, aggressiveSettings.trafficKeepaliveIntervalSeconds)
     }
 
     @Test

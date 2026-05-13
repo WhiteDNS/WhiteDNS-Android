@@ -1638,15 +1638,21 @@ private fun AdvancedSettingsFields(
             capitalization = KeyboardCapitalization.None,
         ),
     )
-    ToggleRow(
+    WhiteDnsDropdownField(
         label = "Traffic Warmup",
-        enabled = settings.trafficWarmupEnabled,
-        onToggle = {
-            onSettingsChange(settings.copy(trafficWarmupEnabled = !settings.trafficWarmupEnabled))
+        value = settings.trafficWarmupMode,
+        options = WhiteDnsOptions.trafficWarmupModes,
+        onValueChange = {
+            onSettingsChange(
+                settings.copy(
+                    trafficWarmupMode = it,
+                    trafficWarmupEnabled = it != WhiteDnsOptions.TrafficWarmupOff,
+                ),
+            )
         },
     )
     AnimatedVisibility(
-        visible = settings.trafficWarmupEnabled,
+        visible = settings.trafficWarmupMode == WhiteDnsOptions.TrafficWarmupCustom,
         enter = fadeIn(animationSpec = tween(220)) + expandVertically(animationSpec = tween(220)),
         exit = fadeOut(animationSpec = tween(160)) + shrinkVertically(animationSpec = tween(160)),
     ) {

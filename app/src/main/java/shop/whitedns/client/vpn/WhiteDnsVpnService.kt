@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.ActivityManager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -15,6 +16,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
@@ -62,6 +64,9 @@ class WhiteDnsVpnService : VpnService() {
     private var networkRecoveryJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
+    private var lastRealTrafficSeenMillis = 0L
+    private var lastTrafficDownloadBytes = 0L
+    private var lastTrafficUploadBytes = 0L
     private var currentSessionId = ""
     @Volatile
     private var stopping = false
@@ -242,6 +247,7 @@ class WhiteDnsVpnService : VpnService() {
                     stopping = false
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
+                    resetRealTrafficTracker()
                     WhiteDnsRuntimeStateStore.markStarting(
                         context = applicationContext,
                         settings = settings,
@@ -262,6 +268,7 @@ class WhiteDnsVpnService : VpnService() {
                     stopVpn()
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
+                    resetRealTrafficTracker()
                     if (!startedOnce) {
                         failAndStopVpn("Failed to start WhiteDNS VPN", error)
                         return@launch
@@ -468,6 +475,7 @@ class WhiteDnsVpnService : VpnService() {
         stopping = true
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
+        resetRealTrafficTracker()
         stopTrafficKeepalive()
         unregisterNetworkChangeCallback()
         runCatching {
@@ -522,9 +530,25 @@ class WhiteDnsVpnService : VpnService() {
             if (successfulWarmupProbes > 0) {
                 logInfo("Traffic warmup completed")
             }
+            if (resolvedSettings.trafficKeepaliveIntervalSeconds <= 0) {
+                return@launch
+            }
             while (isActive && !stopping) {
-                delay(resolvedSettings.trafficKeepaliveIntervalSeconds * 1_000L)
-                WhiteDnsTrafficWarmup.runProbe(resolvedSettings)
+                delay(
+                    WhiteDnsTrafficWarmup.keepaliveDelayMillis(
+                        settings = resolvedSettings,
+                        constrained = isRuntimeConstrained(),
+                    ),
+                )
+                val now = System.currentTimeMillis()
+                if (
+                    !WhiteDnsTrafficWarmup.shouldSkipKeepaliveProbe(
+                        nowMillis = now,
+                        lastRealTrafficSeenMillis = lastRealTrafficSeenMillis,
+                    )
+                ) {
+                    WhiteDnsTrafficWarmup.runProbe(resolvedSettings)
+                }
             }
         }
     }
@@ -714,6 +738,15 @@ class WhiteDnsVpnService : VpnService() {
         }
         val stats = parseStormDnsTrafficStatsLine(message) ?: return
         val now = System.currentTimeMillis()
+        if (stats.downloadSpeedBytesPerSecond > 0 ||
+            stats.uploadSpeedBytesPerSecond > 0 ||
+            stats.downloadBytes > lastTrafficDownloadBytes ||
+            stats.uploadBytes > lastTrafficUploadBytes
+        ) {
+            lastRealTrafficSeenMillis = now
+            lastTrafficDownloadBytes = stats.downloadBytes
+            lastTrafficUploadBytes = stats.uploadBytes
+        }
         if (now - lastTrafficNotificationUpdateMillis < TrafficNotificationUpdateIntervalMillis) {
             return
         }
@@ -734,6 +767,7 @@ class WhiteDnsVpnService : VpnService() {
         }
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
+        resetRealTrafficTracker()
         val failureMessage = if (error == null) {
             message
         } else {
@@ -761,6 +795,23 @@ class WhiteDnsVpnService : VpnService() {
         Log.i(Tag, message)
         WhiteDnsVpnEvents.ready(currentSessionId, message)
         sendVpnEvent(BroadcastTypeReady, message)
+    }
+
+    private fun resetRealTrafficTracker() {
+        lastRealTrafficSeenMillis = 0L
+        lastTrafficDownloadBytes = 0L
+        lastTrafficUploadBytes = 0L
+    }
+
+    private fun isRuntimeConstrained(): Boolean {
+        val powerSaveMode = getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+        return powerSaveMode || isAppInBackground()
+    }
+
+    private fun isAppInBackground(): Boolean {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance > ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
     }
 
     private fun sendVpnEvent(type: String, message: String) {

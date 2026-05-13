@@ -166,6 +166,8 @@ class WhiteDnsSettingsStore(
             startupMode = preferences.getString(KeyStartupMode, defaults.startupMode) ?: defaults.startupMode,
             pingWatchdogSeconds = preferences.getString(KeyPingWatchdogSeconds, defaults.pingWatchdogSeconds)
                 ?: defaults.pingWatchdogSeconds,
+            trafficWarmupMode = preferences.getString(KeyTrafficWarmupMode, defaults.trafficWarmupMode)
+                ?: defaults.trafficWarmupMode,
             trafficWarmupEnabled = preferences.getBoolean(KeyTrafficWarmupEnabled, defaults.trafficWarmupEnabled),
             trafficWarmupProbeCount = preferences.getString(
                 KeyTrafficWarmupProbeCount,
@@ -255,6 +257,7 @@ class WhiteDnsSettingsStore(
             .putString(KeyLocalDnsPort, normalizedSettings.localDnsPort)
             .putString(KeyStartupMode, normalizedSettings.startupMode)
             .putString(KeyPingWatchdogSeconds, normalizedSettings.pingWatchdogSeconds)
+            .putString(KeyTrafficWarmupMode, normalizedSettings.trafficWarmupMode)
             .putBoolean(KeyTrafficWarmupEnabled, normalizedSettings.trafficWarmupEnabled)
             .putString(KeyTrafficWarmupProbeCount, normalizedSettings.trafficWarmupProbeCount)
             .putString(KeyTrafficKeepaliveIntervalSeconds, normalizedSettings.trafficKeepaliveIntervalSeconds)
@@ -478,6 +481,10 @@ class WhiteDnsSettingsStore(
                         "pingWatchdogSeconds",
                         defaultProfile.pingWatchdogSeconds,
                     ),
+                    trafficWarmupMode = item.optString(
+                        "trafficWarmupMode",
+                        defaultProfile.trafficWarmupMode,
+                    ),
                     trafficWarmupEnabled = item.optBoolean(
                         "trafficWarmupEnabled",
                         defaultProfile.trafficWarmupEnabled,
@@ -556,6 +563,7 @@ class WhiteDnsSettingsStore(
                         .put("localDnsPort", profile.localDnsPort)
                         .put("startupMode", profile.startupMode)
                         .put("pingWatchdogSeconds", profile.pingWatchdogSeconds)
+                        .put("trafficWarmupMode", profile.trafficWarmupMode)
                         .put("trafficWarmupEnabled", profile.trafficWarmupEnabled)
                         .put("trafficWarmupProbeCount", profile.trafficWarmupProbeCount)
                         .put("trafficKeepaliveIntervalSeconds", profile.trafficKeepaliveIntervalSeconds)
@@ -687,6 +695,7 @@ class WhiteDnsSettingsStore(
         const val KeyLocalDnsPort = "local_dns_port"
         const val KeyStartupMode = "startup_mode"
         const val KeyPingWatchdogSeconds = "ping_watchdog_seconds"
+        const val KeyTrafficWarmupMode = "traffic_warmup_mode"
         const val KeyTrafficWarmupEnabled = "traffic_warmup_enabled"
         const val KeyTrafficWarmupProbeCount = "traffic_warmup_probe_count"
         const val KeyTrafficKeepaliveIntervalSeconds = "traffic_keepalive_interval_seconds"

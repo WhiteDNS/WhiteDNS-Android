@@ -5,11 +5,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -52,6 +54,9 @@ class WhiteDnsProxyService : Service() {
     private var keepaliveJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
+    private var lastRealTrafficSeenMillis = 0L
+    private var lastTrafficDownloadBytes = 0L
+    private var lastTrafficUploadBytes = 0L
     private var currentSessionId = ""
     @Volatile
     private var stopping = false
@@ -166,6 +171,7 @@ class WhiteDnsProxyService : Service() {
                     waitForLocalPortToClose(resolvedSettings.listenPort)
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
+                    resetRealTrafficTracker()
                     WhiteDnsRuntimeStateStore.markStarting(
                         context = applicationContext,
                         settings = settings,
@@ -192,6 +198,7 @@ class WhiteDnsProxyService : Service() {
                     stopProxyRuntime()
                     runtimeReady = false
                     lastTrafficNotificationUpdateMillis = 0L
+                    resetRealTrafficTracker()
                     updateForegroundNotification("Local proxy reconnecting")
                     val failureMessage = "Failed to start WhiteDNS proxy: ${error.message ?: error::class.java.simpleName}"
                     WhiteDnsRuntimeStateStore.markFailed(
@@ -393,9 +400,25 @@ class WhiteDnsProxyService : Service() {
             if (successfulWarmupProbes > 0) {
                 logInfo("Traffic warmup completed")
             }
+            if (resolvedSettings.trafficKeepaliveIntervalSeconds <= 0) {
+                return@launch
+            }
             while (isActive && !stopping) {
-                delay(resolvedSettings.trafficKeepaliveIntervalSeconds * 1_000L)
-                WhiteDnsTrafficWarmup.runProbe(resolvedSettings)
+                delay(
+                    WhiteDnsTrafficWarmup.keepaliveDelayMillis(
+                        settings = resolvedSettings,
+                        constrained = isRuntimeConstrained(),
+                    ),
+                )
+                val now = System.currentTimeMillis()
+                if (
+                    !WhiteDnsTrafficWarmup.shouldSkipKeepaliveProbe(
+                        nowMillis = now,
+                        lastRealTrafficSeenMillis = lastRealTrafficSeenMillis,
+                    )
+                ) {
+                    WhiteDnsTrafficWarmup.runProbe(resolvedSettings)
+                }
             }
         }
     }
@@ -519,6 +542,15 @@ class WhiteDnsProxyService : Service() {
         }
         val stats = parseStormDnsTrafficStatsLine(message) ?: return
         val now = System.currentTimeMillis()
+        if (stats.downloadSpeedBytesPerSecond > 0 ||
+            stats.uploadSpeedBytesPerSecond > 0 ||
+            stats.downloadBytes > lastTrafficDownloadBytes ||
+            stats.uploadBytes > lastTrafficUploadBytes
+        ) {
+            lastRealTrafficSeenMillis = now
+            lastTrafficDownloadBytes = stats.downloadBytes
+            lastTrafficUploadBytes = stats.uploadBytes
+        }
         if (now - lastTrafficNotificationUpdateMillis < TrafficNotificationUpdateIntervalMillis) {
             return
         }
@@ -540,6 +572,23 @@ class WhiteDnsProxyService : Service() {
         Log.i(Tag, message)
         WhiteDnsProxyEvents.ready(currentSessionId, message)
         sendProxyEvent(BroadcastTypeReady, message)
+    }
+
+    private fun resetRealTrafficTracker() {
+        lastRealTrafficSeenMillis = 0L
+        lastTrafficDownloadBytes = 0L
+        lastTrafficUploadBytes = 0L
+    }
+
+    private fun isRuntimeConstrained(): Boolean {
+        val powerSaveMode = getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+        return powerSaveMode || isAppInBackground()
+    }
+
+    private fun isAppInBackground(): Boolean {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance > ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
     }
 
     private fun sendProxyEvent(type: String, message: String) {

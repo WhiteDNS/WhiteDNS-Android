@@ -208,6 +208,7 @@ object RuntimeLaunchRequestStore {
             .put("localDnsPort", settings.localDnsPort)
             .put("startupMode", settings.startupMode)
             .put("pingWatchdogSeconds", settings.pingWatchdogSeconds)
+            .put("trafficWarmupMode", settings.trafficWarmupMode)
             .put("trafficWarmupEnabled", settings.trafficWarmupEnabled)
             .put("trafficWarmupProbeCount", settings.trafficWarmupProbeCount)
             .put("trafficKeepaliveIntervalSeconds", settings.trafficKeepaliveIntervalSeconds)
@@ -289,6 +290,7 @@ object RuntimeLaunchRequestStore {
             localDnsPort = json.optString("localDnsPort", "10888"),
             startupMode = json.optString("startupMode", "resolvers"),
             pingWatchdogSeconds = json.optString("pingWatchdogSeconds", "300"),
+            trafficWarmupMode = json.optString("trafficWarmupMode", "balanced"),
             trafficWarmupEnabled = json.optBoolean("trafficWarmupEnabled", true),
             trafficWarmupProbeCount = json.optString("trafficWarmupProbeCount", "4"),
             trafficKeepaliveIntervalSeconds = json.optString("trafficKeepaliveIntervalSeconds", "5"),
