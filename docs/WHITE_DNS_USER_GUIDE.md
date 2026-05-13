@@ -16,7 +16,7 @@ server, resolvers, local route, and network.
 Related documents:
 
 - [Troubleshooting Guide](WHITE_DNS_TROUBLESHOOTING.md)
-- [QA Test Plan](WHITE_DNS_FIELD_QA.md)
+- [QA Test Plan](WHITE_DNS_QA.md)
 - [Persian User Guide](fa/WHITE_DNS_USER_GUIDE.md)
 
 ## Quick Start

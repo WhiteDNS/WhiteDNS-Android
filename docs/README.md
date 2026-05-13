@@ -13,7 +13,7 @@ testers, and release reviewers.
 
 ## QA And Release Documentation
 
-- [QA Test Plan](WHITE_DNS_FIELD_QA.md): executable release and regression test
+- [QA Test Plan](WHITE_DNS_QA.md): executable release and regression test
   plan for Android behavior, security, storage, diagnostics, proxy, VPN, UI,
   StormDNS boundary checks, and release sign-off.
 - [Foreground Service Types](ANDROID_FOREGROUND_SERVICE_TYPES.md): Android
