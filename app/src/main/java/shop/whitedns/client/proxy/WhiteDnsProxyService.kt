@@ -283,6 +283,7 @@ class WhiteDnsProxyService : Service() {
                 socksPassword = if (resolvedSettings.socks5Authentication) resolvedSettings.socksPassword else null,
                 onOutput = ::logInfo,
             )
+            logInfo("HTTP proxy bridge limits: ${httpProxyBridge.stats().toDiagnosticText()}")
         }.onFailure { error ->
             logWarning("HTTP proxy bridge was not started: ${error.message ?: error::class.java.simpleName}")
         }
@@ -353,6 +354,10 @@ class WhiteDnsProxyService : Service() {
 
     private fun stopProxyRuntime() {
         stopTrafficKeepalive()
+        val bridgeStats = httpProxyBridge.stats()
+        if (bridgeStats.acceptedClients > 0 || bridgeStats.rejectedClients > 0 || bridgeStats.rejectedTunnels > 0) {
+            logInfo("HTTP proxy bridge stopped: ${bridgeStats.toDiagnosticText()}")
+        }
         httpProxyBridge.stop()
         runCatching {
             stormDnsProcessManager.stop()
@@ -539,6 +544,12 @@ class WhiteDnsProxyService : Service() {
                 .putExtra(BroadcastExtraSessionId, currentSessionId)
                 .putExtra(BroadcastExtraMessage, message),
         )
+    }
+
+    private fun HttpProxyBridgeStats.toDiagnosticText(): String {
+        return "clients active=$activeClients accepted=$acceptedClients rejected=$rejectedClients; " +
+            "tunnels active=$activeTunnelDirections rejected=$rejectedTunnels; " +
+            "headerRejects=$headerLimitRejections badRequests=$badRequestCount"
     }
 
     companion object {

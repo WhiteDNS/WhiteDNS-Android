@@ -24,4 +24,20 @@ class HttpProxyBridgeTest {
     fun parseHttpProxyHostPortRejectsInvalidPort() {
         assertNull(parseHttpProxyHostPort("example.com:99999", defaultPort = 443))
     }
+
+    @Test
+    fun parseHttpProxyHostPortRejectsOversizedHost() {
+        val oversizedHost = "a".repeat(256)
+
+        assertNull(parseHttpProxyHostPort(oversizedHost, defaultPort = 443, maxHostLength = 255))
+    }
+
+    @Test
+    fun bridgeLimitsRejectInvalidBounds() {
+        val error = runCatching {
+            HttpProxyBridgeLimits(maxClients = 0)
+        }.exceptionOrNull()
+
+        assertEquals("maxClients must be in 1..512", error?.message)
+    }
 }
