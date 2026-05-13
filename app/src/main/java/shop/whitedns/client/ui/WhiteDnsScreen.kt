@@ -1,10 +1,14 @@
 package shop.whitedns.client.ui
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.content.Intent
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.PersistableBundle
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -3364,7 +3368,7 @@ private fun ConnectionProfileExportDialog(
     placeholder: String = "stormdns://...",
     showQr: Boolean = true,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -3387,6 +3391,15 @@ private fun ConnectionProfileExportDialog(
             Spacer(modifier = Modifier.height(14.dp))
             val link = linkResult.getOrNull()
             if (link != null) {
+                Text(
+                    text = "This export includes connection secrets. Only share it with people or devices you trust.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 15.sp,
+                        color = WhiteDnsPalette.WarningText,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 if (showQr && !link.contains('\n')) {
                     ProfileQrPreview(link = link)
                     Spacer(modifier = Modifier.height(12.dp))
@@ -3418,7 +3431,7 @@ private fun ConnectionProfileExportDialog(
                         emphasized = false,
                         enabled = true,
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(link))
+                            copySensitiveTextToClipboard(context, "WhiteDNS profile", link)
                         },
                     )
                     CompactActionButton(
@@ -5913,7 +5926,11 @@ private fun buildDiagnosticsText(
         appendLine("Mode: ${WhiteDnsOptions.connectionModeLabel(resolvedSettings.connectionMode)}")
         appendLine("Profile: ${selectedProfile.name.ifBlank { selectedProfile.id }}")
         appendLine("Server: [redacted]")
-        appendLine("Encryption key: ${selectedProfile.customServerEncryptionKey.ifBlank { "not configured" }}")
+        appendLine(
+            "Encryption key: ${
+                if (selectedProfile.customServerEncryptionKey.isBlank()) "not configured" else "[redacted]"
+            }",
+        )
         appendLine("Resolver profile: ${resolverProfile?.name ?: "Manual resolvers"}")
         appendLine("Resolvers: ${resolvedSettings.resolverEntries.size}")
         appendLine("Split tunnel: ${WhiteDnsOptions.splitTunnelModeLabel(resolvedSettings.splitTunnelMode)}")
@@ -5947,7 +5964,25 @@ private fun String.redactDiagnosticSecrets(profile: ConnectionProfile): String {
     if (profile.customServerDomain.isNotBlank()) {
         redacted = redacted.replace(profile.customServerDomain, "[server route]")
     }
-    return redacted.replace(Regex("""(?i)(password|pass|secret)\s*[:=]\s*\S+"""), "\$1=[redacted]")
+    if (profile.customServerEncryptionKey.isNotBlank()) {
+        redacted = redacted.replace(profile.customServerEncryptionKey, "[redacted]")
+    }
+    return redacted.replace(Regex("""(?i)(password|pass|secret|key)\s*[:=]\s*\S+"""), "\$1=[redacted]")
+}
+
+private fun copySensitiveTextToClipboard(
+    context: Context,
+    label: String,
+    value: String,
+) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+    val clip = ClipData.newPlainText(label, value)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        clip.description.extras = PersistableBundle().apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        }
+    }
+    clipboard.setPrimaryClip(clip)
 }
 
 private fun readResolverTextFromUri(context: Context, uri: Uri): Result<String> {

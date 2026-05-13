@@ -1,13 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
--->
+<?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="white_dns_settings.xml" />
+    <exclude domain="file" path="runtime-launch/" />
+    <exclude domain="file" path="stormdns/" />
+    <exclude domain="file" path="logs/" />
+    <exclude domain="file" path="diagnostics/" />
+    <exclude domain="file" path="exports/" />
+    <exclude domain="file" path="cache/" />
+    <exclude domain="root" path="runtime-launch/" />
+    <exclude domain="root" path="stormdns/" />
+    <exclude domain="root" path="logs/" />
+    <exclude domain="root" path="diagnostics/" />
+    <exclude domain="root" path="exports/" />
 </full-backup-content>

@@ -107,9 +107,27 @@ object StormDnsConfigRenderer {
     }
 
     private fun escape(value: String): String {
-        return value
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
+        return buildString {
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\b' -> append("\\b")
+                    '\t' -> append("\\t")
+                    '\n' -> append("\\n")
+                    '\u000C' -> append("\\f")
+                    '\r' -> append("\\r")
+                    else -> {
+                        if (char.code < 0x20) {
+                            append("\\u")
+                            append(char.code.toString(16).padStart(4, '0'))
+                        } else {
+                            append(char)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun ConnectionProfile.toStormDnsServerProfile(): StormDnsServerProfile {

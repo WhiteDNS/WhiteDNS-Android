@@ -61,4 +61,28 @@ class StormDnsConfigRendererTest {
 
         assertTrue(toml.contains("""DOMAINS = ["one.example.com", "two.example.com", "three.example.com"]"""))
     }
+
+    @Test
+    fun renderClientTomlEscapesControlCharacters() {
+        val toml = StormDnsConfigRenderer.renderClientToml(
+            serverProfile = StormDnsServerProfile(
+                id = "custom",
+                label = "Custom",
+                domain = "server.example.com",
+                encryptionKey = "line\nquote\"tab\tctrl\u0001slash\\",
+                encryptionMethod = 1,
+            ),
+            settings = WhiteDnsSettings(
+                resolverText = "1.1.1.1",
+                listenIp = "127.0.0.1",
+                socksUsername = "user\tname",
+                socksPassword = "pass\nword",
+                logLevel = "INFO",
+            ),
+        )
+
+        assertTrue(toml.contains("ENCRYPTION_KEY = \"line\\nquote\\\"tab\\tctrl\\u0001slash\\\\\""))
+        assertTrue(toml.contains("SOCKS5_USER = \"user\\tname\""))
+        assertTrue(toml.contains("SOCKS5_PASS = \"pass\\nword\""))
+    }
 }
