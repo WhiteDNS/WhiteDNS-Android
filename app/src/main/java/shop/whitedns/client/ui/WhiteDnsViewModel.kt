@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ResolveInfo
 import android.net.TrafficStats
 import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
@@ -26,6 +27,7 @@ import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
 import java.util.Collections
+import java.util.Locale
 import java.util.UUID
 import shop.whitedns.client.model.ConnectionProgressState
 import shop.whitedns.client.model.ConnectionStats
@@ -33,6 +35,7 @@ import shop.whitedns.client.model.ConnectionStatus
 import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverRuntimeState
+import shop.whitedns.client.model.SplitTunnelAppInfo
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsRuntimeProxy
@@ -83,6 +86,7 @@ class WhiteDnsViewModel(
     private var runtimeRefreshJob: Job? = null
     private var batteryOptimizationRefreshJob: Job? = null
     private var verificationJob: Job? = null
+    private var splitTunnelAppsJob: Job? = null
     private var activeServerProfile: StormDnsServerProfile? = null
     private var activeRuntimeSessionId: String = ""
     private var activeProxyListenPort: Int = WhiteDnsRuntimeProxy.ListenPortInt
@@ -147,6 +151,7 @@ class WhiteDnsViewModel(
         WhiteDnsVpnEvents.addListener(vpnEventListener)
         registerRuntimeBroadcastReceivers()
         refreshRuntimeConnectionStatus()
+        loadSplitTunnelApps()
     }
 
     fun updateSettings(settings: WhiteDnsSettings) {
@@ -457,6 +462,7 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        splitTunnelAppsJob?.cancel()
         logUiFlushJob?.cancel()
         WhiteDnsProxyEvents.removeListener(proxyEventListener)
         WhiteDnsVpnEvents.removeListener(vpnEventListener)
@@ -486,6 +492,51 @@ class WhiteDnsViewModel(
         runCatching {
             appContext.unregisterReceiver(vpnBroadcastReceiver)
         }
+    }
+
+    private fun loadSplitTunnelApps() {
+        splitTunnelAppsJob?.cancel()
+        splitTunnelAppsJob = viewModelScope.launch {
+            uiState = uiState.copy(splitTunnelAppsLoading = true)
+            val apps = withContext(Dispatchers.IO) {
+                loadSplitTunnelAppOptions(appContext)
+            }
+            uiState = uiState.copy(
+                splitTunnelApps = apps,
+                splitTunnelAppsLoading = false,
+            )
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun loadSplitTunnelAppOptions(context: Context): List<SplitTunnelAppInfo> {
+        val packageManager = context.packageManager
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        return packageManager.queryIntentActivities(launcherIntent, 0)
+            .asSequence()
+            .mapNotNull { resolveInfo: ResolveInfo ->
+                val appPackage = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
+                if (appPackage == context.packageName) {
+                    return@mapNotNull null
+                }
+                val label = resolveInfo.loadLabel(packageManager)
+                    ?.toString()
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: appPackage
+                SplitTunnelAppInfo(
+                    packageName = appPackage,
+                    label = label,
+                )
+            }
+            .distinctBy { it.packageName }
+            .sortedWith(
+                compareBy<SplitTunnelAppInfo> { it.label.lowercase(Locale.US) }
+                    .thenBy { it.packageName },
+            )
+            .toList()
     }
 
     private fun handleRuntimeLog(sessionId: String, message: String) {

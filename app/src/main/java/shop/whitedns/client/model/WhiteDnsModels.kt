@@ -415,6 +415,11 @@ data class ConnectionVerificationState(
     val checkedAtMillis: Long = 0,
 )
 
+data class SplitTunnelAppInfo(
+    val packageName: String,
+    val label: String,
+)
+
 data class WhiteDnsUiState(
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val settings: WhiteDnsSettings = WhiteDnsSettings(),
@@ -428,6 +433,8 @@ data class WhiteDnsUiState(
     val resolverRuntimeState: ResolverRuntimeState = ResolverRuntimeState(),
     val connectionProgress: ConnectionProgressState = ConnectionProgressState(),
     val connectionVerification: ConnectionVerificationState = ConnectionVerificationState(),
+    val splitTunnelApps: List<SplitTunnelAppInfo> = emptyList(),
+    val splitTunnelAppsLoading: Boolean = true,
 )
 
 object WhiteDnsRuntimeProxy {

@@ -33,6 +33,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
@@ -131,6 +133,7 @@ import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
+import shop.whitedns.client.model.SplitTunnelAppInfo
 import shop.whitedns.client.model.WhiteDnsOptions
 import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsSettings
@@ -289,10 +292,7 @@ private fun ConnectTabContent(
     val showInitialSetup = !hasInitialServerProfile || !hasInitialResolverProfile
     val selectedResolverProfile = remember(settings) { settings.selectedResolverProfile() }
     val resolverValidation = remember(settings.resolverText) { validateResolverText(settings.resolverText) }
-    val context = LocalContext.current
-    val splitTunnelApps = remember(context.packageName) {
-        loadSplitTunnelAppOptions(context)
-    }
+    val splitTunnelApps = uiState.splitTunnelApps
     val splitTunnelAppLabels = remember(splitTunnelApps) {
         splitTunnelApps.associate { it.packageName to it.label }
     }
@@ -445,6 +445,7 @@ private fun ConnectTabContent(
                     SplitTunnelSettingsPanel(
                         settings = settings,
                         apps = splitTunnelApps,
+                        appsLoading = uiState.splitTunnelAppsLoading,
                         onSettingsChange = onSettingsChange,
                     )
                 }
@@ -4183,6 +4184,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
 private fun SplitTunnelSettingsPanel(
     settings: WhiteDnsSettings,
     apps: List<SplitTunnelAppInfo>,
+    appsLoading: Boolean,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
     var showAppDialog by rememberSaveable { mutableStateOf(false) }
@@ -4238,9 +4240,9 @@ private fun SplitTunnelSettingsPanel(
                     )
                     CompactActionButton(
                         modifier = Modifier.widthIn(min = 104.dp),
-                        label = "SELECT APPS",
+                        label = if (appsLoading) "LOADING" else "SELECT APPS",
                         emphasized = true,
-                        enabled = apps.isNotEmpty(),
+                        enabled = !appsLoading && apps.isNotEmpty(),
                         onClick = { showAppDialog = true },
                     )
                 }
@@ -4311,22 +4313,26 @@ private fun SplitTunnelAppDialog(
                 placeholder = "App name or package",
             )
             Spacer(modifier = Modifier.height(10.dp))
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .heightIn(max = 360.dp),
             ) {
                 if (visibleApps.isEmpty()) {
-                    Text(
-                        text = "No apps found.",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 11.sp,
-                            color = WhiteDnsPalette.Muted,
-                        ),
-                    )
+                    item {
+                        Text(
+                            text = "No apps found.",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 11.sp,
+                                color = WhiteDnsPalette.Muted,
+                            ),
+                        )
+                    }
                 } else {
-                    visibleApps.forEach { app ->
+                    items(
+                        items = visibleApps,
+                        key = { it.packageName },
+                    ) { app ->
                         val checked = app.packageName in selected
                         SplitTunnelAppRow(
                             app = app,
@@ -5104,11 +5110,6 @@ private data class CompactMetric(
     val icon: ImageVector,
     val label: String,
     val value: String,
-)
-
-private data class SplitTunnelAppInfo(
-    val packageName: String,
-    val label: String,
 )
 
 @Composable
@@ -6043,37 +6044,6 @@ private fun displayProxyIpAddress(
 
 private fun generateSocksPassword(): String {
     return UUID.randomUUID().toString().replace("-", "")
-}
-
-@Suppress("DEPRECATION")
-private fun loadSplitTunnelAppOptions(context: Context): List<SplitTunnelAppInfo> {
-    val packageManager = context.packageManager
-    val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-    }
-    return packageManager.queryIntentActivities(launcherIntent, 0)
-        .asSequence()
-        .mapNotNull { resolveInfo ->
-            val appPackage = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
-            if (appPackage == context.packageName) {
-                return@mapNotNull null
-            }
-            val label = resolveInfo.loadLabel(packageManager)
-                ?.toString()
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?: appPackage
-            SplitTunnelAppInfo(
-                packageName = appPackage,
-                label = label,
-            )
-        }
-        .distinctBy { it.packageName }
-        .sortedWith(
-            compareBy<SplitTunnelAppInfo> { it.label.lowercase(Locale.US) }
-                .thenBy { it.packageName },
-        )
-        .toList()
 }
 
 private fun selectedSplitTunnelLabels(
