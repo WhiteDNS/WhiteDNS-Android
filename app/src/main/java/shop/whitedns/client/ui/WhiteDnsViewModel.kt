@@ -93,6 +93,10 @@ class WhiteDnsViewModel(
     private var latestStormDnsTrafficStats: StormDnsTrafficStats? = null
     private var lastProgressUiUpdateMillis = 0L
     private var lastResolverUiUpdateMillis = 0L
+    private var logUiFlushJob: Job? = null
+    private val connectionLogBuffer = java.util.ArrayDeque<String>().apply {
+        addAll(uiState.connectionLogs)
+    }
     private val socksStreamTrackerLock = Any()
     private val socksStreamLastSeenMillis = mutableMapOf<Int, Long>()
     private val proxyEventListener: (WhiteDnsProxyEvent) -> Unit = { event ->
@@ -256,7 +260,7 @@ class WhiteDnsViewModel(
             resolverRuntimeState = ResolverRuntimeState(),
             connectionProgress = ConnectionProgressState(phase = "preparing", percent = 3),
             connectionVerification = ConnectionVerificationState(),
-            connectionLogs = listOf("Starting StormDNS"),
+            connectionLogs = replaceConnectionLogs(listOf("Starting StormDNS")),
         )
         activeVpnTrafficInterfaceName = null
         latestStormDnsTrafficStats = null
@@ -438,6 +442,9 @@ class WhiteDnsViewModel(
                 val stats = withContext(Dispatchers.IO) {
                     buildConnectionStats(listenPort = listenPort)
                 }
+                if (uiState.connectionStatus != ConnectionStatus.CONNECTED) {
+                    return@launch
+                }
                 uiState = uiState.copy(
                     connectionStats = stats,
                 )
@@ -450,6 +457,7 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        logUiFlushJob?.cancel()
         WhiteDnsProxyEvents.removeListener(proxyEventListener)
         WhiteDnsVpnEvents.removeListener(vpnEventListener)
         unregisterRuntimeBroadcastReceivers()
@@ -747,14 +755,13 @@ class WhiteDnsViewModel(
     }
 
     private fun prependConnectionLog(message: String): List<String> {
-        val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
-            .trim()
-            .redactRouteDetails()
+        val cleanMessage = sanitizeRuntimeLogLine(message)
         if (cleanMessage.isEmpty()) {
             return uiState.connectionLogs
         }
-        return (listOf(cleanMessage) + uiState.connectionLogs).take(MaxConnectionLogs)
+        logUiFlushJob?.cancel()
+        addConnectionLogToBuffer(cleanMessage)
+        return connectionLogBuffer.toList()
     }
 
     private fun shouldReconfigureActiveVpn(
@@ -1111,23 +1118,22 @@ class WhiteDnsViewModel(
         matchLocalPort: Boolean,
     ): List<String> {
         return runCatching {
-            java.io.File(path)
-                .readLines()
-                .drop(1)
-                .mapNotNull { line ->
-                    val columns = line.trim().split(Regex("\\s+"))
-                    val localAddress = columns.getOrNull(1) ?: return@mapNotNull null
-                    val remoteAddress = columns.getOrNull(2) ?: return@mapNotNull null
-                    val state = columns.getOrNull(3) ?: return@mapNotNull null
+            val matches = mutableListOf<String>()
+            java.io.File(path).useLines { lines ->
+                lines.drop(1).forEach { line ->
+                    val columns = line.trim().split(WhitespaceRegex)
+                    val localAddress = columns.getOrNull(1) ?: return@forEach
+                    val remoteAddress = columns.getOrNull(2) ?: return@forEach
+                    val state = columns.getOrNull(3) ?: return@forEach
                     val addressToMatch = if (matchLocalPort) localAddress else remoteAddress
                     val portHex = addressToMatch.substringAfterLast(':', missingDelimiterValue = "")
                     val port = portHex.toIntOrNull(radix = 16)
                     if (port == listenPort && state == EstablishedTcpState) {
-                        "$localAddress-$remoteAddress-$state"
-                    } else {
-                        null
+                        matches += "$localAddress-$remoteAddress-$state"
                     }
                 }
+            }
+            matches
         }.getOrDefault(emptyList())
     }
 
@@ -1209,19 +1215,49 @@ class WhiteDnsViewModel(
     }
 
     private fun appendLogOnMain(message: String) {
-        val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
-            .trim()
-            .redactRouteDetails()
+        val cleanMessage = sanitizeRuntimeLogLine(message)
         if (cleanMessage.isEmpty()) {
             return
         }
-        val nextLogs = (listOf(cleanMessage) + uiState.connectionLogs).take(MaxConnectionLogs)
-        uiState = uiState.copy(connectionLogs = nextLogs)
+        addConnectionLogToBuffer(cleanMessage)
+        scheduleConnectionLogFlush()
+    }
+
+    private fun sanitizeRuntimeLogLine(message: String): String {
+        return AnsiEscapeRegex.replace(message, "")
+            .trim()
+            .take(MaxRuntimeLogLineChars)
+            .redactRouteDetails()
+    }
+
+    private fun replaceConnectionLogs(logs: List<String>): List<String> {
+        logUiFlushJob?.cancel()
+        connectionLogBuffer.clear()
+        logs.take(MaxConnectionLogs).forEach(connectionLogBuffer::addLast)
+        return connectionLogBuffer.toList()
+    }
+
+    private fun addConnectionLogToBuffer(message: String) {
+        connectionLogBuffer.addFirst(message)
+        while (connectionLogBuffer.size > MaxConnectionLogs) {
+            connectionLogBuffer.removeLast()
+        }
+    }
+
+    private fun scheduleConnectionLogFlush() {
+        if (logUiFlushJob?.isActive == true) {
+            return
+        }
+        logUiFlushJob = viewModelScope.launch(Dispatchers.Main.immediate) {
+            delay(LogUiBatchDelayMillis)
+            uiState = uiState.copy(connectionLogs = connectionLogBuffer.toList())
+        }
     }
 
     private companion object {
         const val MaxConnectionLogs = 50
+        const val MaxRuntimeLogLineChars = 1_000
+        const val LogUiBatchDelayMillis = 120L
         const val RuntimeProgressUiUpdateIntervalMillis = 250L
         const val RuntimeResolverUiUpdateIntervalMillis = 500L
         const val EstablishedTcpState = "01"
@@ -1237,6 +1273,8 @@ class WhiteDnsViewModel(
         const val VerificationProbeRetryDelayMillis = 750L
         const val UidTrafficSourcePrefix = "uid:"
         const val VpnTrafficSourcePrefix = "vpn:"
+        val AnsiEscapeRegex = Regex("\\u001B\\[[;\\d]*m")
+        val WhitespaceRegex = Regex("\\s+")
         val socksStreamOpenedRegex = Regex("""New SOCKS\d TCP CONNECT .*Stream ID:\s*(\d+)""")
         val socksStreamClosedRegex = Regex("""ARQ Stream Closed .*Stream:\s*(\d+)""")
         val SafeNetworkInterfaceNameRegex = Regex("""[A-Za-z0-9_.:-]+""")
