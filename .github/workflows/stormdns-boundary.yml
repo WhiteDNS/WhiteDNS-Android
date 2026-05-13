@@ -33,13 +33,18 @@ jobs:
           base_ref="${{ github.event.pull_request.base.sha }}"
           head_ref="${{ github.event.pull_request.head.sha }}"
 
-          if scripts/check-stormdns-boundary.sh "${base_ref}" "${head_ref}"; then
+          set +e
+          scripts/check-stormdns-boundary.sh "${base_ref}" "${head_ref}"
+          guard_status="$?"
+          set -e
+
+          if [[ "${guard_status}" == "0" ]]; then
             exit 0
           fi
 
-          if [[ "${HAS_UPSTREAM_LABEL}" == "true" ]]; then
+          if [[ "${guard_status}" == "1" && "${HAS_UPSTREAM_LABEL}" == "true" ]]; then
             echo "StormDNS upstream changes are intentionally labeled."
             exit 0
           fi
 
-          exit 1
+          exit "${guard_status}"

@@ -28,13 +28,13 @@ Build tooling may know where the upstream client command lives so it can compile
 
 ## Allowed Upstream Changes
 
-Changes under `third_party/StormDNS` are allowed only when they are intentional upstream maintenance, such as:
+Changes under `third_party/StormDNS` or `.gitmodules` are allowed only when they are intentional upstream maintenance, such as:
 
 - Updating the pinned submodule commit.
 - Syncing a reviewed upstream fix.
 - Refreshing native binaries from a documented upstream commit.
 
-Any pull request that changes `third_party/StormDNS` must include the label:
+Any pull request that changes `third_party/StormDNS` or `.gitmodules` must include the label:
 
 `allow-stormdns-upstream`
 
@@ -49,4 +49,4 @@ For any pull request touching StormDNS integration:
 - Confirm telemetry parsing is tolerant of unknown or changed output.
 - Confirm optional behavior is gated by executable version/capability detection when needed.
 - Confirm no Android app code imports, parses, or depends on StormDNS Go internals.
-- Confirm `third_party/StormDNS` changes are either absent or intentionally labeled and explained.
+- Confirm `third_party/StormDNS` and `.gitmodules` changes are either absent or intentionally labeled and explained.

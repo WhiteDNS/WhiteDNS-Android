@@ -9,8 +9,13 @@ if ! git rev-parse --verify "${base_ref}" >/dev/null 2>&1; then
   exit 2
 fi
 
+if ! git rev-parse --verify "${head_ref}" >/dev/null 2>&1; then
+  echo "Head ref '${head_ref}' is not available." >&2
+  exit 2
+fi
+
 changed_files="$(
-  git diff --name-only "${base_ref}...${head_ref}" -- 'third_party/StormDNS' || true
+  git diff --name-only "${base_ref}...${head_ref}" -- 'third_party/StormDNS' '.gitmodules'
 )"
 
 if [[ -z "${changed_files}" ]]; then
