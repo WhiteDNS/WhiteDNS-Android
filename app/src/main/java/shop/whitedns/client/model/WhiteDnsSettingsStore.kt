@@ -8,6 +8,7 @@ class WhiteDnsSettingsStore(
     context: Context,
 ) {
     private val preferences = context.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)
+    private val secretStore = KeystoreSecretStore(context.applicationContext)
 
     fun load(): WhiteDnsSettings {
         val defaults = WhiteDnsSettings()
@@ -16,8 +17,9 @@ class WhiteDnsSettingsStore(
         val legacyServerMode = defaults.serverMode
         val legacyCustomServerDomain = preferences.getString(KeyCustomServerDomain, defaults.customServerDomain)
             ?: defaults.customServerDomain
-        val legacyCustomServerEncryptionKey = preferences.getString(
-            KeyCustomServerEncryptionKey,
+        val legacyCustomServerEncryptionKey = readSecretString(
+            encryptedKey = KeyCustomServerEncryptionKeyEncrypted,
+            legacyKey = KeyCustomServerEncryptionKey,
             defaults.customServerEncryptionKey,
         ) ?: defaults.customServerEncryptionKey
         val legacyCustomServerEncryptionMethod = preferences.getInt(
@@ -35,14 +37,14 @@ class WhiteDnsSettingsStore(
             connectionMode = legacyConnectionMode,
         )
         val connectionProfiles = decodeConnectionProfiles(
-            raw = preferences.getString(KeyConnectionProfiles, null),
+            raw = readSecretString(KeyConnectionProfilesEncrypted, KeyConnectionProfiles, null),
             fallbackProfile = legacyProfile,
         )
         val resolverProfiles = decodeResolverProfiles(
             raw = preferences.getString(KeyResolverProfiles, null),
         )
         val advancedProfiles = decodeAdvancedProfiles(
-            raw = preferences.getString(KeyAdvancedProfiles, null),
+            raw = readSecretString(KeyAdvancedProfilesEncrypted, KeyAdvancedProfiles, null),
         )
         return WhiteDnsSettings(
             selectedConnectionProfileId = preferences.getString(
@@ -70,8 +72,10 @@ class WhiteDnsSettingsStore(
             httpProxyEnabled = preferences.getBoolean(KeyHttpProxyEnabled, defaults.httpProxyEnabled),
             httpProxyPort = preferences.getString(KeyHttpProxyPort, defaults.httpProxyPort) ?: defaults.httpProxyPort,
             socks5Authentication = preferences.getBoolean(KeySocks5Authentication, defaults.socks5Authentication),
-            socksUsername = preferences.getString(KeySocksUsername, defaults.socksUsername) ?: defaults.socksUsername,
-            socksPassword = preferences.getString(KeySocksPassword, defaults.socksPassword) ?: defaults.socksPassword,
+            socksUsername = readSecretString(KeySocksUsernameEncrypted, KeySocksUsername, defaults.socksUsername)
+                ?: defaults.socksUsername,
+            socksPassword = readSecretString(KeySocksPasswordEncrypted, KeySocksPassword, defaults.socksPassword)
+                ?: defaults.socksPassword,
             balancingStrategy = preferences.getInt(KeyBalancingStrategy, defaults.balancingStrategy),
             uploadDuplication = preferences.getString(KeyUploadDuplication, defaults.uploadDuplication) ?: defaults.uploadDuplication,
             downloadDuplication = preferences.getString(KeyDownloadDuplication, defaults.downloadDuplication) ?: defaults.downloadDuplication,
@@ -198,14 +202,26 @@ class WhiteDnsSettingsStore(
         val normalizedSettings = settings.syncSelectedConnectionProfileFields()
         preferences.edit()
             .putString(KeySelectedConnectionProfileId, normalizedSettings.selectedConnectionProfileId)
-            .putString(KeyConnectionProfiles, encodeConnectionProfiles(normalizedSettings.connectionProfiles))
+            .putString(
+                KeyConnectionProfilesEncrypted,
+                secretStore.encryptToString(encodeConnectionProfiles(normalizedSettings.connectionProfiles)),
+            )
+            .remove(KeyConnectionProfiles)
             .putString(KeySelectedResolverProfileId, normalizedSettings.selectedResolverProfileId)
             .putString(KeyResolverProfiles, encodeResolverProfiles(normalizedSettings.resolverProfiles))
             .putString(KeySelectedAdvancedProfileId, normalizedSettings.selectedAdvancedProfileId)
-            .putString(KeyAdvancedProfiles, encodeAdvancedProfiles(normalizedSettings.advancedProfiles))
+            .putString(
+                KeyAdvancedProfilesEncrypted,
+                secretStore.encryptToString(encodeAdvancedProfiles(normalizedSettings.advancedProfiles)),
+            )
+            .remove(KeyAdvancedProfiles)
             .putString(KeyServerMode, normalizedSettings.serverMode)
             .putString(KeyCustomServerDomain, normalizedSettings.customServerDomain)
-            .putString(KeyCustomServerEncryptionKey, normalizedSettings.customServerEncryptionKey)
+            .putString(
+                KeyCustomServerEncryptionKeyEncrypted,
+                secretStore.encryptToString(normalizedSettings.customServerEncryptionKey),
+            )
+            .remove(KeyCustomServerEncryptionKey)
             .putInt(KeyCustomServerEncryptionMethod, normalizedSettings.customServerEncryptionMethod)
             .putString(KeyConnectionMode, normalizedSettings.connectionMode)
             .putString(KeyProtocolType, normalizedSettings.protocolType)
@@ -215,8 +231,10 @@ class WhiteDnsSettingsStore(
             .putBoolean(KeyHttpProxyEnabled, normalizedSettings.httpProxyEnabled)
             .putString(KeyHttpProxyPort, normalizedSettings.httpProxyPort)
             .putBoolean(KeySocks5Authentication, normalizedSettings.socks5Authentication)
-            .putString(KeySocksUsername, normalizedSettings.socksUsername)
-            .putString(KeySocksPassword, normalizedSettings.socksPassword)
+            .putString(KeySocksUsernameEncrypted, secretStore.encryptToString(normalizedSettings.socksUsername))
+            .remove(KeySocksUsername)
+            .putString(KeySocksPasswordEncrypted, secretStore.encryptToString(normalizedSettings.socksPassword))
+            .remove(KeySocksPassword)
             .putInt(KeyBalancingStrategy, normalizedSettings.balancingStrategy)
             .putString(KeyUploadDuplication, normalizedSettings.uploadDuplication)
             .putString(KeyDownloadDuplication, normalizedSettings.downloadDuplication)
@@ -299,6 +317,19 @@ class WhiteDnsSettingsStore(
                 .filter { it.id.isNotBlank() }
                 .ifEmpty { listOf(fallbackProfile) }
         }.getOrDefault(listOf(fallbackProfile))
+    }
+
+    private fun readSecretString(
+        encryptedKey: String,
+        legacyKey: String,
+        defaultValue: String?,
+    ): String? {
+        val encryptedValue = preferences.getString(encryptedKey, null)
+        val decryptedValue = secretStore.decryptFromString(encryptedValue)
+        if (decryptedValue != null) {
+            return decryptedValue
+        }
+        return preferences.getString(legacyKey, defaultValue)
     }
 
     private fun encodeConnectionProfiles(profiles: List<ConnectionProfile>): String {
@@ -637,13 +668,16 @@ class WhiteDnsSettingsStore(
         const val KeyAdvancedDefaultsRevision = "advanced_defaults_revision"
         const val KeySelectedConnectionProfileId = "selected_connection_profile_id"
         const val KeyConnectionProfiles = "connection_profiles"
+        const val KeyConnectionProfilesEncrypted = "connection_profiles_encrypted_v1"
         const val KeySelectedResolverProfileId = "selected_resolver_profile_id"
         const val KeyResolverProfiles = "resolver_profiles"
         const val KeySelectedAdvancedProfileId = "selected_advanced_profile_id"
         const val KeyAdvancedProfiles = "advanced_profiles"
+        const val KeyAdvancedProfilesEncrypted = "advanced_profiles_encrypted_v1"
         const val KeyServerMode = "server_mode"
         const val KeyCustomServerDomain = "custom_server_domain"
         const val KeyCustomServerEncryptionKey = "custom_server_encryption_key"
+        const val KeyCustomServerEncryptionKeyEncrypted = "custom_server_encryption_key_encrypted_v1"
         const val KeyCustomServerEncryptionMethod = "custom_server_encryption_method"
         const val KeyConnectionMode = "connection_mode"
         const val KeyProtocolType = "protocol_type"
@@ -655,6 +689,8 @@ class WhiteDnsSettingsStore(
         const val KeySocks5Authentication = "socks5_authentication"
         const val KeySocksUsername = "socks_username"
         const val KeySocksPassword = "socks_password"
+        const val KeySocksUsernameEncrypted = "socks_username_encrypted_v1"
+        const val KeySocksPasswordEncrypted = "socks_password_encrypted_v1"
         const val KeyBalancingStrategy = "balancing_strategy"
         const val KeyUploadDuplication = "upload_duplication"
         const val KeyDownloadDuplication = "download_duplication"

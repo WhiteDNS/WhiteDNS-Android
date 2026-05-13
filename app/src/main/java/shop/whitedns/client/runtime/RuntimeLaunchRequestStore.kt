@@ -8,6 +8,7 @@ import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONObject
 import shop.whitedns.client.model.ConnectionProfile
+import shop.whitedns.client.model.KeystoreSecretStore
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -38,7 +39,10 @@ object RuntimeLaunchRequestStore {
             settings = settings.runtimeConnectionSettings().syncSelectedConnectionProfileFields(),
         )
         cleanupStale(context)
-        writeAtomically(requestFile(context, requestId), encode(request).toString())
+        writeAtomically(
+            requestFile(context, requestId),
+            KeystoreSecretStore(context).encryptToString(encode(request).toString()),
+        )
         return request
     }
 
@@ -51,7 +55,9 @@ object RuntimeLaunchRequestStore {
             return null
         }
         return runCatching {
-            decode(JSONObject(file.readText(Charsets.UTF_8)))
+            val payload = file.readText(Charsets.UTF_8)
+            val decryptedPayload = KeystoreSecretStore(context).decryptFromString(payload) ?: payload
+            decode(JSONObject(decryptedPayload))
         }.getOrNull()
     }
 
