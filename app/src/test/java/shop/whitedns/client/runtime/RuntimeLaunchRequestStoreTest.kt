@@ -13,16 +13,16 @@ class RuntimeLaunchRequestStoreTest {
 
         val oldRequest = launchDir.resolve("session-old.json").apply {
             writeText("{}")
-            setLastModified(1_000L)
+            assertTrue(setLastModified(1_000L))
         }
         val freshRequest = launchDir.resolve("session-fresh.json").apply {
             writeText("{}")
-            setLastModified(9_500L)
+            assertTrue(setLastModified(9_500L))
         }
         val unsafeName = launchDir.resolve("unsafe/name.json")
         val unrelated = launchDir.resolve("notes.txt").apply {
             writeText("keep")
-            setLastModified(1_000L)
+            assertTrue(setLastModified(1_000L))
         }
 
         RuntimeLaunchRequestStore.cleanupStaleDirectory(

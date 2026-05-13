@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -112,6 +113,7 @@ class WhiteDnsVpnService : VpnService() {
             message = "VPN service stopping",
         )
         stopVpn()
+        RuntimeLaunchRequestStore.delete(applicationContext, currentSessionId)
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
@@ -205,7 +207,9 @@ class WhiteDnsVpnService : VpnService() {
 
     private fun startVpn(intent: Intent?) {
         val previousJob = startJob
-        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
+        val sessionId = intent?.getStringExtra(ExtraSessionId)
+            ?.takeIf(String::isNotBlank)
+            ?: UUID.randomUUID().toString()
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
             currentSessionId = sessionId
@@ -719,19 +723,21 @@ class WhiteDnsVpnService : VpnService() {
             serverProfile: StormDnsServerProfile? = null,
             settings: WhiteDnsSettings? = null,
         ) {
+            val launchSessionId = sessionId.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString()
             val launchSettings = settings ?: WhiteDnsSettingsStore(context).load()
             val launchServerProfile = serverProfile
                 ?: selectServerProfile(launchSettings)
-                ?: throw IllegalStateException("No StormDNS server profile configured")
-            RuntimeLaunchRequestStore.save(
-                context = context,
-                requestId = sessionId,
-                serverProfile = launchServerProfile,
-                settings = launchSettings,
-            )
+            if (launchServerProfile != null) {
+                RuntimeLaunchRequestStore.save(
+                    context = context,
+                    requestId = launchSessionId,
+                    serverProfile = launchServerProfile,
+                    settings = launchSettings,
+                )
+            }
             val intent = Intent(context, WhiteDnsVpnService::class.java)
                 .setAction(ActionStart)
-                .putExtra(ExtraSessionId, sessionId)
+                .putExtra(ExtraSessionId, launchSessionId)
             ContextCompat.startForegroundService(context, intent)
         }
 

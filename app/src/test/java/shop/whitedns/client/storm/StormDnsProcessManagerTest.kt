@@ -14,19 +14,19 @@ class StormDnsProcessManagerTest {
         val freshMillis = nowMillis - 1_000L
         val oldConfig = runtimeDir.resolve(".wd-old.toml").apply {
             writeText("config")
-            setLastModified(oldMillis)
+            assertTrue(setLastModified(oldMillis))
         }
         val oldResolvers = runtimeDir.resolve(".wd-old.resolvers").apply {
             writeText("resolvers")
-            setLastModified(oldMillis)
+            assertTrue(setLastModified(oldMillis))
         }
         val freshConfig = runtimeDir.resolve(".wd-fresh.toml").apply {
             writeText("config")
-            setLastModified(freshMillis)
+            assertTrue(setLastModified(freshMillis))
         }
         val unrelated = runtimeDir.resolve("client.toml").apply {
             writeText("config")
-            setLastModified(oldMillis)
+            assertTrue(setLastModified(oldMillis))
         }
 
         StormDnsProcessManager.cleanupStaleLaunchFiles(

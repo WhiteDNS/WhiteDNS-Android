@@ -148,12 +148,15 @@ object RuntimeLaunchRequestStore {
     }
 
     private fun encodeSettings(settings: WhiteDnsSettings): JSONObject {
+        val selectedConnectionProfile = settings.selectedConnectionProfile()
         val splitTunnelPackages = JSONArray()
         settings.splitTunnelPackages.forEach { packageName ->
             splitTunnelPackages.put(packageName)
         }
         return JSONObject()
             .put("selectedConnectionProfileId", settings.selectedConnectionProfileId)
+            .put("connectionProfileName", selectedConnectionProfile.name)
+            .put("connectionProfileResolverProfileId", selectedConnectionProfile.resolverProfileId)
             .put("serverMode", settings.serverMode)
             .put("customServerDomain", settings.customServerDomain)
             .put("customServerEncryptionKey", settings.customServerEncryptionKey)
@@ -224,11 +227,12 @@ object RuntimeLaunchRequestStore {
             connectionProfiles = listOf(
                 ConnectionProfile(
                     id = selectedConnectionProfileId.ifBlank { ConnectionProfile.DefaultId },
-                    name = "Connection",
+                    name = json.optString("connectionProfileName", "Connection"),
                     serverMode = json.optString("serverMode", "custom"),
                     customServerDomain = json.optString("customServerDomain"),
                     customServerEncryptionKey = json.optString("customServerEncryptionKey"),
                     customServerEncryptionMethod = json.optInt("customServerEncryptionMethod", 1),
+                    resolverProfileId = json.optString("connectionProfileResolverProfileId"),
                     connectionMode = json.optString("connectionMode", "proxy"),
                 ),
             ),
