@@ -216,6 +216,7 @@ fun WhiteDnsScreen(
                     onSettingsChange = onSettingsChange,
                 )
                 WhiteDnsTab.LOGS -> LogsTabContent(uiState = uiState)
+                WhiteDnsTab.GUIDE -> GuideTabContent()
             }
         }
         BottomNavigationBar(
@@ -232,12 +233,18 @@ private enum class WhiteDnsTab(
     PROFILES("Profiles", Icons.Filled.Apps),
     CONNECT("Connect", Icons.Rounded.PowerSettingsNew),
     LOGS("Logs", Icons.Rounded.Link),
+    GUIDE("Guide", Icons.Rounded.Tune),
 }
 
 private enum class ProfileCreateRequest {
     CONNECTION,
     RESOLVER,
 }
+
+private data class GuideEntry(
+    val label: String,
+    val detail: String,
+)
 
 private fun Modifier.whiteDnsPageBackground(): Modifier {
     return drawBehind {
@@ -563,6 +570,8 @@ private fun ConnectTabContent(
                         onAddConnectionClick = onAddConnectionClick,
                         onAddResolverProfileClick = onAddResolverProfileClick,
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    StarterWalkthroughCard()
                     Spacer(modifier = Modifier.height(18.dp))
                 }
             }
@@ -827,6 +836,266 @@ private fun LogsTabContent(uiState: WhiteDnsUiState) {
             ConnectionLogsBlock(uiState = uiState, expanded = true)
             Spacer(modifier = Modifier.height(24.dp))
             FooterLink()
+        }
+    }
+}
+
+@Composable
+private fun GuideTabContent() {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            HeaderCard()
+        }
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                StarterWalkthroughCard()
+                GuideSection(
+                    title = "CONNECTION BASICS",
+                    intro = "WhiteDNS needs a server profile, a resolver list, and one runtime mode. Keep these three pieces separate while troubleshooting.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Domain(s)",
+                            detail = "The public server route StormDNS will use. Multiple domains can improve fallback behavior, but every domain must be valid and controlled by the same setup.",
+                        ),
+                        GuideEntry(
+                            label = "Encryption key",
+                            detail = "The shared secret for the tunnel. A wrong key can still look like a connection attempt, but traffic will not become useful.",
+                        ),
+                        GuideEntry(
+                            label = "Resolvers",
+                            detail = "DNS resolvers carry the tunnel packets. More resolvers are not automatically better; invalid, private, or overloaded resolvers can slow startup and waste traffic.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "PROXY MODE",
+                    intro = "Proxy mode starts a local SOCKS proxy and optionally an HTTP bridge. Use it when another app can point at a local proxy address.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Listen IP",
+                            detail = "Loopback keeps the proxy on this device. A LAN address exposes the proxy to other devices and must use a nonblank username and password.",
+                        ),
+                        GuideEntry(
+                            label = "SOCKS port",
+                            detail = "The local port companion apps use. If another app already owns the port, startup should fail cleanly and release all worker threads.",
+                        ),
+                        GuideEntry(
+                            label = "HTTP bridge",
+                            detail = "Allows HTTP-proxy clients to reach the SOCKS tunnel. Client count, header size, host length, and idle tunnels are bounded to protect the app.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "VPN MODE",
+                    intro = "VPN mode routes selected Android app traffic through WhiteDNS. It is simpler for users, but it is more sensitive to Android background and network-change behavior.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Split tunnel",
+                            detail = "Choose which apps use the tunnel. Editing inactive profiles is safe while connected; active runtime changes should require reconnect or an explicit apply flow.",
+                        ),
+                        GuideEntry(
+                            label = "IPv6 strategy",
+                            detail = "Block is safest against leaks. Bypass can improve compatibility but should be treated as a warning. Experimental route needs network-specific testing.",
+                        ),
+                        GuideEntry(
+                            label = "MTU",
+                            detail = "Lower values such as 1280 favor compatibility. Higher values may improve throughput on clean networks but can break paths that fragment or filter packets.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "TRAFFIC AND BATTERY",
+                    intro = "Warmup and keepalive traffic can make startup smoother, but they also create visible upload and battery cost.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Off",
+                            detail = "No deliberate warmup traffic. Best for users who need the lowest possible background traffic.",
+                        ),
+                        GuideEntry(
+                            label = "Startup-only",
+                            detail = "A low-cost default. It helps the tunnel start, then stops instead of sending ongoing keepalive traffic.",
+                        ),
+                        GuideEntry(
+                            label = "Balanced",
+                            detail = "Keeps the tunnel warm when needed, but should skip keepalive if real traffic was seen recently.",
+                        ),
+                        GuideEntry(
+                            label = "Aggressive",
+                            detail = "Can help difficult networks, but costs more upload, battery, and resolver load. It should be used only when the user accepts that tradeoff.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "TUNNEL SHAPE",
+                    intro = "These settings change how packets are split, repeated, compressed, or encoded before they travel through DNS.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Min and max upload/download",
+                            detail = "These ranges control packet sizing. Smaller values favor compatibility on filtered or fragile networks; larger values can improve throughput when the path is clean.",
+                        ),
+                        GuideEntry(
+                            label = "Upload/download duplication",
+                            detail = "Duplication repeats packets to improve loss tolerance. It can help unstable resolvers but increases upload and resolver load.",
+                        ),
+                        GuideEntry(
+                            label = "Upload/download compression",
+                            detail = "Compression can reduce transferred bytes for compressible traffic, but it adds CPU cost and may not help already-compressed app data.",
+                        ),
+                        GuideEntry(
+                            label = "DNS fragments",
+                            detail = "Fragmenting can avoid size limits, but too many fragments increase request count and can make startup slower.",
+                        ),
+                        GuideEntry(
+                            label = "Base encode data",
+                            detail = "Encoding changes how payload bytes fit DNS-safe text. It can improve compatibility at the cost of extra overhead.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "RELIABILITY CONTROLS",
+                    intro = "Retries, timeouts, workers, and queues decide how patient and parallel the client should be.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Resolver parallel and retries",
+                            detail = "More parallelism can find working resolvers faster, but high values can create upload spikes. Retries help packet loss but delay failure detection.",
+                        ),
+                        GuideEntry(
+                            label = "Resolver timeout and packet timeout",
+                            detail = "Short timeouts fail faster on broken paths. Longer timeouts can help slow networks but make the app feel stuck.",
+                        ),
+                        GuideEntry(
+                            label = "Process workers and RX/TX workers",
+                            detail = "Workers control local concurrency. More workers may help high-throughput devices, but they can cost CPU, battery, and memory.",
+                        ),
+                        GuideEntry(
+                            label = "RX/TX channels and stream queue",
+                            detail = "Queues absorb bursts. Larger queues can smooth traffic but may increase memory use and delay failure visibility.",
+                        ),
+                        GuideEntry(
+                            label = "Retry base, linear, step, and max",
+                            detail = "These shape reconnect and retry pacing. Aggressive retries recover faster but can create repeated traffic on failing networks.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "RUNTIME HOUSEKEEPING",
+                    intro = "These controls affect how WhiteDNS observes a running session and how much history it keeps.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Ping watchdog",
+                            detail = "Detects sessions that look connected but stop responding. A low value reacts faster; a high value avoids false alarms on slow networks.",
+                        ),
+                        GuideEntry(
+                            label = "Idle poll and busy retry",
+                            detail = "These tune how often runtime loops wake up. Lower values can feel more responsive but may use more battery.",
+                        ),
+                        GuideEntry(
+                            label = "Logs parallel, retries, and timeout",
+                            detail = "These affect log collection and runtime observation, not secret handling. Logs still need redaction before sharing.",
+                        ),
+                        GuideEntry(
+                            label = "Cancelled, terminal, and orphan retain",
+                            detail = "Retain limits decide how much completed runtime state stays available for diagnostics. Higher values help debugging but should remain bounded.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "STATUS AND METRICS",
+                    intro = "A useful connection state is more than a running process. The app should show which layer is healthy.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Startup progress",
+                            detail = "Shows where startup is waiting. It should time out with a clear failure instead of remaining stuck.",
+                        ),
+                        GuideEntry(
+                            label = "Resolver state",
+                            detail = "Shows whether resolver activity is healthy. Bad resolver lists can look like server failure unless this layer is separated.",
+                        ),
+                        GuideEntry(
+                            label = "Route check",
+                            detail = "Confirms user traffic can actually leave through the local proxy or VPN route. If this fails, the app should not report ready.",
+                        ),
+                        GuideEntry(
+                            label = "Upload/download",
+                            detail = "Upload can include DNS tunnel requests, warmup, keepalive, and real user traffic. High upload with no download usually needs resolver or server-health checks.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "IMPORT, EXPORT, AND DIAGNOSTICS",
+                    intro = "Profile sharing and support diagnostics have opposite safety goals: profile exports must stay usable, while diagnostics must be redacted by default.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Profile export",
+                            detail = "Contains connection secrets and must remain the real importable value. Show a clear trust warning before copy, share, or QR display.",
+                        ),
+                        GuideEntry(
+                            label = "Diagnostics",
+                            detail = "Safe support output should redact keys, passwords, profile links, TOML secrets, runtime paths, generated files, and logs.",
+                        ),
+                        GuideEntry(
+                            label = "Clipboard",
+                            detail = "Copying sensitive values should require explicit intent and mark clipboard content sensitive on Android versions that support it.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "TROUBLESHOOTING PATH",
+                    intro = "When the tunnel does not work, check one layer at a time instead of changing every setting together.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "1. Server",
+                            detail = "Confirm the domain, key, and server capacity. An expired or unreachable server can still produce confusing startup activity.",
+                        ),
+                        GuideEntry(
+                            label = "2. Resolvers",
+                            detail = "Use a smaller clean resolver list, remove duplicates, and avoid private/local addresses unless intentionally testing a local network.",
+                        ),
+                        GuideEntry(
+                            label = "3. Local route",
+                            detail = "In proxy mode, verify the companion app uses the displayed address and port. In VPN mode, verify the target app is included by split tunnel.",
+                        ),
+                        GuideEntry(
+                            label = "4. Network",
+                            detail = "Try Wi-Fi and mobile data separately. Operator filtering, IPv6, MTU, and battery restrictions can change the result.",
+                        ),
+                    ),
+                )
+                GuideSection(
+                    title = "QA CHECKLIST",
+                    intro = "Use this mini-checklist before sharing a build or profile with another user.",
+                    entries = listOf(
+                        GuideEntry(
+                            label = "Secrets",
+                            detail = "Diagnostics are redacted, backups exclude sensitive files, and profile exports show a clear warning.",
+                        ),
+                        GuideEntry(
+                            label = "Connection",
+                            detail = "Proxy and VPN both start, stop, reconnect, and reject stale runtime events.",
+                        ),
+                        GuideEntry(
+                            label = "Usability",
+                            detail = "Text remains visible after navigation, large font sizes do not overlap, and long profile names wrap cleanly.",
+                        ),
+                    ),
+                )
+                FooterLink()
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
@@ -1987,6 +2256,147 @@ private fun ConnectionSetupCard(
             onClick = onAddResolverProfileClick,
         )
     }
+}
+
+@Composable
+private fun StarterWalkthroughCard() {
+    InfoCard(title = "STARTER WALKTHROUGH", compact = true) {
+        GuideStepRow(
+            number = "1",
+            title = "Add a connection profile",
+            detail = "Enter the server domain or domains and the encryption key from a source you trust.",
+        )
+        GuideStepDivider()
+        GuideStepRow(
+            number = "2",
+            title = "Add a resolver profile",
+            detail = "Start with a clean, smaller resolver list. Large duplicate-heavy lists can slow startup and increase upload.",
+        )
+        GuideStepDivider()
+        GuideStepRow(
+            number = "3",
+            title = "Choose proxy or VPN mode",
+            detail = "Use proxy mode for companion apps that can use a local proxy. Use VPN mode when Android apps should route directly through WhiteDNS.",
+        )
+        GuideStepDivider()
+        GuideStepRow(
+            number = "4",
+            title = "Connect and read the status",
+            detail = "A healthy session needs server startup, resolver activity, and a passing local route check before user traffic is truly ready.",
+        )
+    }
+}
+
+@Composable
+private fun GuideSection(
+    title: String,
+    intro: String,
+    entries: List<GuideEntry>,
+) {
+    InfoCard(title = title, compact = true) {
+        Text(
+            text = intro,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = WhiteDnsPalette.TextSecondary,
+                lineHeight = 17.sp,
+            ),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        entries.forEachIndexed { index, entry ->
+            GuideInfoRow(entry = entry)
+            if (index != entries.lastIndex) {
+                GuideStepDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideInfoRow(entry: GuideEntry) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = entry.label,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = WhiteDnsPalette.Ink,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+            ),
+        )
+        Text(
+            text = entry.detail,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = WhiteDnsPalette.TextSecondary,
+                lineHeight = 17.sp,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun GuideStepRow(
+    number: String,
+    title: String,
+    detail: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(WhiteDnsPalette.AccentSurface)
+                .border(1.5.dp, WhiteDnsPalette.Accent.copy(alpha = 0.24f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = number,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WhiteDnsPalette.AccentText,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = WhiteDnsPalette.Ink,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                ),
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = WhiteDnsPalette.TextSecondary,
+                    lineHeight = 17.sp,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideStepDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(WhiteDnsPalette.Divider),
+    )
 }
 
 @Composable
