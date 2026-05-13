@@ -8,6 +8,9 @@ val whiteDnsVersionCode = providers.gradleProperty("WHITE_DNS_VERSION_CODE")
     .orElse(8)
 val whiteDnsVersionName = providers.gradleProperty("WHITE_DNS_VERSION_NAME")
     .orElse("1.2.0")
+val whiteDnsUniversalApk = providers.gradleProperty("WHITE_DNS_UNIVERSAL_APK")
+    .map(String::toBoolean)
+    .orElse(false)
 
 android {
     namespace = "shop.whitedns.client"
@@ -47,7 +50,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
-            isUniversalApk = true
+            isUniversalApk = whiteDnsUniversalApk.get()
         }
     }
 
