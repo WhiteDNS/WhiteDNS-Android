@@ -166,6 +166,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.util.Locale
+import java.util.UUID
 
 @Composable
 fun WhiteDnsScreen(
@@ -1329,6 +1330,7 @@ private fun AdvancedSettingsFields(
     showProxySettings: Boolean,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
+    val context = LocalContext.current
     GroupLabel("MTU")
     MtuSettingsGroup(
         settings = settings,
@@ -1344,6 +1346,7 @@ private fun AdvancedSettingsFields(
 
     SectionDivider()
     if (showProxySettings) {
+        val lanReachableProxy = isLanReachableListenIp(settings.listenIp)
         GroupLabel("Local Proxy")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WhiteDnsTextField(
@@ -1390,6 +1393,69 @@ private fun AdvancedSettingsFields(
             )
         }
 
+        AnimatedVisibility(
+            visible = lanReachableProxy,
+            enter = fadeIn(animationSpec = tween(220)) + expandVertically(animationSpec = tween(220)),
+            exit = fadeOut(animationSpec = tween(160)) + shrinkVertically(animationSpec = tween(160)),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WhiteDnsPalette.WarningSurface)
+                    .border(1.dp, WhiteDnsPalette.WarningText.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        tint = WhiteDnsPalette.WarningText,
+                    )
+                    Text(
+                        text = if (settings.socks5Authentication) {
+                            "LAN-reachable proxy is protected by SOCKS5 authentication."
+                        } else {
+                            "LAN-reachable proxy requires SOCKS5 authentication before connecting."
+                        },
+                        color = WhiteDnsPalette.WarningText,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactActionButton(
+                        modifier = Modifier.weight(1f),
+                        label = "ENABLE AUTH",
+                        emphasized = !settings.socks5Authentication,
+                        enabled = true,
+                        onClick = {
+                            onSettingsChange(
+                                settings.copy(
+                                    socks5Authentication = true,
+                                    socksPassword = settings.socksPassword.ifBlank { generateSocksPassword() },
+                                ),
+                            )
+                        },
+                    )
+                    CompactActionButton(
+                        modifier = Modifier.weight(1f),
+                        label = "COPY ADDRESS",
+                        emphasized = false,
+                        enabled = true,
+                        onClick = {
+                            copyTextToClipboard(
+                                context = context,
+                                label = "SOCKS5 proxy",
+                                text = "${settings.listenIp.trim().ifBlank { "127.0.0.1" }}:${settings.listenPort}",
+                                sensitive = false,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
         ToggleRow(
             label = "SOCKS5 Authentication",
             enabled = settings.socks5Authentication,
@@ -1419,6 +1485,32 @@ private fun AdvancedSettingsFields(
                         onValueChange = { onSettingsChange(settings.copy(socksPassword = it)) },
                         placeholder = "master_dns_vpn",
                         visualTransformation = PasswordVisualTransformation(),
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactActionButton(
+                        modifier = Modifier.weight(1f),
+                        label = "REGENERATE PASSWORD",
+                        emphasized = false,
+                        enabled = true,
+                        onClick = {
+                            onSettingsChange(settings.copy(socksPassword = generateSocksPassword()))
+                        },
+                    )
+                    CompactActionButton(
+                        modifier = Modifier.weight(1f),
+                        label = "COPY PASSWORD",
+                        emphasized = false,
+                        enabled = settings.socksPassword.isNotBlank(),
+                        onClick = {
+                            copyTextToClipboard(
+                                context = context,
+                                label = "SOCKS5 password",
+                                text = settings.socksPassword,
+                                sensitive = true,
+                            )
+                        },
                     )
                 }
             }
@@ -5865,6 +5957,19 @@ private fun displayProxyIpAddress(
         "" -> "127.0.0.1"
         else -> listenIp.trim()
     }
+}
+
+private fun isLanReachableListenIp(listenIp: String): Boolean {
+    val host = listenIp.trim().lowercase().removeSurrounding("[", "]")
+    return when {
+        host.startsWith("127.") -> false
+        host in setOf("", "localhost", "::1") -> false
+        else -> true
+    }
+}
+
+private fun generateSocksPassword(): String {
+    return UUID.randomUUID().toString().replace("-", "")
 }
 
 @Suppress("DEPRECATION")

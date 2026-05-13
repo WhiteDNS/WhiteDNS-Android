@@ -307,6 +307,15 @@ class WhiteDnsViewModel(
                 runCatching {
                     val resolvedSettings = runtimeSettings.resolve()
                     activeProxyListenPort = resolvedSettings.listenPort
+                    if (
+                        resolvedSettings.connectionMode == "proxy" &&
+                        isLanReachableListenIp(resolvedSettings.listenIp) &&
+                        !resolvedSettings.socks5Authentication
+                    ) {
+                        throw IllegalStateException(
+                            "Enable SOCKS5 authentication before listening on a LAN-reachable address",
+                        )
+                    }
                     val modeLabel = if (resolvedSettings.connectionMode == "vpn") {
                         "Full System VPN"
                     } else {
@@ -1209,6 +1218,15 @@ class WhiteDnsViewModel(
         }
         val nextLogs = (listOf(cleanMessage) + uiState.connectionLogs).take(MaxConnectionLogs)
         uiState = uiState.copy(connectionLogs = nextLogs)
+    }
+
+    private fun isLanReachableListenIp(listenIp: String): Boolean {
+        val host = listenIp.trim().lowercase().removeSurrounding("[", "]")
+        return when {
+            host.startsWith("127.") -> false
+            host in setOf("", "localhost", "::1") -> false
+            else -> true
+        }
     }
 
     private companion object {
