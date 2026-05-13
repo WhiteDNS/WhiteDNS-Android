@@ -34,6 +34,7 @@ import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverRuntimeState
 import shop.whitedns.client.model.StormDnsServerProfile
+import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsRuntimeProxy
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.WhiteDnsSettingsStore
@@ -309,11 +310,10 @@ class WhiteDnsViewModel(
                     activeProxyListenPort = resolvedSettings.listenPort
                     if (
                         resolvedSettings.connectionMode == "proxy" &&
-                        isLanReachableListenIp(resolvedSettings.listenIp) &&
-                        !resolvedSettings.socks5Authentication
+                        WhiteDnsProxyExposurePolicy.requiresCompleteSocksCredentials(resolvedSettings)
                     ) {
                         throw IllegalStateException(
-                            "Enable SOCKS5 authentication before listening on a LAN-reachable address",
+                            "Set a SOCKS5 username and password before listening on a LAN-reachable address",
                         )
                     }
                     val modeLabel = if (resolvedSettings.connectionMode == "vpn") {
@@ -1218,15 +1218,6 @@ class WhiteDnsViewModel(
         }
         val nextLogs = (listOf(cleanMessage) + uiState.connectionLogs).take(MaxConnectionLogs)
         uiState = uiState.copy(connectionLogs = nextLogs)
-    }
-
-    private fun isLanReachableListenIp(listenIp: String): Boolean {
-        val host = listenIp.trim().lowercase().removeSurrounding("[", "]")
-        return when {
-            host.startsWith("127.") -> false
-            host in setOf("", "localhost", "::1") -> false
-            else -> true
-        }
     }
 
     private companion object {

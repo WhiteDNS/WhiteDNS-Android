@@ -132,6 +132,7 @@ import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
 import shop.whitedns.client.model.WhiteDnsOptions
+import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.WhiteDnsUiState
 import shop.whitedns.client.model.applyResolverProfileToSelectedConnection
@@ -1346,7 +1347,12 @@ private fun AdvancedSettingsFields(
 
     SectionDivider()
     if (showProxySettings) {
-        val lanReachableProxy = isLanReachableListenIp(settings.listenIp)
+        val lanReachableProxy = WhiteDnsProxyExposurePolicy.isLanReachableListenIp(settings.listenIp)
+        val lanProxyProtected = WhiteDnsProxyExposurePolicy.hasCompleteSocksCredentials(
+            enabled = settings.socks5Authentication,
+            username = settings.socksUsername,
+            password = settings.socksPassword,
+        )
         GroupLabel("Local Proxy")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WhiteDnsTextField(
@@ -1414,10 +1420,10 @@ private fun AdvancedSettingsFields(
                         tint = WhiteDnsPalette.WarningText,
                     )
                     Text(
-                        text = if (settings.socks5Authentication) {
+                        text = if (lanProxyProtected) {
                             "LAN-reachable proxy is protected by SOCKS5 authentication."
                         } else {
-                            "LAN-reachable proxy requires SOCKS5 authentication before connecting."
+                            "LAN-reachable proxy requires a SOCKS5 username and password before connecting."
                         },
                         color = WhiteDnsPalette.WarningText,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -1427,7 +1433,7 @@ private fun AdvancedSettingsFields(
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
                         label = "ENABLE AUTH",
-                        emphasized = !settings.socks5Authentication,
+                        emphasized = !lanProxyProtected,
                         enabled = true,
                         onClick = {
                             onSettingsChange(
@@ -6026,15 +6032,6 @@ private fun displayProxyIpAddress(
         "0.0.0.0", "::", "[::]" -> networkIpAddress.ifBlank { "127.0.0.1" }
         "" -> "127.0.0.1"
         else -> listenIp.trim()
-    }
-}
-
-private fun isLanReachableListenIp(listenIp: String): Boolean {
-    val host = listenIp.trim().lowercase().removeSurrounding("[", "]")
-    return when {
-        host.startsWith("127.") -> false
-        host in setOf("", "localhost", "::1") -> false
-        else -> true
     }
 }
 

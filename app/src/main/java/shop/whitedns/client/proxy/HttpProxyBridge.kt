@@ -101,9 +101,15 @@ class HttpProxyBridge(
             limits.maxTunnelDirections,
             namedThreadFactory("whitedns-http-tunnel"),
         )
-        val socket = ServerSocket().apply {
-            reuseAddress = true
-            bind(InetSocketAddress(InetAddress.getByName(bindHost), listenPort))
+        val socket = runCatching {
+            ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(InetAddress.getByName(bindHost), listenPort))
+            }
+        }.getOrElse { error ->
+            nextClientExecutor.shutdownNow()
+            nextTunnelExecutor.shutdownNow()
+            throw error
         }
         synchronized(lifecycleLock) {
             clientExecutor = nextClientExecutor
@@ -336,7 +342,7 @@ class HttpProxyBridge(
         val input = socket.getInputStream()
         val output = socket.getOutputStream()
 
-        val useAuth = !socksUsername.isNullOrEmpty()
+        val useAuth = !socksUsername.isNullOrBlank() && !socksPassword.isNullOrBlank()
         output.write(byteArrayOf(0x05, 0x01, if (useAuth) 0x02 else 0x00))
         output.flush()
         val methodReply = input.readExactly(2)
@@ -454,7 +460,7 @@ class HttpProxyBridge(
     }
 
     private fun isAuthorized(headers: List<String>, username: String?, password: String?): Boolean {
-        if (username.isNullOrEmpty()) {
+        if (username.isNullOrBlank() || password.isNullOrBlank()) {
             return true
         }
         val header = headers.firstOrNull { it.startsWith("Proxy-Authorization:", ignoreCase = true) }

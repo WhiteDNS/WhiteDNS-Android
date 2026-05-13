@@ -56,6 +56,19 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun resolveDisablesSocksAuthenticationWhenCredentialsAreBlank() {
+        val resolvedSettings = WhiteDnsSettings(
+            socks5Authentication = true,
+            socksUsername = "   ",
+            socksPassword = "secret",
+        ).resolve()
+
+        assertEquals(false, resolvedSettings.socks5Authentication)
+        assertEquals("   ", resolvedSettings.socksUsername)
+        assertEquals("secret", resolvedSettings.socksPassword)
+    }
+
+    @Test
     fun syncSelectedConnectionProfileFieldsUsesSelectedResolverProfileText() {
         val resolverProfile = ResolverProfile(
             id = "resolver-main",

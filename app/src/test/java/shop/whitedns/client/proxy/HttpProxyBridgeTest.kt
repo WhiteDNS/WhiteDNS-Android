@@ -1,5 +1,6 @@
 package shop.whitedns.client.proxy
 
+import java.net.ServerSocket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -39,5 +40,31 @@ class HttpProxyBridgeTest {
         }.exceptionOrNull()
 
         assertEquals("maxClients must be in 1..512", error?.message)
+    }
+
+    @Test
+    fun bridgeCanRestartAfterBindFailure() {
+        ServerSocket(0).use { occupiedSocket ->
+            val bridge = HttpProxyBridge()
+            val failedStart = runCatching {
+                bridge.start(
+                    listenHost = "127.0.0.1",
+                    listenPort = occupiedSocket.localPort,
+                    socksHost = "127.0.0.1",
+                    socksPort = 10886,
+                )
+            }
+
+            val freePort = ServerSocket(0).use { it.localPort }
+            bridge.start(
+                listenHost = "127.0.0.1",
+                listenPort = freePort,
+                socksHost = "127.0.0.1",
+                socksPort = 10886,
+            )
+            bridge.stop()
+
+            assertEquals(true, failedStart.isFailure)
+        }
     }
 }

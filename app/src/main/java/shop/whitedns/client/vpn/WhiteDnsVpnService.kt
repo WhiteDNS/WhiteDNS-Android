@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -608,30 +607,27 @@ class WhiteDnsVpnService : VpnService() {
     ) {
         unregisterNetworkChangeCallback()
         val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
         val ignoreEventsBeforeMillis = System.currentTimeMillis() + NetworkChangeInitialQuietMillis
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
-                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network became available")
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Default network became available")
             }
 
             override fun onLost(network: Network) {
                 if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
-                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network changed")
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Default network changed")
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
-                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network capabilities changed")
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Default network capabilities changed")
             }
         }
         runCatching {
-            connectivityManager.registerNetworkCallback(request, callback)
+            connectivityManager.registerDefaultNetworkCallback(callback)
             networkCallback = callback
-            logInfo("Watching network changes for same-session VPN recovery")
+            logInfo("Watching default network changes for same-session VPN recovery")
         }.onFailure { error ->
             logWarning("Unable to watch network changes: ${error.message ?: error::class.java.simpleName}")
         }

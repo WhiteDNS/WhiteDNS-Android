@@ -30,6 +30,7 @@ import shop.whitedns.client.MainActivity
 import shop.whitedns.client.R
 import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.StormDnsServerProfile
+import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.resolve
@@ -153,9 +154,9 @@ class WhiteDnsProxyService : Service() {
                     if (resolvedSettings.resolverEntries.isEmpty()) {
                         throw IllegalStateException("Resolvers are required to connect")
                     }
-                    if (isLanReachableListenIp(resolvedSettings.listenIp) && !resolvedSettings.socks5Authentication) {
+                    if (WhiteDnsProxyExposurePolicy.requiresCompleteSocksCredentials(resolvedSettings)) {
                         throw IllegalStateException(
-                            "SOCKS5 authentication is required when the proxy listens on a LAN-reachable address",
+                            "SOCKS5 username and password are required when the proxy listens on a LAN-reachable address",
                         )
                     }
                     val serverProfile = launchRequest.serverProfile
@@ -409,15 +410,6 @@ class WhiteDnsProxyService : Service() {
             "", "0.0.0.0" -> "127.0.0.1"
             "::" -> "::1"
             else -> listenIp.trim().removeSurrounding("[", "]")
-        }
-    }
-
-    private fun isLanReachableListenIp(listenIp: String): Boolean {
-        val host = listenIp.trim().lowercase().removeSurrounding("[", "]")
-        return when {
-            host.startsWith("127.") -> false
-            host in setOf("", "localhost", "::1") -> false
-            else -> true
         }
     }
 
