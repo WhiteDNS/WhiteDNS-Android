@@ -549,6 +549,32 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun exportAndImportStormDnsProfileLinkPreservesMultipleDomains() {
+        val connectionProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Multi Domain",
+            serverMode = "custom",
+            customServerDomain = "one.example.com, two.example.com\nthree.example.com.",
+            customServerEncryptionKey = "secret-key",
+            customServerEncryptionMethod = 2,
+        )
+
+        val link = WhiteDnsSettings(
+            selectedConnectionProfileId = connectionProfile.id,
+            connectionProfiles = listOf(connectionProfile),
+        ).exportStormDnsProfileLink(profile = connectionProfile)
+        val serverJson = JSONObject(decodeStormDnsProfilePayload(link))
+            .getJSONObject("profile")
+            .getJSONObject("server")
+        val importedProfile = WhiteDnsSettings()
+            .importStormDnsProfileLink(link, nowMillis = 301L)
+            .selectedConnectionProfile()
+
+        assertEquals("one.example.com", serverJson.getString("domain"))
+        assertEquals(listOf("one.example.com", "two.example.com", "three.example.com"), importedProfile.customServerDomain.lines())
+    }
+
+    @Test
     fun importStormDnsProfileLinkIgnoresResolverPayload() {
         val existingResolverProfile = ResolverProfile(
             id = "resolver-existing",

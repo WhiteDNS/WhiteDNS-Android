@@ -147,6 +147,8 @@ import shop.whitedns.client.model.importStormDnsProfileLinks
 import shop.whitedns.client.model.matchesAdvancedProfile
 import shop.whitedns.client.model.moveConnectionProfileToIndex
 import shop.whitedns.client.model.moveResolverProfileToIndex
+import shop.whitedns.client.model.normalizeServerDomainText
+import shop.whitedns.client.model.normalizeServerDomains
 import shop.whitedns.client.model.normalizedAdvancedProfiles
 import shop.whitedns.client.model.normalizedConnectionProfiles
 import shop.whitedns.client.model.normalizedResolverProfiles
@@ -301,7 +303,7 @@ private fun ConnectTabContent(
             HomeSelectorItem(
                 id = profile.id,
                 title = profile.name,
-                detail = profile.customServerDomain.ifBlank { "Server route missing" },
+                detail = serverRouteSummary(profile.customServerDomain),
             )
         }
     }
@@ -483,7 +485,7 @@ private fun ConnectTabContent(
                         HomeSelectorCard(
                             label = "Connection",
                             value = selectedConnectionProfile.name,
-                            detail = selectedConnectionProfile.customServerDomain.ifBlank { "Server route missing" },
+                            detail = serverRouteSummary(selectedConnectionProfile.customServerDomain),
                             selected = true,
                             enabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
                             onClick = { openSelector(HomeSelectorType.CONNECTION) },
@@ -1934,7 +1936,7 @@ private fun ConnectionSetupCard(
     onAddConnectionClick: () -> Unit,
     onAddResolverProfileClick: () -> Unit,
 ) {
-    val serverRoute = selectedConnectionProfile.customServerDomain.ifBlank { "Server route missing" }
+    val serverRoute = serverRouteSummary(selectedConnectionProfile.customServerDomain)
     val connectionIssue = when {
         selectedConnectionProfile.customServerDomain.isBlank() &&
             selectedConnectionProfile.customServerEncryptionKey.isBlank() -> "Server route and key missing"
@@ -2241,8 +2243,8 @@ private fun ConnectionProfilesSettings(
     customProfiles.forEachIndexed { index, profile ->
         val isActive = profile.id == activeConnectionProfileId &&
             connectionStatus != ConnectionStatus.DISCONNECTED
-        val canEdit = canManageProfiles
-        val canDelete = canManageProfiles && !isActive
+        val canEdit = canManageProfiles || !isActive
+        val canDelete = !isActive && connectionStatus != ConnectionStatus.DISCONNECTING
         val isDragging = profile.id == draggedProfileId
         val targetTranslationY = profileDragTranslationY(
             itemIndex = index,
@@ -2474,6 +2476,9 @@ private fun ResolverProfilesSettings(
         Spacer(modifier = Modifier.height(8.dp))
     }
     profiles.forEachIndexed { index, profile ->
+        val isSelected = profile.id == selectedProfile?.id
+        val canEditProfile = canChangeProfiles || !isSelected
+        val canDeleteProfile = canEditProfile && connectionStatus != ConnectionStatus.DISCONNECTING
         val isDragging = profile.id == draggedProfileId
         val targetTranslationY = profileDragTranslationY(
             itemIndex = index,
@@ -2501,9 +2506,9 @@ private fun ResolverProfilesSettings(
         ) {
             ResolverProfileRow(
                 profile = profile,
-                selected = profile.id == selectedProfile?.id,
-                canEdit = canChangeProfiles,
-                canDelete = canChangeProfiles,
+                selected = isSelected,
+                canEdit = canEditProfile,
+                canDelete = canDeleteProfile,
                 canDrag = canChangeProfiles && profiles.size > 1,
                 dragging = isDragging,
                 onUse = {
@@ -2531,7 +2536,7 @@ private fun ResolverProfilesSettings(
                 },
                 onEdit = { dialogProfile = profile },
                 onDelete = {
-                    if (canChangeProfiles) {
+                    if (canDeleteProfile) {
                         onSettingsChange(settings.deleteResolverProfile(profile.id))
                     }
                 },
@@ -3054,7 +3059,8 @@ private fun ConnectionProfileDialog(
     var encryptionMethod by remember(profile?.id) {
         mutableStateOf(profile?.customServerEncryptionMethod ?: 1)
     }
-    val canSave = name.isNotBlank() && domain.isNotBlank() && encryptionKey.isNotBlank()
+    val normalizedDomains = remember(domain) { normalizeServerDomains(domain) }
+    val canSave = name.isNotBlank() && normalizedDomains.isNotEmpty() && encryptionKey.isNotBlank()
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -3082,10 +3088,13 @@ private fun ConnectionProfileDialog(
                 placeholder = "My StormDNS",
             )
             WhiteDnsTextField(
-                label = "Domain",
+                label = "Domain(s)",
                 value = domain,
-                onValueChange = { domain = it.trim() },
-                placeholder = "v.example.com",
+                onValueChange = { domain = it },
+                placeholder = "v1.example.com, v2.example.com",
+                singleLine = false,
+                minLines = 2,
+                maxLines = 4,
             )
             WhiteDnsTextField(
                 label = "Encryption Key",
@@ -3122,7 +3131,7 @@ private fun ConnectionProfileDialog(
                                 id = profile?.id.orEmpty(),
                                 name = name.trim(),
                                 serverMode = "custom",
-                                customServerDomain = domain.trim().trimEnd('.'),
+                                customServerDomain = normalizeServerDomainText(domain),
                                 customServerEncryptionKey = encryptionKey.trim(),
                                 customServerEncryptionMethod = encryptionMethod,
                                 resolverProfileId = profile?.resolverProfileId.orEmpty(),
@@ -6085,6 +6094,15 @@ private fun splitTunnelConnectionSummary(
             if (labels.isEmpty()) "All apps" else "Bypass ${compactAppLabelSummary(labels)}"
         }
         else -> "All apps"
+    }
+}
+
+private fun serverRouteSummary(raw: String): String {
+    val domains = normalizeServerDomains(raw)
+    return if (domains.isEmpty()) {
+        "Server route missing"
+    } else {
+        domains.joinToString(separator = ", ")
     }
 }
 

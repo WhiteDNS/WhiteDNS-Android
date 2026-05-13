@@ -12,6 +12,7 @@ import shop.whitedns.client.model.KeystoreSecretStore
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.runtimeConnectionSettings
+import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
 
 data class RuntimeLaunchRequest(
@@ -154,12 +155,15 @@ object RuntimeLaunchRequestStore {
     }
 
     private fun encodeSettings(settings: WhiteDnsSettings): JSONObject {
+        val selectedConnectionProfile = settings.selectedConnectionProfile()
         val splitTunnelPackages = JSONArray()
         settings.splitTunnelPackages.forEach { packageName ->
             splitTunnelPackages.put(packageName)
         }
         return JSONObject()
             .put("selectedConnectionProfileId", settings.selectedConnectionProfileId)
+            .put("connectionProfileName", selectedConnectionProfile.name)
+            .put("connectionProfileResolverProfileId", selectedConnectionProfile.resolverProfileId)
             .put("serverMode", settings.serverMode)
             .put("customServerDomain", settings.customServerDomain)
             .put("customServerEncryptionKey", settings.customServerEncryptionKey)
@@ -234,11 +238,12 @@ object RuntimeLaunchRequestStore {
             connectionProfiles = listOf(
                 ConnectionProfile(
                     id = selectedConnectionProfileId.ifBlank { ConnectionProfile.DefaultId },
-                    name = "Connection",
+                    name = json.optString("connectionProfileName", "Connection"),
                     serverMode = json.optString("serverMode", "custom"),
                     customServerDomain = json.optString("customServerDomain"),
                     customServerEncryptionKey = json.optString("customServerEncryptionKey"),
                     customServerEncryptionMethod = json.optInt("customServerEncryptionMethod", 1),
+                    resolverProfileId = json.optString("connectionProfileResolverProfileId"),
                     connectionMode = json.optString("connectionMode", "proxy"),
                 ),
             ),
@@ -296,7 +301,7 @@ object RuntimeLaunchRequestStore {
             localDnsPort = json.optString("localDnsPort", "10888"),
             startupMode = json.optString("startupMode", "resolvers"),
             pingWatchdogSeconds = json.optString("pingWatchdogSeconds", "300"),
-            trafficWarmupMode = json.optString("trafficWarmupMode", "balanced"),
+            trafficWarmupMode = json.optString("trafficWarmupMode", "startup_only"),
             trafficWarmupEnabled = json.optBoolean("trafficWarmupEnabled", true),
             trafficWarmupProbeCount = json.optString("trafficWarmupProbeCount", "4"),
             trafficKeepaliveIntervalSeconds = json.optString("trafficKeepaliveIntervalSeconds", "5"),

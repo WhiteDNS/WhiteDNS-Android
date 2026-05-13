@@ -305,7 +305,7 @@ data class WhiteDnsSettings(
     val localDnsPort: String = "53",
     val startupMode: String = "resolvers",
     val pingWatchdogSeconds: String = "300",
-    val trafficWarmupMode: String = WhiteDnsOptions.TrafficWarmupBalanced,
+    val trafficWarmupMode: String = WhiteDnsOptions.TrafficWarmupStartupOnly,
     val trafficWarmupEnabled: Boolean = true,
     val trafficWarmupProbeCount: String = "4",
     val trafficKeepaliveIntervalSeconds: String = "5",
@@ -1301,10 +1301,11 @@ fun validateConnectionSettings(settings: WhiteDnsSettings): WhiteDnsSettingsVali
         issues += WhiteDnsValidationIssue(WhiteDnsValidationSeverity.Warning, field, message)
     }
 
-    if (connectionProfile.customServerDomain.isBlank() || connectionProfile.customServerEncryptionKey.isBlank()) {
+    val serverDomains = normalizeServerDomains(connectionProfile.customServerDomain)
+    if (serverDomains.isEmpty() || connectionProfile.customServerEncryptionKey.isBlank()) {
         fatal("server", "Custom StormDNS domain and encryption key are required")
-    } else if (!isValidServerDomain(connectionProfile.customServerDomain)) {
-        fatal("server", "Custom StormDNS domain is not valid")
+    } else if (serverDomains.any { !isValidServerDomain(it) }) {
+        fatal("server", "One or more custom StormDNS domains are not valid")
     }
 
     if (resolverValidation.normalizedResolvers.isEmpty()) {
@@ -1383,8 +1384,26 @@ private fun normalizeTrafficWarmupMode(raw: String, legacyEnabled: Boolean): Str
         WhiteDnsOptions.TrafficWarmupBalanced,
         WhiteDnsOptions.TrafficWarmupAggressive,
         WhiteDnsOptions.TrafficWarmupCustom -> raw
-        else -> WhiteDnsOptions.TrafficWarmupBalanced
+        else -> WhiteDnsOptions.TrafficWarmupStartupOnly
     }
+}
+
+fun normalizeServerDomainText(raw: String): String {
+    return normalizeServerDomains(raw).joinToString(separator = "\n")
+}
+
+fun normalizeServerDomains(raw: String): List<String> {
+    return raw
+        .replace("[", " ")
+        .replace("]", " ")
+        .replace("\"", " ")
+        .replace("'", " ")
+        .split(Regex("[,;\\s]+"))
+        .asSequence()
+        .map { it.trim().trimEnd('.') }
+        .filter(String::isNotEmpty)
+        .distinct()
+        .toList()
 }
 
 private fun validatePortText(

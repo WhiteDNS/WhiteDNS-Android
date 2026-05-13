@@ -1,6 +1,7 @@
 package shop.whitedns.client.model
 
 import java.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val StormDnsProfileScheme = "stormdns"
@@ -8,10 +9,11 @@ private const val StormDnsProfileSchema = "whitedns.profile"
 private const val StormDnsProfileVersion = 1
 
 fun WhiteDnsSettings.exportStormDnsProfileLink(profile: ConnectionProfile = selectedConnectionProfile()): String {
+    val domains = normalizeServerDomains(profile.customServerDomain)
     val normalizedProfile = profile.copy(
         name = profile.name.ifBlank { profile.customServerDomain.ifBlank { "WhiteDNS Profile" } },
         serverMode = "custom",
-        customServerDomain = profile.customServerDomain.trim().trimEnd('.'),
+        customServerDomain = domains.joinToString(separator = "\n"),
         customServerEncryptionKey = profile.customServerEncryptionKey.trim(),
         customServerEncryptionMethod = profile.customServerEncryptionMethod.coerceIn(0, 5),
     )
@@ -23,10 +25,14 @@ fun WhiteDnsSettings.exportStormDnsProfileLink(profile: ConnectionProfile = sele
         .put("name", normalizedProfile.name)
         .put(
             "server",
-            JSONObject()
-                .put("domain", normalizedProfile.customServerDomain)
-                .put("encryption_key", normalizedProfile.customServerEncryptionKey)
-                .put("encryption_method", normalizedProfile.customServerEncryptionMethod),
+            JSONObject().apply {
+                put("domain", domains.first())
+                if (domains.size > 1) {
+                    put("domains", JSONArray(domains))
+                }
+                put("encryption_key", normalizedProfile.customServerEncryptionKey)
+                put("encryption_method", normalizedProfile.customServerEncryptionMethod)
+            },
         )
 
     val root = JSONObject()
@@ -99,7 +105,10 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
         ?: throw IllegalArgumentException("Missing profile")
     val serverJson = profileJson.optJSONObject("server")
         ?: throw IllegalArgumentException("Missing server")
-    val domain = serverJson.requiredString("domain").trim().trimEnd('.')
+    val domains = serverJson.optionalStringArray("domains")
+        .takeIf { it.isNotEmpty() }
+        ?: listOf(serverJson.requiredString("domain"))
+    val domain = normalizeServerDomainText(domains.joinToString(separator = "\n"))
     val encryptionKey = serverJson.requiredString("encryption_key").trim()
     if (domain.isBlank()) {
         throw IllegalArgumentException("Server domain is required")
@@ -208,4 +217,10 @@ private fun JSONObject.optionalInt(name: String): Int? {
         is String -> value.trim().toIntOrNull()
         else -> null
     }
+}
+
+private fun JSONObject.optionalStringArray(name: String): List<String> {
+    val array = optJSONArray(name) ?: return emptyList()
+    return (0 until array.length())
+        .mapNotNull { index -> array.optString(index).takeIf(String::isNotBlank) }
 }

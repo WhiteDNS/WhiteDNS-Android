@@ -44,4 +44,21 @@ class StormDnsConfigRendererTest {
         assertTrue(toml.contains("UPLOAD_PACKET_DUPLICATION_COUNT = 4"))
         assertTrue(toml.contains("LOG_LEVEL = \"INFO\""))
     }
+
+    @Test
+    fun renderClientTomlAcceptsMultipleServerDomains() {
+        val connectionProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main",
+            customServerDomain = "one.example.com, two.example.com\nthree.example.com.",
+            customServerEncryptionKey = "secret-key",
+        )
+
+        val toml = StormDnsConfigRenderer.renderClientToml(
+            connectionProfile = connectionProfile,
+            settings = WhiteDnsSettings(resolverText = "1.1.1.1"),
+        )
+
+        assertTrue(toml.contains("""DOMAINS = ["one.example.com", "two.example.com", "three.example.com"]"""))
+    }
 }

@@ -46,7 +46,7 @@ object WhiteDnsRuntimeStateStore {
         writeModeState(context, mode, sessionId, StatusStopped, message)
     }
 
-    fun markFailed(context: Context, mode: String, message: String, sessionId: String = "") {
+    fun markFailed(context: Context, mode: String, sessionId: String = "", message: String) {
         writeModeState(context, mode, sessionId, StatusFailed, message)
     }
 

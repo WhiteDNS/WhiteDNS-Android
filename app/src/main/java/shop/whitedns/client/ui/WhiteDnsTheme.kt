@@ -31,7 +31,9 @@ object WhiteDnsPalette {
     val Warning = Color(0xFFFBBF24)
     val WarningText = Color(0xFFFBBF24)
     val Ink = Color(0xFFEDEEF2)
+    val TextPrimary = Ink
     val Muted = Color(0xFFC2C8E1)
+    val TextSecondary = Muted
     val Pale = Color(0xFFADB5D3)
     val SectionTitle = Color(0xFFC1C1C2)
     val FieldLabel = Color(0xFFC1C1C2)

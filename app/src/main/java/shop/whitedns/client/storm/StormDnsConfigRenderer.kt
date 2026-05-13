@@ -3,6 +3,8 @@ package shop.whitedns.client.storm
 import shop.whitedns.client.model.ConnectionProfile
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsSettings
+import shop.whitedns.client.model.normalizeServerDomainText
+import shop.whitedns.client.model.normalizeServerDomains
 import shop.whitedns.client.model.normalizedResolverProfiles
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -35,9 +37,13 @@ object StormDnsConfigRenderer {
         settings: WhiteDnsSettings,
     ): String {
         val resolved = settings.resolve()
+        val domains = normalizeServerDomains(serverProfile.domain)
+        require(domains.isNotEmpty()) {
+            "Custom server domain and encryption key are required to export TOML"
+        }
 
         return buildString {
-            appendLine("""DOMAINS = ["${escape(serverProfile.domain)}"]""")
+            appendLine("DOMAINS = [${domains.joinToString { "\"${escape(it)}\"" }}]")
             appendLine("DATA_ENCRYPTION_METHOD = ${serverProfile.encryptionMethod}")
             appendLine("ENCRYPTION_KEY = \"${escape(serverProfile.encryptionKey)}\"")
             appendLine("PROTOCOL_TYPE = \"${escape(resolved.protocolType)}\"")
@@ -107,7 +113,7 @@ object StormDnsConfigRenderer {
     }
 
     private fun ConnectionProfile.toStormDnsServerProfile(): StormDnsServerProfile {
-        val domain = customServerDomain.trim().trimEnd('.')
+        val domain = normalizeServerDomainText(customServerDomain)
         val encryptionKey = customServerEncryptionKey.trim()
         if (domain.isBlank() || encryptionKey.isBlank()) {
             throw IllegalArgumentException("Custom server domain and encryption key are required to export TOML")

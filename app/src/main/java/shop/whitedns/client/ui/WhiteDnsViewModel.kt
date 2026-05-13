@@ -42,6 +42,7 @@ import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.WhiteDnsSettingsStore
 import shop.whitedns.client.model.WhiteDnsUiState
 import shop.whitedns.client.model.importStormDnsProfileLink
+import shop.whitedns.client.model.normalizeServerDomainText
 import shop.whitedns.client.model.normalizedConnectionProfiles
 import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
@@ -858,9 +859,7 @@ class WhiteDnsViewModel(
 
     private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
         val connectionProfile = settings.selectedConnectionProfile()
-        val domain = connectionProfile.customServerDomain
-            .trim()
-            .trimEnd('.')
+        val domain = normalizeServerDomainText(connectionProfile.customServerDomain)
         val encryptionKey = connectionProfile.customServerEncryptionKey.trim()
         if (domain.isBlank() || encryptionKey.isBlank()) {
             return null
@@ -916,20 +915,21 @@ class WhiteDnsViewModel(
         val probePassed = repeatBooleanAttempt(VerificationProbeAttempts) {
             WhiteDnsTrafficWarmup.verifySocksRoute(resolvedSettings)
         }
+        if (!probePassed) {
+            return failedVerification(
+                if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
+                    "Connection needs attention: VPN is active but the tunnel probe could not reach the internet"
+                } else {
+                    "Connection needs attention: proxy is active but the tunnel probe could not reach the internet"
+                },
+            )
+        }
         return ConnectionVerificationState(
             status = ConnectionVerificationStatus.Verified,
-            message = if (probePassed) {
-                if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
-                    "Connection verified: VPN tunnel can reach the internet"
-                } else {
-                    "Connection verified: proxy tunnel can reach the internet"
-                }
+            message = if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
+                "Connection verified: VPN tunnel can reach the internet"
             } else {
-                if (expectedConnectionMode == WhiteDnsRuntimeStateStore.ModeVpn) {
-                    "Connection ready: VPN tunnel is active; outbound probe is still warming up"
-                } else {
-                    "Connection ready: proxy tunnel is active; outbound probe is still warming up"
-                }
+                "Connection verified: proxy tunnel can reach the internet"
             },
             checkedAtMillis = System.currentTimeMillis(),
         )
