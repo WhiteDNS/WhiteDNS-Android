@@ -716,6 +716,48 @@ class WhiteDnsModelsTest {
         )
     }
 
+    @Test
+    fun validateConnectionSettingsBlocksFatalLaunchErrors() {
+        val validation = WhiteDnsSettings(
+            connectionProfiles = listOf(
+                ConnectionProfile(
+                    id = ConnectionProfile.DefaultId,
+                    name = "Connection",
+                    customServerDomain = "bad domain",
+                    customServerEncryptionKey = "",
+                ),
+            ),
+            resolverText = "not-a-resolver",
+            listenPort = "70000",
+        ).let(::validateConnectionSettings)
+
+        assertEquals(false, validation.canConnect)
+        assertTrue(validation.fatalIssues.any { it.field == "server" })
+        assertTrue(validation.fatalIssues.any { it.field == "resolvers" })
+        assertTrue(validation.fatalIssues.any { it.field == "listenPort" })
+    }
+
+    @Test
+    fun validateConnectionSettingsWarnsForRiskyButUsableSettings() {
+        val validation = WhiteDnsSettings(
+            connectionProfiles = listOf(
+                ConnectionProfile(
+                    id = ConnectionProfile.DefaultId,
+                    name = "Connection",
+                    customServerDomain = "server.example.com",
+                    customServerEncryptionKey = "secret",
+                ),
+            ),
+            resolverText = (1..300).joinToString("\n") { "192.0.${it / 250}.${(it % 250) + 1}" },
+            rxTxWorkers = "40",
+            tunnelProcessWorkers = "40",
+        ).let(::validateConnectionSettings)
+
+        assertEquals(true, validation.canConnect)
+        assertTrue(validation.warnings.any { it.field == "resolvers" })
+        assertTrue(validation.warnings.any { it.field == "workers" })
+    }
+
     private fun decodeStormDnsProfilePayload(link: String): String {
         val payload = link.removePrefix("stormdns://")
         val paddedPayload = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), '=')

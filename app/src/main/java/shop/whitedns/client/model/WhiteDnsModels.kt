@@ -220,6 +220,30 @@ data class ResolverTextValidation(
         get() = normalizedResolvers.isNotEmpty() && invalidEntries.isEmpty()
 }
 
+object WhiteDnsValidationSeverity {
+    const val Fatal = "fatal"
+    const val Warning = "warning"
+}
+
+data class WhiteDnsValidationIssue(
+    val severity: String,
+    val field: String,
+    val message: String,
+)
+
+data class WhiteDnsSettingsValidation(
+    val issues: List<WhiteDnsValidationIssue>,
+) {
+    val fatalIssues: List<WhiteDnsValidationIssue>
+        get() = issues.filter { it.severity == WhiteDnsValidationSeverity.Fatal }
+
+    val warnings: List<WhiteDnsValidationIssue>
+        get() = issues.filter { it.severity == WhiteDnsValidationSeverity.Warning }
+
+    val canConnect: Boolean
+        get() = fatalIssues.isEmpty()
+}
+
 data class WhiteDnsSettings(
     val selectedConnectionProfileId: String = ConnectionProfile.DefaultId,
     val connectionProfiles: List<ConnectionProfile> = listOf(ConnectionProfile.defaultProfile()),
@@ -1240,8 +1264,10 @@ private enum class ResolverTextEntryType {
 }
 
 private const val DefaultResolverPort = 53
+private const val MaxRecommendedResolvers = 256
 
 private val ResolverIpv6Chars = Regex("^[0-9A-Fa-f:.]+$")
+private val ServerDomainLabelRegex = Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 private fun normalizeSplitTunnelMode(raw: String): String {
     return when (raw) {
@@ -1259,6 +1285,94 @@ private fun normalizeConnectionMode(raw: String): String {
     }
 }
 
+fun validateConnectionSettings(settings: WhiteDnsSettings): WhiteDnsSettingsValidation {
+    val normalizedSettings = settings.syncSelectedConnectionProfileFields()
+    val runtimeSettings = normalizedSettings.runtimeConnectionSettings()
+    val resolvedSettings = runtimeSettings.resolve()
+    val connectionProfile = normalizedSettings.selectedConnectionProfile()
+    val resolverValidation = validateResolverText(runtimeSettings.resolverText)
+    val issues = mutableListOf<WhiteDnsValidationIssue>()
+
+    fun fatal(field: String, message: String) {
+        issues += WhiteDnsValidationIssue(WhiteDnsValidationSeverity.Fatal, field, message)
+    }
+
+    fun warning(field: String, message: String) {
+        issues += WhiteDnsValidationIssue(WhiteDnsValidationSeverity.Warning, field, message)
+    }
+
+    if (connectionProfile.customServerDomain.isBlank() || connectionProfile.customServerEncryptionKey.isBlank()) {
+        fatal("server", "Custom StormDNS domain and encryption key are required")
+    } else if (!isValidServerDomain(connectionProfile.customServerDomain)) {
+        fatal("server", "Custom StormDNS domain is not valid")
+    }
+
+    if (resolverValidation.normalizedResolvers.isEmpty()) {
+        fatal("resolvers", "Resolvers are required to connect")
+    }
+    if (resolverValidation.invalidEntries.isNotEmpty()) {
+        fatal("resolvers", "Resolver list contains invalid entries")
+    }
+    if (resolverValidation.normalizedResolvers.size > MaxRecommendedResolvers) {
+        warning("resolvers", "Large resolver lists can slow startup and increase battery use")
+    }
+
+    validatePortText(runtimeSettings.listenPort, "listenPort", "SOCKS listen port") { field, message ->
+        fatal(field, message)
+    }
+    if (runtimeSettings.httpProxyEnabled) {
+        validatePortText(runtimeSettings.httpProxyPort, "httpProxyPort", "HTTP proxy port") { field, message ->
+            fatal(field, message)
+        }
+        if (resolvedSettings.httpProxyPort == resolvedSettings.listenPort) {
+            fatal("httpProxyPort", "HTTP proxy port must differ from the SOCKS listen port")
+        }
+    }
+    if (runtimeSettings.localDnsEnabled) {
+        validatePortText(runtimeSettings.localDnsPort, "localDnsPort", "Local DNS port") { field, message ->
+            fatal(field, message)
+        }
+    }
+    if (runtimeSettings.localDnsEnabled && resolvedSettings.localDnsPort == resolvedSettings.listenPort) {
+        fatal("localDnsPort", "Local DNS port must differ from the SOCKS listen port")
+    }
+    if (runtimeSettings.localDnsEnabled && runtimeSettings.httpProxyEnabled &&
+        resolvedSettings.localDnsPort == resolvedSettings.httpProxyPort
+    ) {
+        fatal("localDnsPort", "Local DNS port must differ from the HTTP proxy port")
+    }
+
+    if (
+        resolvedSettings.connectionMode == "proxy" &&
+        WhiteDnsProxyExposurePolicy.requiresCompleteSocksCredentials(resolvedSettings)
+    ) {
+        fatal("socks5Authentication", "LAN-reachable proxy requires a SOCKS5 username and password")
+    }
+
+    if (resolvedSettings.rxTxWorkers > 32 || resolvedSettings.tunnelProcessWorkers > 32) {
+        warning("workers", "High worker counts can increase CPU and battery use")
+    }
+    if (resolvedSettings.txChannelSize > 8192 || resolvedSettings.rxChannelSize > 8192) {
+        warning("queues", "Large queues can increase memory use")
+    }
+    if (resolvedSettings.maxUploadMtu < resolvedSettings.minUploadMtu ||
+        resolvedSettings.maxDownloadMtu < resolvedSettings.minDownloadMtu
+    ) {
+        fatal("mtu", "Maximum MTU values must be greater than or equal to minimum MTU values")
+    }
+    if (resolvedSettings.vpnMtu < resolvedSettings.maxUploadMtu || resolvedSettings.vpnMtu < resolvedSettings.minDownloadMtu) {
+        warning("vpnMtu", "VPN MTU is lower than one or more StormDNS MTU limits")
+    }
+    if (resolvedSettings.localHandshakeTimeoutSeconds < 1.0 ||
+        resolvedSettings.socksUdpAssociateReadTimeoutSeconds < 1.0 ||
+        resolvedSettings.tunnelPacketTimeoutSeconds < 1.0
+    ) {
+        warning("timeouts", "Very short runtime timeouts can cause unstable connections")
+    }
+
+    return WhiteDnsSettingsValidation(issues)
+}
+
 private fun normalizeTrafficWarmupMode(raw: String, legacyEnabled: Boolean): String {
     if (!legacyEnabled) {
         return WhiteDnsOptions.TrafficWarmupOff
@@ -1270,6 +1384,31 @@ private fun normalizeTrafficWarmupMode(raw: String, legacyEnabled: Boolean): Str
         WhiteDnsOptions.TrafficWarmupAggressive,
         WhiteDnsOptions.TrafficWarmupCustom -> raw
         else -> WhiteDnsOptions.TrafficWarmupBalanced
+    }
+}
+
+private fun validatePortText(
+    raw: String,
+    field: String,
+    label: String,
+    fatal: (String, String) -> Unit,
+) {
+    val port = raw.trim().toIntOrNull()
+    if (port == null || port !in 1..65535) {
+        fatal(field, "$label must be between 1 and 65535")
+    }
+}
+
+private fun isValidServerDomain(raw: String): Boolean {
+    val domain = raw.trim().trimEnd('.')
+    if (domain.isBlank() || domain.length > 253 || domain.any(Char::isWhitespace)) {
+        return false
+    }
+    if (domain.startsWith("[") && domain.endsWith("]")) {
+        return domain.length > 2
+    }
+    return domain.split('.').all { label ->
+        label.isNotBlank() && ServerDomainLabelRegex.matches(label)
     }
 }
 

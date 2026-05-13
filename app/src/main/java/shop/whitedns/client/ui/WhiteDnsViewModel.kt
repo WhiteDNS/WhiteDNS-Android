@@ -37,7 +37,6 @@ import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverRuntimeState
 import shop.whitedns.client.model.SplitTunnelAppInfo
 import shop.whitedns.client.model.StormDnsServerProfile
-import shop.whitedns.client.model.WhiteDnsProxyExposurePolicy
 import shop.whitedns.client.model.WhiteDnsRuntimeProxy
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.model.WhiteDnsSettingsStore
@@ -48,6 +47,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
+import shop.whitedns.client.model.validateConnectionSettings
 import shop.whitedns.client.proxy.WhiteDnsProxyEvent
 import shop.whitedns.client.proxy.WhiteDnsProxyEvents
 import shop.whitedns.client.proxy.WhiteDnsProxyService
@@ -276,8 +276,12 @@ class WhiteDnsViewModel(
 
         connectJob = viewModelScope.launch {
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
-            if (settings.resolve().resolverEntries.isEmpty()) {
-                appendLog("Resolvers are required to connect")
+            val connectionProfile = settings.selectedConnectionProfile()
+            val validation = validateConnectionSettings(settings)
+            if (!validation.canConnect) {
+                validation.fatalIssues.forEach { issue ->
+                    appendLog(issue.message)
+                }
                 activeRuntimeSessionId = ""
                 uiState = uiState.copy(
                     connectionStatus = ConnectionStatus.DISCONNECTED,
@@ -287,7 +291,9 @@ class WhiteDnsViewModel(
                 )
                 return@launch
             }
-            val connectionProfile = settings.selectedConnectionProfile()
+            validation.warnings.forEach { issue ->
+                appendLog("Warning: ${issue.message}")
+            }
             val serverProfile = selectServerProfile(settings)
             if (serverProfile == null) {
                 appendLog(
@@ -317,14 +323,6 @@ class WhiteDnsViewModel(
                 runCatching {
                     val resolvedSettings = runtimeSettings.resolve()
                     activeProxyListenPort = resolvedSettings.listenPort
-                    if (
-                        resolvedSettings.connectionMode == "proxy" &&
-                        WhiteDnsProxyExposurePolicy.requiresCompleteSocksCredentials(resolvedSettings)
-                    ) {
-                        throw IllegalStateException(
-                            "Set a SOCKS5 username and password before listening on a LAN-reachable address",
-                        )
-                    }
                     val modeLabel = if (resolvedSettings.connectionMode == "vpn") {
                         "Full System VPN"
                     } else {
