@@ -318,6 +318,27 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun resolveNormalizesVpnIpv6StrategyAndMtuPreset() {
+        val defaultResolvedSettings = WhiteDnsSettings(
+            vpnIpv6Strategy = "invalid",
+            vpnMtuPreset = "invalid",
+            vpnCustomMtu = "42",
+        ).resolve()
+        val customResolvedSettings = WhiteDnsSettings(
+            vpnIpv6Strategy = WhiteDnsOptions.VpnIpv6StrategyBypass,
+            vpnMtuPreset = WhiteDnsOptions.VpnMtuPresetCustom,
+            vpnCustomMtu = "99999",
+        ).resolve()
+
+        assertEquals(WhiteDnsOptions.VpnIpv6StrategyBlock, defaultResolvedSettings.vpnIpv6Strategy)
+        assertEquals(WhiteDnsOptions.VpnMtuPreset1500, defaultResolvedSettings.vpnMtuPreset)
+        assertEquals(1500, defaultResolvedSettings.vpnMtu)
+        assertEquals(WhiteDnsOptions.VpnIpv6StrategyBypass, customResolvedSettings.vpnIpv6Strategy)
+        assertEquals(WhiteDnsOptions.VpnMtuPresetCustom, customResolvedSettings.vpnMtuPreset)
+        assertEquals(9000, customResolvedSettings.vpnMtu)
+    }
+
+    @Test
     fun resolveUsesAppMtuDefaults() {
         val resolvedSettings = WhiteDnsSettings().resolve()
 

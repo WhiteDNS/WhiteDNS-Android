@@ -175,6 +175,12 @@ class WhiteDnsSettingsStore(
                 KeyTrafficKeepaliveIntervalSeconds,
                 defaults.trafficKeepaliveIntervalSeconds,
             ) ?: defaults.trafficKeepaliveIntervalSeconds,
+            vpnIpv6Strategy = preferences.getString(KeyVpnIpv6Strategy, defaults.vpnIpv6Strategy)
+                ?: defaults.vpnIpv6Strategy,
+            vpnMtuPreset = preferences.getString(KeyVpnMtuPreset, defaults.vpnMtuPreset)
+                ?: defaults.vpnMtuPreset,
+            vpnCustomMtu = preferences.getString(KeyVpnCustomMtu, defaults.vpnCustomMtu)
+                ?: defaults.vpnCustomMtu,
             fullVpnPerformanceWarningDismissed = preferences.getBoolean(
                 KeyFullVpnPerformanceWarningDismissed,
                 defaults.fullVpnPerformanceWarningDismissed,
@@ -252,6 +258,9 @@ class WhiteDnsSettingsStore(
             .putBoolean(KeyTrafficWarmupEnabled, normalizedSettings.trafficWarmupEnabled)
             .putString(KeyTrafficWarmupProbeCount, normalizedSettings.trafficWarmupProbeCount)
             .putString(KeyTrafficKeepaliveIntervalSeconds, normalizedSettings.trafficKeepaliveIntervalSeconds)
+            .putString(KeyVpnIpv6Strategy, normalizedSettings.vpnIpv6Strategy)
+            .putString(KeyVpnMtuPreset, normalizedSettings.vpnMtuPreset)
+            .putString(KeyVpnCustomMtu, normalizedSettings.vpnCustomMtu)
             .putBoolean(
                 KeyFullVpnPerformanceWarningDismissed,
                 normalizedSettings.fullVpnPerformanceWarningDismissed,
@@ -481,6 +490,9 @@ class WhiteDnsSettingsStore(
                         "trafficKeepaliveIntervalSeconds",
                         defaultProfile.trafficKeepaliveIntervalSeconds,
                     ),
+                    vpnIpv6Strategy = item.optString("vpnIpv6Strategy", defaultProfile.vpnIpv6Strategy),
+                    vpnMtuPreset = item.optString("vpnMtuPreset", defaultProfile.vpnMtuPreset),
+                    vpnCustomMtu = item.optString("vpnCustomMtu", defaultProfile.vpnCustomMtu),
                     logLevel = item.optString("logLevel", defaultProfile.logLevel),
                 )
             }
@@ -547,6 +559,9 @@ class WhiteDnsSettingsStore(
                         .put("trafficWarmupEnabled", profile.trafficWarmupEnabled)
                         .put("trafficWarmupProbeCount", profile.trafficWarmupProbeCount)
                         .put("trafficKeepaliveIntervalSeconds", profile.trafficKeepaliveIntervalSeconds)
+                        .put("vpnIpv6Strategy", profile.vpnIpv6Strategy)
+                        .put("vpnMtuPreset", profile.vpnMtuPreset)
+                        .put("vpnCustomMtu", profile.vpnCustomMtu)
                         .put("logLevel", profile.logLevel),
                 )
             }
@@ -675,6 +690,9 @@ class WhiteDnsSettingsStore(
         const val KeyTrafficWarmupEnabled = "traffic_warmup_enabled"
         const val KeyTrafficWarmupProbeCount = "traffic_warmup_probe_count"
         const val KeyTrafficKeepaliveIntervalSeconds = "traffic_keepalive_interval_seconds"
+        const val KeyVpnIpv6Strategy = "vpn_ipv6_strategy"
+        const val KeyVpnMtuPreset = "vpn_mtu_preset"
+        const val KeyVpnCustomMtu = "vpn_custom_mtu"
         const val KeyFullVpnPerformanceWarningDismissed = "full_vpn_performance_warning_dismissed"
         const val KeySplitTunnelMode = "split_tunnel_mode"
         const val KeySplitTunnelPackages = "split_tunnel_packages"

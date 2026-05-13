@@ -1519,6 +1519,44 @@ private fun AdvancedSettingsFields(
         SectionDivider()
     }
 
+    if (settings.connectionMode == "vpn") {
+        GroupLabel("VPN Behavior")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WhiteDnsDropdownField(
+                modifier = Modifier.weight(1f),
+                label = "IPv6 Strategy",
+                value = settings.vpnIpv6Strategy,
+                options = WhiteDnsOptions.vpnIpv6Strategies,
+                onValueChange = { onSettingsChange(settings.copy(vpnIpv6Strategy = it)) },
+            )
+            WhiteDnsDropdownField(
+                modifier = Modifier.weight(1f),
+                label = "VPN MTU",
+                value = settings.vpnMtuPreset,
+                options = WhiteDnsOptions.vpnMtuPresets,
+                onValueChange = { onSettingsChange(settings.copy(vpnMtuPreset = it)) },
+            )
+        }
+        AnimatedVisibility(
+            visible = settings.vpnMtuPreset == WhiteDnsOptions.VpnMtuPresetCustom,
+            enter = fadeIn(animationSpec = tween(220)) + expandVertically(animationSpec = tween(220)),
+            exit = fadeOut(animationSpec = tween(160)) + shrinkVertically(animationSpec = tween(160)),
+        ) {
+            WhiteDnsTextField(
+                label = "Custom VPN MTU",
+                value = settings.vpnCustomMtu,
+                onValueChange = { onSettingsChange(settings.copy(vpnCustomMtu = it.filter(Char::isDigit))) },
+                placeholder = "1500",
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    capitalization = KeyboardCapitalization.None,
+                ),
+            )
+        }
+        VpnBehaviorNotice(settings.vpnIpv6Strategy)
+        SectionDivider()
+    }
+
     GroupLabel("Network Tuning")
 
     WhiteDnsDropdownField(
@@ -1643,6 +1681,38 @@ private fun AdvancedSettingsFields(
         options = WhiteDnsOptions.logLevels,
         onValueChange = { onSettingsChange(settings.copy(logLevel = it)) },
     )
+}
+
+@Composable
+private fun VpnBehaviorNotice(ipv6Strategy: String) {
+    val strategyText = when (ipv6Strategy) {
+        WhiteDnsOptions.VpnIpv6StrategyBypass ->
+            "IPv6 traffic bypasses the tunnel. Use Android's Block connections without VPN setting when leak prevention matters."
+        WhiteDnsOptions.VpnIpv6StrategyExperimentalRoute ->
+            "Experimental IPv6 route is enabled. Some networks or apps may need fallback to Block IPv6."
+        else ->
+            "IPv6 is routed into WhiteDNS and blocked unless the VPN stack can forward it."
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(WhiteDnsPalette.SurfaceAlt)
+            .border(1.dp, WhiteDnsPalette.ControlBorder, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = strategyText,
+            color = WhiteDnsPalette.TextPrimary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = "For Always-on VPN, enable WhiteDNS in Android VPN settings and turn on Block connections without VPN.",
+            color = WhiteDnsPalette.TextSecondary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
 }
 
 private fun advancedProfileSummary(profile: AdvancedSettingsProfile): String {

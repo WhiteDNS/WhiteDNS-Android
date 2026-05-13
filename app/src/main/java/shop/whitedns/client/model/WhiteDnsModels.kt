@@ -122,6 +122,9 @@ data class AdvancedSettingsProfile(
     val trafficWarmupEnabled: Boolean,
     val trafficWarmupProbeCount: String,
     val trafficKeepaliveIntervalSeconds: String,
+    val vpnIpv6Strategy: String,
+    val vpnMtuPreset: String,
+    val vpnCustomMtu: String,
     val logLevel: String,
 ) : Serializable {
     companion object {
@@ -195,6 +198,9 @@ data class AdvancedSettingsProfile(
                 trafficWarmupEnabled = settings.trafficWarmupEnabled,
                 trafficWarmupProbeCount = settings.trafficWarmupProbeCount,
                 trafficKeepaliveIntervalSeconds = settings.trafficKeepaliveIntervalSeconds,
+                vpnIpv6Strategy = settings.vpnIpv6Strategy,
+                vpnMtuPreset = settings.vpnMtuPreset,
+                vpnCustomMtu = settings.vpnCustomMtu,
                 logLevel = settings.logLevel,
             )
         }
@@ -276,6 +282,9 @@ data class WhiteDnsSettings(
     val trafficWarmupEnabled: Boolean = true,
     val trafficWarmupProbeCount: String = "4",
     val trafficKeepaliveIntervalSeconds: String = "5",
+    val vpnIpv6Strategy: String = WhiteDnsOptions.VpnIpv6StrategyBlock,
+    val vpnMtuPreset: String = WhiteDnsOptions.VpnMtuPreset1500,
+    val vpnCustomMtu: String = "1500",
     val fullVpnPerformanceWarningDismissed: Boolean = false,
     val splitTunnelMode: String = WhiteDnsOptions.SplitTunnelModeOff,
     val splitTunnelPackages: List<String> = emptyList(),
@@ -336,6 +345,9 @@ data class ResolvedWhiteDnsSettings(
     val trafficWarmupEnabled: Boolean,
     val trafficWarmupProbeCount: Int,
     val trafficKeepaliveIntervalSeconds: Int,
+    val vpnIpv6Strategy: String,
+    val vpnMtuPreset: String,
+    val vpnMtu: Int,
     val splitTunnelMode: String,
     val splitTunnelPackages: List<String>,
     val logLevel: String,
@@ -428,6 +440,13 @@ object WhiteDnsOptions {
     const val SplitTunnelModeOff = "off"
     const val SplitTunnelModeInclude = "include"
     const val SplitTunnelModeExclude = "exclude"
+    const val VpnIpv6StrategyBlock = "block"
+    const val VpnIpv6StrategyBypass = "bypass"
+    const val VpnIpv6StrategyExperimentalRoute = "experimental_route"
+    const val VpnMtuPreset1280 = "1280"
+    const val VpnMtuPreset1400 = "1400"
+    const val VpnMtuPreset1500 = "1500"
+    const val VpnMtuPresetCustom = "custom"
 
     val connectionModes = listOf(
         Choice("proxy", "Proxy Mode"),
@@ -438,6 +457,19 @@ object WhiteDnsOptions {
         Choice(SplitTunnelModeOff, "All Apps"),
         Choice(SplitTunnelModeInclude, "Only Selected"),
         Choice(SplitTunnelModeExclude, "Bypass Selected"),
+    )
+
+    val vpnIpv6Strategies = listOf(
+        Choice(VpnIpv6StrategyBlock, "Block IPv6"),
+        Choice(VpnIpv6StrategyBypass, "Bypass IPv6"),
+        Choice(VpnIpv6StrategyExperimentalRoute, "Experimental Route"),
+    )
+
+    val vpnMtuPresets = listOf(
+        Choice(VpnMtuPreset1280, "1280"),
+        Choice(VpnMtuPreset1400, "1400"),
+        Choice(VpnMtuPreset1500, "1500"),
+        Choice(VpnMtuPresetCustom, "Custom"),
     )
 
     val encryptionMethods = listOf(
@@ -486,6 +518,10 @@ object WhiteDnsOptions {
 
     fun splitTunnelModeLabel(mode: String): String {
         return splitTunnelModes.firstOrNull { it.value == mode }?.label ?: "All Apps"
+    }
+
+    fun vpnIpv6StrategyLabel(strategy: String): String {
+        return vpnIpv6Strategies.firstOrNull { it.value == strategy }?.label ?: "Block IPv6"
     }
 }
 
@@ -681,6 +717,9 @@ fun WhiteDnsSettings.applyAdvancedProfile(profile: AdvancedSettingsProfile): Whi
         trafficWarmupEnabled = profile.trafficWarmupEnabled,
         trafficWarmupProbeCount = profile.trafficWarmupProbeCount,
         trafficKeepaliveIntervalSeconds = profile.trafficKeepaliveIntervalSeconds,
+        vpnIpv6Strategy = profile.vpnIpv6Strategy,
+        vpnMtuPreset = profile.vpnMtuPreset,
+        vpnCustomMtu = profile.vpnCustomMtu,
         logLevel = profile.logLevel,
     ).syncSelectedConnectionProfileFields()
 }
@@ -995,6 +1034,9 @@ fun WhiteDnsSettings.resetAdvancedSettings(): WhiteDnsSettings {
         trafficWarmupEnabled = defaults.trafficWarmupEnabled,
         trafficWarmupProbeCount = defaults.trafficWarmupProbeCount,
         trafficKeepaliveIntervalSeconds = defaults.trafficKeepaliveIntervalSeconds,
+        vpnIpv6Strategy = defaults.vpnIpv6Strategy,
+        vpnMtuPreset = defaults.vpnMtuPreset,
+        vpnCustomMtu = defaults.vpnCustomMtu,
         logLevel = defaults.logLevel,
     ).syncSelectedConnectionProfileFields()
 }
@@ -1245,6 +1287,30 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         .coerceAtLeast(resolvedMinUploadMtu)
     val resolvedMaxDownloadMtu = boundedInt(maxDownloadMtu, defaultValue = 3000, minValue = 1, maxValue = 65535)
         .coerceAtLeast(resolvedMinDownloadMtu)
+    val resolvedVpnIpv6Strategy = when (vpnIpv6Strategy) {
+        WhiteDnsOptions.VpnIpv6StrategyBlock,
+        WhiteDnsOptions.VpnIpv6StrategyBypass,
+        WhiteDnsOptions.VpnIpv6StrategyExperimentalRoute -> vpnIpv6Strategy
+        else -> WhiteDnsOptions.VpnIpv6StrategyBlock
+    }
+    val resolvedVpnMtuPreset = when (vpnMtuPreset) {
+        WhiteDnsOptions.VpnMtuPreset1280,
+        WhiteDnsOptions.VpnMtuPreset1400,
+        WhiteDnsOptions.VpnMtuPreset1500,
+        WhiteDnsOptions.VpnMtuPresetCustom -> vpnMtuPreset
+        else -> WhiteDnsOptions.VpnMtuPreset1500
+    }
+    val resolvedVpnMtu = when (resolvedVpnMtuPreset) {
+        WhiteDnsOptions.VpnMtuPreset1280 -> 1280
+        WhiteDnsOptions.VpnMtuPreset1400 -> 1400
+        WhiteDnsOptions.VpnMtuPresetCustom -> boundedInt(
+            vpnCustomMtu,
+            defaultValue = 1500,
+            minValue = 1280,
+            maxValue = 9000,
+        )
+        else -> 1500
+    }
 
     return ResolvedWhiteDnsSettings(
         connectionMode = when (connectionMode) {
@@ -1386,6 +1452,9 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
             minValue = 2,
             maxValue = 300,
         ),
+        vpnIpv6Strategy = resolvedVpnIpv6Strategy,
+        vpnMtuPreset = resolvedVpnMtuPreset,
+        vpnMtu = resolvedVpnMtu,
         splitTunnelMode = normalizeSplitTunnelMode(splitTunnelMode),
         splitTunnelPackages = normalizePackageNames(splitTunnelPackages),
         logLevel = when (logLevel) {

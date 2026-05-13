@@ -8,6 +8,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -55,6 +59,8 @@ class WhiteDnsVpnService : VpnService() {
     private var foregroundStarted = false
     private var startJob: Job? = null
     private var keepaliveJob: Job? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var networkRecoveryJob: Job? = null
     private var runtimeReady = false
     private var lastTrafficNotificationUpdateMillis = 0L
     private var currentSessionId = ""
@@ -402,12 +408,13 @@ class WhiteDnsVpnService : VpnService() {
             logInfo("Preparing Android VPN interface with virtual DNS")
             val tun = Builder()
                 .setSession("WhiteDNS")
-                .setMtu(VpnMtu)
+                .setMtu(resolvedSettings.vpnMtu)
                 .addAddress(TunIpv4Address, TunIpv4PrefixLength)
                 .addDnsServer(TunDnsServer)
                 .addRoute(TunDnsServer, 32)
                 .addRoute("0.0.0.0", 0)
                 .apply {
+                    configureIpv6Strategy(resolvedSettings.vpnIpv6Strategy)
                     configureSplitTunnelApplications(
                         splitTunnelMode = resolvedSettings.splitTunnelMode,
                         splitTunnelPackages = resolvedSettings.splitTunnelPackages,
@@ -420,6 +427,10 @@ class WhiteDnsVpnService : VpnService() {
             clearCloseOnExec(tun)
             val tunFd = tun.fd
             logInfo("Routing device traffic to SOCKS $socksHost:$socksPort")
+            logInfo(
+                "VPN interface ready with MTU ${resolvedSettings.vpnMtu} and " +
+                    WhiteDnsOptions.vpnIpv6StrategyLabel(resolvedSettings.vpnIpv6Strategy),
+            )
             tun2SocksProcessManager.start(
                 tunFileDescriptor = tunFd,
                 closeTunFileDescriptorOnDrop = false,
@@ -440,6 +451,7 @@ class WhiteDnsVpnService : VpnService() {
             )
             updateForegroundNotification("Full-device VPN is active")
             runtimeReady = true
+            registerNetworkChangeCallback(sessionId, runtimeFailure)
             WhiteDnsRuntimeStateStore.markReady(
                 context = applicationContext,
                 settings = settings,
@@ -458,6 +470,7 @@ class WhiteDnsVpnService : VpnService() {
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
         stopTrafficKeepalive()
+        unregisterNetworkChangeCallback()
         runCatching {
             val stopped = tun2SocksProcessManager.stop(
                 gracePeriodMillis = Tun2proxyStopGracePeriodMillis,
@@ -568,6 +581,86 @@ class WhiteDnsVpnService : VpnService() {
             else -> {
                 excludeWhiteDnsApp()
             }
+        }
+    }
+
+    private fun Builder.configureIpv6Strategy(ipv6Strategy: String) {
+        when (ipv6Strategy) {
+            WhiteDnsOptions.VpnIpv6StrategyBypass -> {
+                logWarning("IPv6 bypass is enabled; IPv6 traffic will not be routed through WhiteDNS")
+            }
+            WhiteDnsOptions.VpnIpv6StrategyExperimentalRoute -> {
+                addAddress(TunIpv6Address, TunIpv6PrefixLength)
+                addRoute("::", 0)
+                logWarning("Experimental IPv6 routing is enabled")
+            }
+            else -> {
+                addAddress(TunIpv6Address, TunIpv6PrefixLength)
+                addRoute("::", 0)
+                logInfo("IPv6 traffic is routed into WhiteDNS and blocked unless supported by the VPN bridge")
+            }
+        }
+    }
+
+    private fun registerNetworkChangeCallback(
+        sessionId: String,
+        runtimeFailure: AtomicReference<String?>,
+    ) {
+        unregisterNetworkChangeCallback()
+        val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        val ignoreEventsBeforeMillis = System.currentTimeMillis() + NetworkChangeInitialQuietMillis
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network became available")
+            }
+
+            override fun onLost(network: Network) {
+                if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network changed")
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                if (System.currentTimeMillis() < ignoreEventsBeforeMillis) return
+                scheduleNetworkRecovery(sessionId, runtimeFailure, "Network capabilities changed")
+            }
+        }
+        runCatching {
+            connectivityManager.registerNetworkCallback(request, callback)
+            networkCallback = callback
+            logInfo("Watching network changes for same-session VPN recovery")
+        }.onFailure { error ->
+            logWarning("Unable to watch network changes: ${error.message ?: error::class.java.simpleName}")
+        }
+    }
+
+    private fun scheduleNetworkRecovery(
+        sessionId: String,
+        runtimeFailure: AtomicReference<String?>,
+        reason: String,
+    ) {
+        if (sessionId != currentSessionId || stopping) {
+            return
+        }
+        networkRecoveryJob?.cancel()
+        networkRecoveryJob = serviceScope.launch {
+            delay(NetworkChangeDebounceMillis)
+            if (sessionId == currentSessionId && runtimeReady && !stopping) {
+                runtimeFailure.compareAndSet(null, "$reason; recovering VPN session")
+            }
+        }
+    }
+
+    private fun unregisterNetworkChangeCallback() {
+        networkRecoveryJob?.cancel()
+        networkRecoveryJob = null
+        val callback = networkCallback ?: return
+        networkCallback = null
+        runCatching {
+            getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(callback)
         }
     }
 
@@ -698,8 +791,9 @@ class WhiteDnsVpnService : VpnService() {
         private const val ExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"
         const val TunIpv4Address = "172.19.0.1"
         private const val TunIpv4PrefixLength = 30
+        private const val TunIpv6Address = "fd00:7764:6e73::1"
+        private const val TunIpv6PrefixLength = 126
         private const val TunDnsServer = "172.19.0.2"
-        private const val VpnMtu = 1500
         private const val VpnRestartInitialDelayMillis = 2_000L
         private const val VpnRestartMaxDelayMillis = 30_000L
         private const val VpnRestartMaxFailures = 3
@@ -710,6 +804,8 @@ class WhiteDnsVpnService : VpnService() {
         private const val PreviousRuntimeStopPollMillis = 100L
         private const val TrafficNotificationUpdateIntervalMillis = 1_000L
         private const val TrafficWarmupProbeSpacingMillis = 300L
+        private const val NetworkChangeInitialQuietMillis = 2_000L
+        private const val NetworkChangeDebounceMillis = 1_500L
         private const val NotificationId = 3101
         private const val NotificationChannelId = "whitedns_vpn"
 

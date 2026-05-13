@@ -211,6 +211,9 @@ object RuntimeLaunchRequestStore {
             .put("trafficWarmupEnabled", settings.trafficWarmupEnabled)
             .put("trafficWarmupProbeCount", settings.trafficWarmupProbeCount)
             .put("trafficKeepaliveIntervalSeconds", settings.trafficKeepaliveIntervalSeconds)
+            .put("vpnIpv6Strategy", settings.vpnIpv6Strategy)
+            .put("vpnMtuPreset", settings.vpnMtuPreset)
+            .put("vpnCustomMtu", settings.vpnCustomMtu)
             .put("fullVpnPerformanceWarningDismissed", settings.fullVpnPerformanceWarningDismissed)
             .put("splitTunnelMode", settings.splitTunnelMode)
             .put("splitTunnelPackages", splitTunnelPackages)
@@ -289,6 +292,9 @@ object RuntimeLaunchRequestStore {
             trafficWarmupEnabled = json.optBoolean("trafficWarmupEnabled", true),
             trafficWarmupProbeCount = json.optString("trafficWarmupProbeCount", "4"),
             trafficKeepaliveIntervalSeconds = json.optString("trafficKeepaliveIntervalSeconds", "5"),
+            vpnIpv6Strategy = json.optString("vpnIpv6Strategy", "block"),
+            vpnMtuPreset = json.optString("vpnMtuPreset", "1500"),
+            vpnCustomMtu = json.optString("vpnCustomMtu", "1500"),
             fullVpnPerformanceWarningDismissed = json.optBoolean("fullVpnPerformanceWarningDismissed", false),
             splitTunnelMode = json.optString("splitTunnelMode", "off"),
             splitTunnelPackages = decodeStringArray(json.optJSONArray("splitTunnelPackages")),
