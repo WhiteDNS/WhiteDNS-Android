@@ -204,7 +204,7 @@ Expected result:
 - Sections cover connection basics, proxy mode, VPN mode, traffic/battery, status
   metrics, import/export, diagnostics, troubleshooting, and QA.
 - Navigation state remains stable after leaving and returning to the guide.
-- The guide does not expose secrets or refer to private support material.
+- The guide does not expose secrets or refer to sensitive user material.
 
 ## Profile Import, Export, And QR
 
@@ -523,6 +523,27 @@ Expected result:
   sensible order.
 - Diagnostics and UI labels use the same concepts as the guide.
 - The guide does not recommend changing unrelated advanced settings first.
+
+### QA-HEALTH-005 Failed Route Next-Step Panel
+
+Priority: P1
+
+Steps:
+
+1. Configure a profile that starts the runtime but fails route verification.
+2. Start proxy mode and wait for verification failure.
+3. Inspect the next-step panel below the verification summary.
+4. Repeat in VPN mode.
+
+Expected result:
+
+- The app shows a concise "what to check next" panel after route failure.
+- The panel checks server, resolvers, local route, and network in that order.
+- Proxy mode guidance mentions the displayed local proxy address and SOCKS/HTTP
+  port distinction.
+- VPN mode guidance mentions VPN permission, split tunnel, IPv6, MTU, and Android
+  battery restrictions.
+- The panel does not expose secrets, profile links, resolver paths, or raw logs.
 
 ## Proxy Mode
 

@@ -529,6 +529,16 @@ private fun ConnectTabContent(
                         modifier = Modifier.padding(top = 10.dp),
                         verification = uiState.connectionVerification,
                     )
+                    AnimatedVisibility(
+                        visible = uiState.connectionVerification.status == ConnectionVerificationStatus.Failed,
+                        enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(180)),
+                        exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(120)),
+                    ) {
+                        RouteTroubleshootingCard(
+                            modifier = Modifier.padding(top = 10.dp),
+                            connectionMode = resolvedSettings.connectionMode,
+                        )
+                    }
                 }
             }
             AnimatedVisibility(
@@ -2397,6 +2407,50 @@ private fun GuideStepDivider() {
             .height(1.dp)
             .background(WhiteDnsPalette.Divider),
     )
+}
+
+@Composable
+private fun RouteTroubleshootingCard(
+    connectionMode: String,
+    modifier: Modifier = Modifier,
+) {
+    val routeHint = if (connectionMode == "vpn") {
+        "Check VPN permission, split tunnel selection, IPv6 strategy, MTU, and Android battery restrictions."
+    } else {
+        "Check that the companion app uses the displayed local proxy address and the correct SOCKS or HTTP port."
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        InfoCard(title = "WHAT TO CHECK NEXT", compact = true) {
+            GuideInfoRow(
+                GuideEntry(
+                    label = "Server",
+                    detail = "Confirm the domain, encryption key, server capacity, and whether the profile is still valid.",
+                ),
+            )
+            GuideStepDivider()
+            GuideInfoRow(
+                GuideEntry(
+                    label = "Resolvers",
+                    detail = "Try a smaller clean resolver list. Remove duplicates, invalid rows, and private or loopback addresses.",
+                ),
+            )
+            GuideStepDivider()
+            GuideInfoRow(
+                GuideEntry(
+                    label = "Local route",
+                    detail = routeHint,
+                ),
+            )
+            GuideStepDivider()
+            GuideInfoRow(
+                GuideEntry(
+                    label = "Network",
+                    detail = "Test Wi-Fi and mobile data separately. If one network fails, try safer MTU and IPv6 settings before changing every advanced value.",
+                ),
+            )
+        }
+    }
 }
 
 @Composable
