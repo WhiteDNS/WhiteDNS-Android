@@ -6,6 +6,8 @@
 
 WhiteDNS is an Android application for running a local DNS tunneling client with proxy and VPN modes.
 
+[راهنمای فارسی](./README.fa.md) | [Persian user guide](./docs/fa/WHITE_DNS_USER_GUIDE.md) | [Persian QA plan](./docs/fa/WHITE_DNS_QA.md)
+
 > **NOTICE:** WhiteDNS is source-available proprietary software. The code is published for transparency, review, and contribution to this official project only. You may not copy the app into a separate product, publish modified builds, repackage APKs, redistribute binaries, clone the branding, or reuse the WhiteDNS name, logo, icon, design, or visual identity.
 
 > **APP STORE WARNING:** WhiteDNS does not have any publication on Google Play. Any WhiteDNS APK, listing, or package found on Google Play or another app marketplace is not an official release from this project and may be modified, outdated, or unsafe. Use only this repository and the official Telegram channel for project updates.
