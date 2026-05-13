@@ -707,6 +707,7 @@ private fun ConnectTabContent(
                 fieldLabel = "client_config.toml",
                 placeholder = "client_config.toml",
                 showQr = false,
+                redactDisplayedValue = true,
                 redactionSecrets = settings.redactionSecrets(),
                 linkResult = remember(settings, selectedConnectionProfile, showConnectionTomlDialog) {
                     runCatching {
@@ -2174,7 +2175,7 @@ private fun ConnectionProfilesSettings(
         ConnectionProfileExportDialog(
             title = "EXPORT CONNECTION",
             fieldLabel = "Profile Link",
-            redactionSecrets = settings.redactionSecrets(),
+            warningText = "This export includes connection secrets. Only share it with people or devices you trust.",
             linkResult = remember(settings, profile) {
                 runCatching { settings.exportStormDnsProfileLink(profile) }
             },
@@ -2189,7 +2190,7 @@ private fun ConnectionProfilesSettings(
         ConnectionProfileExportDialog(
             title = "EXPORT ALL CONNECTIONS",
             fieldLabel = "Profile Links",
-            redactionSecrets = settings.redactionSecrets(),
+            warningText = "This export includes connection secrets. Only share it with people or devices you trust.",
             linkResult = remember(settings, showExportAllDialog) {
                 runCatching { settings.exportAllStormDnsProfileLinks() }
             },
@@ -2725,6 +2726,8 @@ private fun ConnectionProfileExportDialog(
     onShare: (String) -> Unit,
     placeholder: String = "stormdns://...",
     showQr: Boolean = true,
+    warningText: String? = null,
+    redactDisplayedValue: Boolean = false,
     redactionSecrets: RedactionSecrets = RedactionSecrets(),
 ) {
     val context = LocalContext.current
@@ -2751,17 +2754,32 @@ private fun ConnectionProfileExportDialog(
             Spacer(modifier = Modifier.height(14.dp))
             val link = linkResult.getOrNull()
             if (link != null) {
-                val redactedLink = remember(link, redactionSecrets) {
-                    SecretRedactor.redact(link, redactionSecrets)
+                val displayValue = remember(link, redactionSecrets, redactDisplayedValue) {
+                    if (redactDisplayedValue) {
+                        SecretRedactor.redact(link, redactionSecrets)
+                    } else {
+                        link
+                    }
                 }
-                val isLinkRedacted = redactedLink != link
-                if (showQr && !link.contains('\n') && !isLinkRedacted) {
+                warningText?.let { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                            color = WhiteDnsPalette.WarningText,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                if (showQr && !link.contains('\n')) {
                     ProfileQrPreview(link = link)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 WhiteDnsTextField(
                     label = fieldLabel,
-                    value = redactedLink,
+                    value = displayValue,
                     onValueChange = {},
                     placeholder = placeholder,
                     singleLine = false,
@@ -2789,8 +2807,8 @@ private fun ConnectionProfileExportDialog(
                             copyTextToClipboard(
                                 context = context,
                                 label = fieldLabel,
-                                text = redactedLink,
-                                sensitive = false,
+                                text = displayValue,
+                                sensitive = !redactDisplayedValue,
                             )
                         },
                     )
@@ -2804,16 +2822,18 @@ private fun ConnectionProfileExportDialog(
                         },
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                CompactActionButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "COPY FULL",
-                    emphasized = false,
-                    enabled = true,
-                    onClick = {
-                        pendingFullExport = FullExportAction.Copy
-                    },
-                )
+                if (redactDisplayedValue) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactActionButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "COPY FULL",
+                        emphasized = false,
+                        enabled = true,
+                        onClick = {
+                            pendingFullExport = FullExportAction.Copy
+                        },
+                    )
+                }
             } else {
                 Text(
                     text = linkResult.exceptionOrNull()?.message ?: "Unable to export profile",
