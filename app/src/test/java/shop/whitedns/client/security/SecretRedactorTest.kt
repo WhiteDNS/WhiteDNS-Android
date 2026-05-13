@@ -10,6 +10,7 @@ class SecretRedactorTest {
         val raw = """
             Server vpn.private.example uses key super-secret-key
             SOCKS user user-name password proxy-password
+            Short password xy appears in a free-form line
             stormdns://eyJzZWNyZXQiOiJzdXBlci1zZWNyZXQta2V5In0
             Runtime path /data/data/shop.whitedns.client/no_backup/stormdns/runtime/.wd-a.toml
         """.trimIndent()
@@ -20,7 +21,7 @@ class SecretRedactorTest {
                 serverRoutes = listOf("vpn.private.example"),
                 encryptionKeys = listOf("super-secret-key"),
                 socksUsers = listOf("user-name"),
-                socksPasswords = listOf("proxy-password"),
+                socksPasswords = listOf("proxy-password", "xy"),
             ),
         )
 
@@ -28,6 +29,7 @@ class SecretRedactorTest {
         assertFalse(redacted.contains("super-secret-key"))
         assertFalse(redacted.contains("user-name"))
         assertFalse(redacted.contains("proxy-password"))
+        assertFalse(redacted.contains("xy"))
         assertFalse(redacted.contains("stormdns://"))
         assertFalse(redacted.contains(".wd-a.toml"))
         assertTrue(redacted.contains("[server route]"))

@@ -2754,8 +2754,9 @@ private fun ConnectionProfileExportDialog(
                 val redactedLink = remember(link, redactionSecrets) {
                     SecretRedactor.redact(link, redactionSecrets)
                 }
-                if (showQr && !redactedLink.contains('\n')) {
-                    ProfileQrPreview(link = redactedLink)
+                val isLinkRedacted = redactedLink != link
+                if (showQr && !link.contains('\n') && !isLinkRedacted) {
+                    ProfileQrPreview(link = link)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 WhiteDnsTextField(

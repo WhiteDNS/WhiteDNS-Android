@@ -56,13 +56,11 @@ object SecretRedactor {
         return values
             .asSequence()
             .map(String::trim)
-            .filter { it.length >= MinimumDirectSecretLength }
+            .filter(String::isNotEmpty)
             .distinct()
             .sortedByDescending(String::length)
             .fold(source) { text, value ->
                 text.replace(value, replacement)
             }
     }
-
-    private const val MinimumDirectSecretLength = 3
 }

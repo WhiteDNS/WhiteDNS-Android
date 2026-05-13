@@ -662,7 +662,6 @@ class WhiteDnsViewModel(
 
     private fun prependConnectionLog(message: String): List<String> {
         val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
             .trim()
             .redactRuntimeSecrets()
         if (cleanMessage.isEmpty()) {
@@ -1120,7 +1119,6 @@ class WhiteDnsViewModel(
 
     private fun appendLogOnMain(message: String) {
         val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
             .trim()
             .redactRuntimeSecrets()
         if (cleanMessage.isEmpty()) {
