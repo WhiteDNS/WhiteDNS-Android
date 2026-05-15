@@ -445,7 +445,26 @@ object WhiteDnsScanStatus {
 
 object WhiteDnsScanDefaults {
     const val DefaultWorkerCount = 4
-    const val WorkerWarningThreshold = 8
+    const val WorkerWarningThreshold = 16
+    const val MaxWorkerCount = 128
+    const val CustomWorkerBudget = "custom"
+
+    val workerBudgets = listOf(
+        Choice("4", "Quick - 4 workers"),
+        Choice("8", "Balanced - 8 workers"),
+        Choice("16", "Deep - 16 workers"),
+        Choice("32", "Expert - 32 workers"),
+        Choice("64", "High - 64 workers"),
+        Choice("128", "Max - 128 workers"),
+        Choice(CustomWorkerBudget, "Custom"),
+    )
+
+    fun workerBudgetFor(workerCount: Int): String {
+        return workerBudgets
+            .firstOrNull { it.value == workerCount.toString() }
+            ?.value
+            ?: CustomWorkerBudget
+    }
 }
 
 object WhiteDnsThemeMode {
