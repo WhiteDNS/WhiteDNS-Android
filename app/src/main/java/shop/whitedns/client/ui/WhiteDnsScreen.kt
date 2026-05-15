@@ -144,6 +144,7 @@ import shop.whitedns.client.model.ConnectionStats
 import shop.whitedns.client.model.ConnectionStatus
 import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
+import shop.whitedns.client.model.ResolvedWhiteDnsSettings
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
 import shop.whitedns.client.model.WhiteDnsOptions
@@ -183,6 +184,7 @@ import shop.whitedns.client.model.updateManualResolverText
 import shop.whitedns.client.model.upsertConnectionProfile
 import shop.whitedns.client.model.upsertAdvancedProfile
 import shop.whitedns.client.model.upsertResolverProfile
+import shop.whitedns.client.model.validateConnectionSettings
 import shop.whitedns.client.model.validateResolverText
 import shop.whitedns.client.model.WhiteDnsAutoTunePresets
 import shop.whitedns.client.model.WhiteDnsParallelTest
@@ -203,6 +205,7 @@ fun WhiteDnsScreen(
     onBatteryOptimizationClick: () -> Unit,
     onNotificationPermissionClick: () -> Unit,
     onConnectClick: () -> Unit,
+    onTestProfileClick: () -> Unit,
     onScanFileSelected: (Uri) -> Unit,
     onScanDefaultListSelected: () -> Unit,
     onScanStartClick: () -> Unit,
@@ -235,6 +238,7 @@ fun WhiteDnsScreen(
                     onBatteryOptimizationClick = onBatteryOptimizationClick,
                     onNotificationPermissionClick = onNotificationPermissionClick,
                     onConnectClick = onConnectClick,
+                    onTestProfileClick = onTestProfileClick,
                     onAddConnectionClick = {
                         profileCreateRequest = ProfileCreateRequest.CONNECTION
                         selectedTab = WhiteDnsTab.PROFILES
@@ -321,6 +325,7 @@ private fun ConnectTabContent(
     onBatteryOptimizationClick: () -> Unit,
     onNotificationPermissionClick: () -> Unit,
     onConnectClick: () -> Unit,
+    onTestProfileClick: () -> Unit,
     onAddConnectionClick: () -> Unit,
     onAddResolverProfileClick: () -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
@@ -355,6 +360,11 @@ private fun ConnectTabContent(
     val showInitialSetup = !hasInitialServerProfile || !hasInitialResolverProfile
     val selectedResolverProfile = remember(settings) { settings.selectedResolverProfile() }
     val resolverValidation = remember(settings.resolverText) { validateResolverText(settings.resolverText) }
+    val resolverIssue = when {
+        resolverValidation.invalidEntries.isNotEmpty() -> "Resolver list contains invalid entries"
+        resolverValidation.normalizedResolvers.isEmpty() -> "Add at least one valid resolver"
+        else -> null
+    }
     val context = LocalContext.current
     val splitTunnelApps = remember(context.packageName) {
         loadSplitTunnelAppOptions(context)
@@ -553,6 +563,29 @@ private fun ConnectTabContent(
                 },
             )
             AnimatedVisibility(
+                visible = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
+                enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(180)),
+                exit = fadeOut(animationSpec = tween(140)) + shrinkVertically(animationSpec = tween(140)),
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+                    ProfileReadinessPanel(
+                        readiness = uiState.profileReadiness,
+                        settings = settings,
+                        resolvedSettings = resolvedSettings,
+                        resolverCount = resolverValidation.normalizedResolvers.size,
+                        resolverIssue = resolverIssue,
+                        onTestProfileClick = onTestProfileClick,
+                        onAddConnectionClick = onAddConnectionClick,
+                        onAddResolverProfileClick = onAddResolverProfileClick,
+                        onOpenAdvancedClick = {
+                            showResolverRequiredMessage = false
+                            showAdvancedEditDialog = true
+                        },
+                    )
+                }
+            }
+            AnimatedVisibility(
                 visible = resolvedSettings.connectionMode == "proxy" || resolvedSettings.connectionMode == "vpn",
                 enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = tween(180)),
                 exit = fadeOut(animationSpec = tween(140)) + shrinkVertically(animationSpec = tween(140)),
@@ -687,13 +720,7 @@ private fun ConnectTabContent(
                         selectedConnectionProfile = selectedConnectionProfile,
                         selectedResolverProfile = selectedResolverProfile,
                         resolverCount = resolverValidation.normalizedResolvers.size,
-                        resolverIssue = resolverValidation.invalidEntries.firstOrNull()?.let { invalidEntry ->
-                            "Invalid resolver IP: $invalidEntry"
-                        } ?: if (resolverValidation.normalizedResolvers.isEmpty()) {
-                            "No resolvers configured"
-                        } else {
-                            null
-                        },
+                        resolverIssue = resolverIssue,
                         actionsEnabled = uiState.connectionStatus != ConnectionStatus.CONNECTING,
                         onAddConnectionClick = onAddConnectionClick,
                         onAddResolverProfileClick = onAddResolverProfileClick,
@@ -2730,6 +2757,216 @@ private fun HomeSelectorSheetRow(
                 contentDescription = "Selected",
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileReadinessPanel(
+    readiness: ConnectionVerificationState,
+    settings: WhiteDnsSettings,
+    resolvedSettings: ResolvedWhiteDnsSettings,
+    resolverCount: Int,
+    resolverIssue: String?,
+    onTestProfileClick: () -> Unit,
+    onAddConnectionClick: () -> Unit,
+    onAddResolverProfileClick: () -> Unit,
+    onOpenAdvancedClick: () -> Unit,
+) {
+    val selectedProfile = settings.selectedConnectionProfile()
+    val validation = remember(settings) { validateConnectionSettings(settings) }
+    val serverReady = selectedProfile.customServerDomain.isNotBlank() &&
+        selectedProfile.customServerEncryptionKey.isNotBlank() &&
+        validation.fatalIssues.none { issue -> issue.field == "server" }
+    val resolverReady = resolverCount > 0 && resolverIssue == null &&
+        validation.fatalIssues.none { issue -> issue.field == "resolvers" }
+    val localPortReady = when {
+        readiness.status == ConnectionVerificationStatus.Verified -> true
+        readiness.status == ConnectionVerificationStatus.Failed &&
+            readiness.message.contains("local", ignoreCase = true) -> false
+        else -> null
+    }
+    val localPortDetail = buildString {
+        append("SOCKS ${resolvedSettings.listenPort}")
+        if (resolvedSettings.httpProxyEnabled) {
+            append(", HTTP ${resolvedSettings.httpProxyPort}")
+        }
+        if (resolvedSettings.localDnsEnabled) {
+            append(", DNS ${resolvedSettings.localDnsPort}")
+        }
+    }
+    val safetyReady = when {
+        validation.fatalIssues.any { issue -> issue.field == "socks5Authentication" } -> false
+        readiness.status == ConnectionVerificationStatus.Verified -> true
+        else -> null
+    }
+    val testRunning = readiness.status == ConnectionVerificationStatus.Checking
+
+    InfoCard(title = "SETUP READINESS", compact = true) {
+        ConnectionVerificationSummary(
+            verification = readiness,
+            idleMessage = "Run Test Setup before connecting. It checks profile fields, resolver input, local ports, LAN exposure rules, and an advisory server address signal.",
+            checkingLabel = "Checking Setup",
+            verifiedLabel = "Ready To Connect",
+            failedLabel = "Setup Needs Attention",
+        )
+        Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            ReadinessStepRow(
+                label = "Server",
+                detail = if (serverReady) {
+                    "Domain and key are present"
+                } else {
+                    "Add a valid domain and encryption key"
+                },
+                ready = serverReady,
+            )
+            ReadinessStepRow(
+                label = "Resolvers",
+                detail = if (resolverReady) {
+                    resolverCountLabel(resolverCount)
+                } else {
+                    resolverIssue ?: "Add at least one valid resolver"
+                },
+                ready = resolverReady,
+            )
+            ReadinessStepRow(
+                label = "Mode",
+                detail = WhiteDnsOptions.connectionModeLabel(resolvedSettings.connectionMode),
+                ready = resolvedSettings.connectionMode in setOf("proxy", "vpn"),
+            )
+            ReadinessStepRow(
+                label = "Local Ports",
+                detail = localPortDetail,
+                ready = localPortReady,
+            )
+            ReadinessStepRow(
+                label = "Safety",
+                detail = if (safetyReady == false) {
+                    "LAN proxy exposure needs a SOCKS username and password"
+                } else {
+                    "Checks LAN exposure and credential rules"
+                },
+                ready = safetyReady,
+            )
+            ReadinessStepRow(
+                label = "Route Check",
+                detail = "Runs after connect to verify real proxy/VPN traffic",
+                ready = null,
+            )
+        }
+        Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+        SetupActionButton(
+            label = if (testRunning) "Checking Setup" else "Test Setup",
+            supportingText = "Server, resolvers, ports, and safety",
+            icon = Icons.Rounded.Tune,
+            emphasized = true,
+            enabled = !testRunning,
+            onClick = onTestProfileClick,
+        )
+        AnimatedVisibility(
+            visible = !serverReady || !resolverReady || safetyReady == false,
+            enter = fadeIn(animationSpec = tween(160)) + expandVertically(animationSpec = tween(160)),
+            exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(120)),
+        ) {
+            Column(
+                modifier = Modifier.padding(top = WhiteDnsSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(WhiteDnsSpacing.sm),
+            ) {
+                if (!serverReady) {
+                    SetupActionButton(
+                        label = "Add Connection",
+                        supportingText = "Create or choose a preset server",
+                        icon = Icons.Rounded.Add,
+                        emphasized = false,
+                        enabled = true,
+                        onClick = onAddConnectionClick,
+                    )
+                }
+                if (!resolverReady) {
+                    SetupActionButton(
+                        label = "Add Resolvers",
+                        supportingText = "Create a clean resolver profile",
+                        icon = Icons.Rounded.Link,
+                        emphasized = false,
+                        enabled = true,
+                        onClick = onAddResolverProfileClick,
+                    )
+                }
+                if (safetyReady == false) {
+                    SetupActionButton(
+                        label = "Open Safety Settings",
+                        supportingText = "Use loopback or add SOCKS credentials",
+                        icon = Icons.Rounded.WarningAmber,
+                        emphasized = false,
+                        enabled = true,
+                        onClick = onOpenAdvancedClick,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadinessStepRow(
+    label: String,
+    detail: String,
+    ready: Boolean?,
+) {
+    val color = when (ready) {
+        true -> WhiteDnsPalette.Success
+        false -> WhiteDnsPalette.WarningText
+        null -> WhiteDnsPalette.Muted
+    }
+    val surface = when (ready) {
+        true -> WhiteDnsPalette.SuccessSurface
+        false -> WhiteDnsPalette.WarningSurface
+        null -> WhiteDnsPalette.SurfaceAlt
+    }
+    val icon = when (ready) {
+        true -> Icons.Rounded.Check
+        false -> Icons.Rounded.WarningAmber
+        null -> Icons.Rounded.Tune
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(9.dp))
+            .background(surface)
+            .border(1.dp, color.copy(alpha = 0.16f), RoundedCornerShape(9.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(16.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 11.sp,
+                    color = WhiteDnsPalette.Ink,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            Text(
+                text = detail,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    color = WhiteDnsPalette.Description,
+                    fontWeight = FontWeight.Medium,
+                ),
             )
         }
     }
@@ -5081,18 +5318,37 @@ private fun MtuSettingsGroup(
             ),
         )
     }
-    WhiteDnsTextField(
-        label = "Resolver Parallel",
-        value = settings.mtuTestParallelismResolvers,
-        onValueChange = {
-            onSettingsChange(settings.copy(mtuTestParallelismResolvers = it.filter(Char::isDigit)))
+    val resolverParallelPreset = remember(settings.mtuTestParallelismResolvers) {
+        WhiteDnsOptions.resolverTestParallelismPreset(settings.mtuTestParallelismResolvers)
+    }
+    WhiteDnsDropdownField(
+        label = "Resolver Parallel Preset",
+        value = resolverParallelPreset,
+        options = WhiteDnsOptions.resolverTestParallelismPresets,
+        onValueChange = { preset ->
+            if (preset != WhiteDnsOptions.ResolverTestParallelismCustom) {
+                onSettingsChange(settings.copy(mtuTestParallelismResolvers = preset))
+            }
         },
-        placeholder = "100",
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Number,
-            capitalization = KeyboardCapitalization.None,
-        ),
     )
+    AnimatedVisibility(
+        visible = resolverParallelPreset == WhiteDnsOptions.ResolverTestParallelismCustom,
+        enter = fadeIn(animationSpec = tween(160)) + expandVertically(animationSpec = tween(160)),
+        exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(animationSpec = tween(120)),
+    ) {
+        WhiteDnsTextField(
+            label = "Resolver Parallel",
+            value = settings.mtuTestParallelismResolvers,
+            onValueChange = {
+                onSettingsChange(settings.copy(mtuTestParallelismResolvers = it.filter(Char::isDigit)))
+            },
+            placeholder = "100",
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                capitalization = KeyboardCapitalization.None,
+            ),
+        )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
@@ -6614,16 +6870,20 @@ private fun ResolverRuntimeValue(
 private fun ConnectionVerificationSummary(
     verification: ConnectionVerificationState,
     modifier: Modifier = Modifier,
+    idleMessage: String = "Connection verification has not run yet",
+    checkingLabel: String = "Verifying",
+    verifiedLabel: String = "Verified",
+    failedLabel: String = "Needs Attention",
 ) {
     val statusText = when (verification.status) {
-        ConnectionVerificationStatus.Checking -> "Verifying"
-        ConnectionVerificationStatus.Verified -> "Verified"
-        ConnectionVerificationStatus.Failed -> "Needs Attention"
+        ConnectionVerificationStatus.Checking -> checkingLabel
+        ConnectionVerificationStatus.Verified -> verifiedLabel
+        ConnectionVerificationStatus.Failed -> failedLabel
         else -> "Pending"
     }
     val message = verification.message.ifBlank {
         if (verification.status == ConnectionVerificationStatus.Idle) {
-            "Connection verification has not run yet"
+            idleMessage
         } else {
             "Checking tunnel route"
         }

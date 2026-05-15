@@ -1115,6 +1115,78 @@ class WhiteDnsModelsTest {
         assertEquals(freshState, recovered)
     }
 
+    @Test
+    fun validateConnectionSettingsRequiresServerProfileAndResolvers() {
+        val validation = validateConnectionSettings(WhiteDnsSettings())
+
+        assertEquals(false, validation.canConnect)
+        assertTrue(validation.fatalIssues.any { it.field == "server" })
+        assertTrue(validation.fatalIssues.any { it.field == "resolvers" })
+    }
+
+    @Test
+    fun validateConnectionSettingsAcceptsCompleteSetup() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1\n8.8.8.8",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(true, validation.canConnect)
+        assertEquals(emptyList<WhiteDnsValidationIssue>(), validation.fatalIssues)
+    }
+
+    @Test
+    fun validateConnectionSettingsRejectsExposedProxyWithoutCompleteCredentials() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1",
+            listenIp = "0.0.0.0",
+            socks5Authentication = true,
+            socksUsername = "",
+            socksPassword = "password",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(false, validation.canConnect)
+        assertTrue(validation.fatalIssues.any { it.field == "socks5Authentication" })
+        assertEquals(false, settings.resolve().socks5Authentication)
+    }
+
+    @Test
+    fun validateConnectionSettingsWarnsOnLargeResolverParallelism() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1",
+            mtuTestParallelismResolvers = "129",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(true, validation.canConnect)
+        assertTrue(validation.warnings.any { it.field == "resolverTestParallelism" })
+    }
+
+    @Test
+    fun resolverTestParallelismPresetRecognizesBuiltInsAndCustomValues() {
+        assertEquals("64", WhiteDnsOptions.resolverTestParallelismPreset("64"))
+        assertEquals("128", WhiteDnsOptions.resolverTestParallelismPreset("128"))
+        assertEquals(WhiteDnsOptions.ResolverTestParallelismCustom, WhiteDnsOptions.resolverTestParallelismPreset("256"))
+    }
+
+    @Test
+    fun normalizeServerDomainsAcceptsCommaSpaceAndBracketedText() {
+        assertEquals(
+            listOf("one.example.com", "two.example.com", "three.example.com"),
+            normalizeServerDomains("[one.example.com, two.example.com] 'three.example.com'"),
+        )
+    }
+
     private fun decodeStormDnsProfilePayload(link: String): String {
         val payload = link.removePrefix("stormdns://")
         val paddedPayload = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), '=')

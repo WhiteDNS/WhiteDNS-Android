@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
@@ -58,6 +59,7 @@ import shop.whitedns.client.model.WhiteDnsParallelTest
 import shop.whitedns.client.model.applyAdvancedProfile
 import shop.whitedns.client.model.applyAutoTunePreset
 import shop.whitedns.client.model.importStormDnsProfileLink
+import shop.whitedns.client.model.normalizeServerDomains
 import shop.whitedns.client.model.normalizedAdvancedProfiles
 import shop.whitedns.client.model.normalizedConnectionProfiles
 import shop.whitedns.client.model.normalizedResolverProfiles
@@ -65,6 +67,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
+import shop.whitedns.client.model.validateConnectionSettings
 import shop.whitedns.client.proxy.WhiteDnsProxyEvent
 import shop.whitedns.client.proxy.WhiteDnsProxyEvents
 import shop.whitedns.client.proxy.WhiteDnsProxyService
@@ -126,6 +129,7 @@ class WhiteDnsViewModel(
     private var runtimeRefreshJob: Job? = null
     private var batteryOptimizationRefreshJob: Job? = null
     private var verificationJob: Job? = null
+    private var readinessJob: Job? = null
     private var scanLaunchJob: Job? = null
     private var lastScannerResultProfileText = ""
     private var activeServerProfile: StormDnsServerProfile? = null
@@ -222,6 +226,9 @@ class WhiteDnsViewModel(
             settings = normalizedSettings,
             requestedProfileId = uiState.scanConnectionProfileId,
         )
+        if (normalizedSettings != previousSettings) {
+            readinessJob?.cancel()
+        }
         if (scanConnectionProfileId != uiState.scanConnectionProfileId) {
             scanSettingsStore.saveConnectionProfileId(scanConnectionProfileId)
         }
@@ -230,6 +237,11 @@ class WhiteDnsViewModel(
             settings = normalizedSettings,
             networkIpAddress = findDeviceNetworkIpAddress(),
             scanConnectionProfileId = scanConnectionProfileId,
+            profileReadiness = if (normalizedSettings != previousSettings) {
+                ConnectionVerificationState()
+            } else {
+                uiState.profileReadiness
+            },
         )
         if (shouldReconfigureActiveVpn(previousSettings, normalizedSettings)) {
             reconfigureActiveVpnSplitTunnel(normalizedSettings)
@@ -242,10 +254,12 @@ class WhiteDnsViewModel(
                 .importStormDnsProfileLink(rawLink)
                 .syncSelectedConnectionProfileFields()
         }.onSuccess { importedSettings ->
+            readinessJob?.cancel()
             settingsStore.save(importedSettings)
             uiState = uiState.copy(
                 settings = importedSettings,
                 networkIpAddress = findDeviceNetworkIpAddress(),
+                profileReadiness = ConnectionVerificationState(),
             )
             appendLog("Imported connection profile")
         }.onFailure { error ->
@@ -278,6 +292,29 @@ class WhiteDnsViewModel(
         uiState = uiState.copy(
             notificationsEnabled = areNotificationsEnabled(appContext),
         )
+    }
+
+    fun testCurrentProfileReadiness() {
+        if (uiState.connectionStatus != ConnectionStatus.DISCONNECTED) {
+            return
+        }
+        val settingsSnapshot = uiState.settings.syncSelectedConnectionProfileFields()
+        readinessJob?.cancel()
+        uiState = uiState.copy(
+            profileReadiness = ConnectionVerificationState(
+                status = ConnectionVerificationStatus.Checking,
+                message = "Checking setup",
+            ),
+        )
+        readinessJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                verifyProfileReadiness(settingsSnapshot)
+            }
+            if (uiState.connectionStatus != ConnectionStatus.DISCONNECTED) {
+                return@launch
+            }
+            uiState = uiState.copy(profileReadiness = result)
+        }
     }
 
     fun refreshRuntimeConnectionStatus() {
@@ -315,6 +352,7 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        readinessJob?.cancel()
         val sessionId = UUID.randomUUID().toString()
         activeRuntimeSessionId = sessionId
         uiState = uiState.copy(
@@ -322,6 +360,7 @@ class WhiteDnsViewModel(
             connectionStats = ConnectionStats(),
             resolverRuntimeState = ResolverRuntimeState(),
             connectionProgress = ConnectionProgressState(phase = "preparing", percent = 3),
+            profileReadiness = ConnectionVerificationState(),
             connectionVerification = ConnectionVerificationState(),
             autoTuneTrialResults = emptyList(),
             connectionLogs = listOf("Starting StormDNS"),
@@ -1299,6 +1338,7 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        readinessJob?.cancel()
         scanLaunchJob?.cancel()
         stopAutoTuneTrialManagers()
         WhiteDnsProxyEvents.removeListener(proxyEventListener)
@@ -1798,6 +1838,58 @@ class WhiteDnsViewModel(
         )
     }
 
+    private fun verifyProfileReadiness(settings: WhiteDnsSettings): ConnectionVerificationState {
+        val normalizedSettings = settings.syncSelectedConnectionProfileFields()
+        val validation = validateConnectionSettings(normalizedSettings)
+        if (!validation.canConnect) {
+            return failedVerification("Setup needs attention: ${validation.fatalIssues.first().message}")
+        }
+
+        val runtimeSettings = normalizedSettings.runtimeConnectionSettings()
+        val resolvedSettings = runtimeSettings.resolve()
+        val connectionProfile = normalizedSettings.selectedConnectionProfile()
+        val serverDomains = normalizeServerDomains(connectionProfile.customServerDomain)
+        val resolvedDomainCount = serverDomains.count { domain -> hasServerAddressRecord(domain) }
+
+        val busyPorts = buildList {
+            add("SOCKS ${resolvedSettings.listenPort}" to resolvedSettings.listenPort)
+            if (resolvedSettings.httpProxyEnabled) {
+                add("HTTP ${resolvedSettings.httpProxyPort}" to resolvedSettings.httpProxyPort)
+            }
+            if (resolvedSettings.localDnsEnabled) {
+                add("DNS ${resolvedSettings.localDnsPort}" to resolvedSettings.localDnsPort)
+            }
+        }.filter { (_, port) -> canConnectToLocalPort(port) }
+        if (busyPorts.isNotEmpty()) {
+            return failedVerification(
+                "Setup needs attention: local ${busyPorts.joinToString { it.first }} already appears to be in use",
+            )
+        }
+
+        val domainSummary = if (serverDomains.size <= 1) {
+            if (resolvedDomainCount == 1) {
+                "server address lookup is confirmed"
+            } else {
+                "server domain is configured"
+            }
+        } else {
+            "$resolvedDomainCount/${serverDomains.size} server address lookups confirmed"
+        }
+        val resolverCount = resolvedSettings.resolverEntries.size
+        val warnings = buildList {
+            addAll(validation.warnings.take(2).map { issue -> issue.message })
+            if (serverDomains.isNotEmpty() && resolvedDomainCount == 0) {
+                add("normal server address lookup was not confirmed; the route check will prove the live tunnel after connect")
+            }
+        }.joinToString("; ")
+        val warningSuffix = if (warnings.isBlank()) "" else " Warning: $warnings."
+        return ConnectionVerificationState(
+            status = ConnectionVerificationStatus.Verified,
+            message = "Setup ready: $domainSummary, $resolverCount resolver${if (resolverCount == 1) "" else "s"}, and local ports are free. Connect next for the route check.$warningSuffix",
+            checkedAtMillis = System.currentTimeMillis(),
+        )
+    }
+
     private fun startConnectionVerification(expectedConnectionMode: String) {
         verificationJob?.cancel()
         uiState = uiState.copy(
@@ -1865,6 +1957,16 @@ class WhiteDnsViewModel(
             message = message,
             checkedAtMillis = System.currentTimeMillis(),
         )
+    }
+
+    private fun hasServerAddressRecord(domain: String): Boolean {
+        val lookupDomain = domain.trim().removeSurrounding("[", "]")
+        if (lookupDomain.isBlank()) {
+            return false
+        }
+        return runCatching {
+            InetAddress.getAllByName(lookupDomain).isNotEmpty()
+        }.getOrDefault(false)
     }
 
     private suspend fun repeatBooleanAttempt(
