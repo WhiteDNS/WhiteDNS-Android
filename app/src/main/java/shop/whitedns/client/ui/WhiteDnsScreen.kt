@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
@@ -160,6 +161,7 @@ import shop.whitedns.client.model.deleteConnectionProfile
 import shop.whitedns.client.model.deleteDuplicateConnectionProfiles
 import shop.whitedns.client.model.deleteAdvancedProfile
 import shop.whitedns.client.model.deleteResolverProfile
+import shop.whitedns.client.model.duplicateConnectionProfile
 import shop.whitedns.client.model.duplicateConnectionProfileCount
 import shop.whitedns.client.model.exportAllStormDnsProfileLinks
 import shop.whitedns.client.model.exportStormDnsProfileLink
@@ -3414,6 +3416,11 @@ private fun ConnectionProfilesSettings(
                 onExport = {
                     exportProfile = profile
                 },
+                onDuplicate = {
+                    if (canEdit) {
+                        onSettingsChange(settings.duplicateConnectionProfile(profile.id))
+                    }
+                },
                 onEdit = {
                     dialogProfile = profile
                 },
@@ -4811,6 +4818,7 @@ private fun ConnectionProfileRow(
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
     onExport: () -> Unit,
+    onDuplicate: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -4886,6 +4894,13 @@ private fun ConnectionProfileRow(
                         contentDescription = "Export connection profile",
                         enabled = profile.customServerDomain.isNotBlank() && profile.customServerEncryptionKey.isNotBlank(),
                         onClick = onExport,
+                    ),
+                    ProfileMenuAction(
+                        label = "Duplicate profile",
+                        icon = Icons.Rounded.ContentCopy,
+                        contentDescription = "Duplicate connection profile",
+                        enabled = canEdit,
+                        onClick = onDuplicate,
                     ),
                     ProfileMenuAction(
                         label = if (selected) "Edit profile (selected)" else "Edit profile",
