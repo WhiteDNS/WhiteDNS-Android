@@ -21,6 +21,92 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun duplicateConnectionProfileCopiesRuntimeFieldsAndSelectsCopy() {
+        val resolverProfile = ResolverProfile(
+            id = "resolver-main",
+            name = "Main resolvers",
+            resolverText = "1.1.1.1",
+        )
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+            customServerEncryptionKey = "secret-key",
+            customServerEncryptionMethod = 2,
+            resolverProfileId = resolverProfile.id,
+            connectionMode = "vpn",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile),
+            resolverProfiles = listOf(resolverProfile),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = sourceProfile.id,
+            nowMillis = 1234L,
+        )
+        val profiles = duplicatedSettings.normalizedConnectionProfiles()
+        val copiedProfile = duplicatedSettings.selectedConnectionProfile()
+
+        assertEquals(2, profiles.size)
+        assertEquals("profile-copy-1234", copiedProfile.id)
+        assertEquals("Main server Copy", copiedProfile.name)
+        assertEquals(sourceProfile.customServerDomain, copiedProfile.customServerDomain)
+        assertEquals(sourceProfile.customServerEncryptionKey, copiedProfile.customServerEncryptionKey)
+        assertEquals(sourceProfile.customServerEncryptionMethod, copiedProfile.customServerEncryptionMethod)
+        assertEquals(sourceProfile.resolverProfileId, copiedProfile.resolverProfileId)
+        assertEquals(sourceProfile.connectionMode, copiedProfile.connectionMode)
+        assertEquals(copiedProfile.id, duplicatedSettings.selectedConnectionProfileId)
+    }
+
+    @Test
+    fun duplicateConnectionProfileLeavesSettingsUnchangedForUnknownProfile() {
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = "missing-profile",
+            nowMillis = 1234L,
+        )
+
+        assertEquals(settings.syncSelectedConnectionProfileFields(), duplicatedSettings)
+    }
+
+    @Test
+    fun duplicateConnectionProfileKeepsCopyIdsAndNamesUnique() {
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+        )
+        val existingCopy = sourceProfile.copy(
+            id = "profile-copy-1234",
+            name = "Main server Copy",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile, existingCopy),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = sourceProfile.id,
+            nowMillis = 1234L,
+        )
+        val copiedProfile = duplicatedSettings.selectedConnectionProfile()
+
+        assertEquals("profile-copy-1234-2", copiedProfile.id)
+        assertEquals("Main server Copy 2", copiedProfile.name)
+    }
+
+    @Test
     fun runtimeConnectionSettingsEnableTunneledDnsForProxyMode() {
         val runtimeSettings = WhiteDnsSettings(
             connectionMode = "proxy",

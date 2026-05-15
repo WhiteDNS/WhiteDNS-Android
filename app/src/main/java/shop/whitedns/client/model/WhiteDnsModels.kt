@@ -918,6 +918,32 @@ fun WhiteDnsSettings.upsertConnectionProfile(profile: ConnectionProfile): WhiteD
     ).syncSelectedConnectionProfileFields()
 }
 
+fun WhiteDnsSettings.duplicateConnectionProfile(
+    profileId: String,
+    nowMillis: Long = System.currentTimeMillis(),
+): WhiteDnsSettings {
+    val profiles = normalizedConnectionProfiles()
+    val sourceProfile = profiles.firstOrNull { it.id == profileId }
+        ?: return copy(connectionProfiles = profiles).syncSelectedConnectionProfileFields()
+    val nextProfileId = uniqueConnectionProfileCopyId(
+        baseId = "profile-copy-$nowMillis",
+        existingIds = profiles.map { it.id }.toSet(),
+    )
+    val nextProfileName = uniqueConnectionProfileCopyName(
+        baseName = sourceProfile.name,
+        existingNames = profiles.map { it.name }.toSet(),
+    )
+    val copiedProfile = sourceProfile.copy(
+        id = nextProfileId,
+        name = nextProfileName,
+        serverMode = "custom",
+    )
+    return copy(
+        connectionProfiles = profiles + copiedProfile,
+        selectedConnectionProfileId = nextProfileId,
+    ).syncSelectedConnectionProfileFields()
+}
+
 fun WhiteDnsSettings.upsertResolverProfile(profile: ResolverProfile): WhiteDnsSettings {
     if (profile.id == ResolverProfile.DefaultId) {
         return syncSelectedConnectionProfileFields()
@@ -1127,6 +1153,30 @@ fun WhiteDnsSettings.deleteConnectionProfile(profileId: String): WhiteDnsSetting
         connectionProfiles = remainingProfiles,
         selectedConnectionProfileId = nextSelectedId,
     ).syncSelectedConnectionProfileFields()
+}
+
+private fun uniqueConnectionProfileCopyId(baseId: String, existingIds: Set<String>): String {
+    if (baseId !in existingIds) {
+        return baseId
+    }
+    var suffix = 2
+    while ("$baseId-$suffix" in existingIds) {
+        suffix += 1
+    }
+    return "$baseId-$suffix"
+}
+
+private fun uniqueConnectionProfileCopyName(baseName: String, existingNames: Set<String>): String {
+    val normalizedBaseName = baseName.trim().ifBlank { "Connection" }
+    val firstCopyName = "$normalizedBaseName Copy"
+    if (firstCopyName !in existingNames) {
+        return firstCopyName
+    }
+    var suffix = 2
+    while ("$firstCopyName $suffix" in existingNames) {
+        suffix += 1
+    }
+    return "$firstCopyName $suffix"
 }
 
 fun WhiteDnsSettings.duplicateConnectionProfileCount(): Int {
