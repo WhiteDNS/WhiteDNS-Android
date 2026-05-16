@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import java.io.File
 import java.io.IOException
 import java.util.Collections
+import java.util.UUID
 import kotlin.concurrent.thread
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -87,7 +88,7 @@ class WhiteDnsScanService : Service() {
 
     private fun startScan(intent: Intent?) {
         val previousJob = scanJob
-        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
+        val sessionId = resolveSessionId(intent)
         stopRequested = false
         scanJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
@@ -128,6 +129,13 @@ class WhiteDnsScanService : Service() {
                 stopSelf()
             }
         }
+    }
+
+    private fun resolveSessionId(intent: Intent?): String {
+        return intent
+            ?.getStringExtra(ExtraSessionId)
+            ?.takeIf(String::isNotBlank)
+            ?: UUID.randomUUID().toString()
     }
 
     private suspend fun runScan(
