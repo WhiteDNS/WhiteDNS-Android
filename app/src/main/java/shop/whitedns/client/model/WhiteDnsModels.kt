@@ -1553,7 +1553,7 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         listenPort = boundedInt(listenPort, defaultValue = 10886, minValue = 1, maxValue = 65535),
         httpProxyEnabled = httpProxyEnabled,
         httpProxyPort = boundedInt(httpProxyPort, defaultValue = 10887, minValue = 1, maxValue = 65535),
-        socks5Authentication = socks5Authentication,
+        socks5Authentication = socks5Authentication && socksUsername.isNotBlank() && socksPassword.isNotBlank(),
         socksUsername = socksUsername.take(255),
         socksPassword = socksPassword.take(255),
         balancingStrategy = listOf(1, 2, 3, 4).firstOrNull { it == balancingStrategy } ?: 3,

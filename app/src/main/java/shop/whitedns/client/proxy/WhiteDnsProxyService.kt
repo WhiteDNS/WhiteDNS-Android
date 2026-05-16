@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.UUID
@@ -243,6 +244,11 @@ class WhiteDnsProxyService : Service() {
             httpProxyBridge.stop()
             return
         }
+        if (isLanReachableListenIp(resolvedSettings.listenIp) && !hasUsableProxyAuthentication(resolvedSettings)) {
+            throw IllegalStateException(
+                "HTTP proxy authentication is required when the proxy listens on a LAN-reachable address",
+            )
+        }
         runCatching {
             httpProxyBridge.start(
                 listenHost = resolvedSettings.listenIp,
@@ -256,6 +262,26 @@ class WhiteDnsProxyService : Service() {
         }.onFailure { error ->
             logWarning("HTTP proxy bridge was not started: ${error.message ?: error::class.java.simpleName}")
         }
+    }
+
+    private fun hasUsableProxyAuthentication(settings: ResolvedWhiteDnsSettings): Boolean {
+        return settings.socks5Authentication &&
+            settings.socksUsername.isNotBlank() &&
+            settings.socksPassword.isNotBlank()
+    }
+
+    private fun isLanReachableListenIp(listenIp: String): Boolean {
+        val normalized = listenIp.trim().removeSurrounding("[", "]")
+        if (normalized.isEmpty()) {
+            return true
+        }
+        if (normalized == "0.0.0.0" || normalized == "::") {
+            return true
+        }
+        val address = runCatching { InetAddress.getByName(normalized) }.getOrNull() ?: return true
+        return !address.isAnyLocalAddress &&
+            !address.isLoopbackAddress &&
+            !address.isLinkLocalAddress
     }
 
     private suspend fun waitForProxyPort(

@@ -11,11 +11,52 @@ import java.net.Socket
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.Locale
-import kotlin.concurrent.thread
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicLong
 
 private data class HostPort(
     val host: String,
     val port: Int,
+)
+
+data class HttpProxyBridgeLimits(
+    val maxClients: Int = 64,
+    val maxTunnelDirections: Int = 128,
+    val maxHeaderLineBytes: Int = 8_192,
+    val maxHeaderBytes: Int = 32_768,
+    val maxHeaderCount: Int = 128,
+    val maxHostLength: Int = 255,
+    val tunnelIdleTimeoutMillis: Int = 60_000,
+) {
+    init {
+        require(maxClients in 1..512) { "maxClients must be between 1 and 512" }
+        require(maxTunnelDirections in 2..1024) { "maxTunnelDirections must be between 2 and 1024" }
+        require(maxHeaderLineBytes in 256..65_536) { "maxHeaderLineBytes must be between 256 and 65536" }
+        require(maxHeaderBytes in maxHeaderLineBytes..262_144) {
+            "maxHeaderBytes must be at least maxHeaderLineBytes and at most 262144"
+        }
+        require(maxHeaderCount in 1..1024) { "maxHeaderCount must be between 1 and 1024" }
+        require(maxHostLength in 1..255) { "maxHostLength must be between 1 and 255" }
+        require(tunnelIdleTimeoutMillis in 5_000..3_600_000) {
+            "tunnelIdleTimeoutMillis must be between 5000 and 3600000"
+        }
+    }
+}
+
+data class HttpProxyBridgeStats(
+    val acceptedClients: Long,
+    val rejectedClients: Long,
+    val activeClients: Int,
+    val activeTunnelDirections: Int,
+    val uploadedBytes: Long,
+    val downloadedBytes: Long,
+    val authFailures: Long,
+    val parseFailures: Long,
+    val tunnelFailures: Long,
 )
 
 class HttpProxyBridge {
@@ -23,6 +64,24 @@ class HttpProxyBridge {
     private var serverSocket: ServerSocket? = null
     @Volatile
     private var running = false
+    @Volatile
+    private var clientExecutor: ExecutorService? = null
+    @Volatile
+    private var tunnelExecutor: ExecutorService? = null
+    @Volatile
+    private var clientSlots: Semaphore? = null
+    @Volatile
+    private var tunnelSlots: Semaphore? = null
+    @Volatile
+    private var activeLimits = HttpProxyBridgeLimits()
+
+    private val acceptedClients = AtomicLong()
+    private val rejectedClients = AtomicLong()
+    private val uploadedBytes = AtomicLong()
+    private val downloadedBytes = AtomicLong()
+    private val authFailures = AtomicLong()
+    private val parseFailures = AtomicLong()
+    private val tunnelFailures = AtomicLong()
 
     fun start(
         listenHost: String,
@@ -31,6 +90,7 @@ class HttpProxyBridge {
         socksPort: Int,
         socksUsername: String? = null,
         socksPassword: String? = null,
+        limits: HttpProxyBridgeLimits = HttpProxyBridgeLimits(),
         onOutput: (String) -> Unit = {},
     ) {
         stop()
@@ -38,40 +98,107 @@ class HttpProxyBridge {
             throw IllegalArgumentException("Invalid HTTP proxy or SOCKS port")
         }
 
-        val bindHost = listenHost.trim().ifEmpty { "127.0.0.1" }
-        val socket = ServerSocket().apply {
-            reuseAddress = true
-            bind(InetSocketAddress(InetAddress.getByName(bindHost), listenPort))
-        }
-        serverSocket = socket
-        running = true
-        onOutput("HTTP proxy is listening on $bindHost:$listenPort")
-
-        thread(name = "whitedns-http-proxy", isDaemon = true) {
-            while (running) {
-                val client = try {
-                    socket.accept()
-                } catch (_: IOException) {
-                    break
-                }
-                thread(name = "whitedns-http-proxy-client", isDaemon = true) {
-                    handleClient(
-                        client = client,
-                        socksHost = socksHost,
-                        socksPort = socksPort,
-                        socksUsername = socksUsername,
-                        socksPassword = socksPassword,
-                    )
-                }
+        val nextClientExecutor = Executors.newFixedThreadPool(
+            limits.maxClients,
+            namedThreadFactory("whitedns-http-client"),
+        )
+        val nextTunnelExecutor = Executors.newFixedThreadPool(
+            limits.maxTunnelDirections,
+            namedThreadFactory("whitedns-http-tunnel"),
+        )
+        try {
+            val bindHost = listenHost.trim().ifEmpty { "127.0.0.1" }
+            val socket = ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(InetAddress.getByName(bindHost), listenPort))
             }
+            serverSocket = socket
+            clientExecutor = nextClientExecutor
+            tunnelExecutor = nextTunnelExecutor
+            clientSlots = Semaphore(limits.maxClients)
+            tunnelSlots = Semaphore(limits.maxTunnelDirections)
+            activeLimits = limits
+            running = true
+            onOutput("HTTP proxy is listening on $bindHost:$listenPort")
+
+            namedThreadFactory("whitedns-http-accept").newThread {
+                acceptClients(socket, socksHost, socksPort, socksUsername, socksPassword, limits)
+            }.start()
+        } catch (error: Exception) {
+            nextClientExecutor.shutdownNow()
+            nextTunnelExecutor.shutdownNow()
+            throw error
         }
     }
 
     fun stop() {
         running = false
         val socket = serverSocket
+        val clients = clientExecutor
+        val tunnels = tunnelExecutor
         serverSocket = null
+        clientExecutor = null
+        tunnelExecutor = null
+        clientSlots = null
+        tunnelSlots = null
         runCatching { socket?.close() }
+        clients?.shutdownNow()
+        tunnels?.shutdownNow()
+    }
+
+    fun snapshotStats(): HttpProxyBridgeStats {
+        val limits = activeLimits
+        val clients = clientSlots
+        val tunnels = tunnelSlots
+        return HttpProxyBridgeStats(
+            acceptedClients = acceptedClients.get(),
+            rejectedClients = rejectedClients.get(),
+            activeClients = limits.maxClients - (clients?.availablePermits() ?: limits.maxClients),
+            activeTunnelDirections = limits.maxTunnelDirections - (tunnels?.availablePermits() ?: limits.maxTunnelDirections),
+            uploadedBytes = uploadedBytes.get(),
+            downloadedBytes = downloadedBytes.get(),
+            authFailures = authFailures.get(),
+            parseFailures = parseFailures.get(),
+            tunnelFailures = tunnelFailures.get(),
+        )
+    }
+
+    private fun acceptClients(
+        socket: ServerSocket,
+        socksHost: String,
+        socksPort: Int,
+        socksUsername: String?,
+        socksPassword: String?,
+        limits: HttpProxyBridgeLimits,
+    ) {
+        while (running) {
+            val client = try {
+                socket.accept()
+            } catch (_: IOException) {
+                break
+            }
+            val slots = clientSlots
+            val executor = clientExecutor
+            if (slots == null || executor == null || !slots.tryAcquire()) {
+                rejectedClients.incrementAndGet()
+                writeCapacityErrorAndClose(client)
+                continue
+            }
+            acceptedClients.incrementAndGet()
+            try {
+                executor.execute {
+                    try {
+                        handleClient(client, socksHost, socksPort, socksUsername, socksPassword, limits)
+                    } finally {
+                        slots.release()
+                    }
+                }
+            } catch (_: RuntimeException) {
+                slots.release()
+                rejectedClients.incrementAndGet()
+                writeCapacityErrorAndClose(client)
+            }
+        }
     }
 
     private fun handleClient(
@@ -80,6 +207,7 @@ class HttpProxyBridge {
         socksPort: Int,
         socksUsername: String?,
         socksPassword: String?,
+        limits: HttpProxyBridgeLimits,
     ) {
         client.use { clientSocket ->
             try {
@@ -87,9 +215,13 @@ class HttpProxyBridge {
                 val input = clientSocket.getInputStream()
                 val output = clientSocket.getOutputStream()
 
-                val requestLine = readHttpLine(input) ?: return
-                val headers = readHeaders(input) ?: return
+                val requestLine = readHttpLine(input, limits) ?: return
+                val headers = readHeaders(input, limits) ?: run {
+                    parseFailures.incrementAndGet()
+                    return
+                }
                 if (!isAuthorized(headers, socksUsername, socksPassword)) {
+                    authFailures.incrementAndGet()
                     output.write(
                         "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"WhiteDNS\"\r\nConnection: close\r\n\r\n"
                             .toByteArray(StandardCharsets.ISO_8859_1),
@@ -100,25 +232,28 @@ class HttpProxyBridge {
 
                 val parts = requestLine.split(' ', limit = 3)
                 if (parts.size < 3) {
+                    parseFailures.incrementAndGet()
                     writeHttpError(output, 400, "Bad Request")
                     return
                 }
 
                 val method = parts[0].uppercase(Locale.US)
                 if (method == "CONNECT") {
-                    val target = parseHostPort(parts[1], defaultPort = 443)
+                    val target = parseHostPort(parts[1], defaultPort = 443, maxHostLength = limits.maxHostLength)
                     if (target == null) {
+                        parseFailures.incrementAndGet()
                         writeHttpError(output, 400, "Bad Request")
                         return
                     }
                     val upstream = connectViaSocks(socksHost, socksPort, socksUsername, socksPassword, target.host, target.port)
                     output.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(StandardCharsets.ISO_8859_1))
                     output.flush()
-                    tunnel(clientSocket, upstream)
+                    tunnel(clientSocket, upstream, limits)
                     return
                 }
 
-                val rewrittenRequest = rewriteHttpRequest(parts, headers) ?: run {
+                val rewrittenRequest = rewriteHttpRequest(parts, headers, limits) ?: run {
+                    parseFailures.incrementAndGet()
                     writeHttpError(output, 400, "Bad Request")
                     return
                 }
@@ -132,8 +267,9 @@ class HttpProxyBridge {
                 )
                 upstream.getOutputStream().write(rewrittenRequest.headerBytes)
                 upstream.getOutputStream().flush()
-                tunnel(clientSocket, upstream)
+                tunnel(clientSocket, upstream, limits)
             } catch (_: Exception) {
+                tunnelFailures.incrementAndGet()
                 runCatching {
                     writeHttpError(clientSocket.getOutputStream(), 502, "Bad Gateway")
                 }
@@ -141,24 +277,65 @@ class HttpProxyBridge {
         }
     }
 
-    private fun tunnel(client: Socket, upstream: Socket) {
+    private fun tunnel(client: Socket, upstream: Socket, limits: HttpProxyBridgeLimits) {
         upstream.use { upstreamSocket ->
-            client.soTimeout = 0
-            upstreamSocket.soTimeout = 0
-            val clientToUpstream = thread(name = "whitedns-http-c2u", isDaemon = true) {
-                copyAndCloseOutput(client.getInputStream(), upstreamSocket)
+            client.soTimeout = limits.tunnelIdleTimeoutMillis
+            upstreamSocket.soTimeout = limits.tunnelIdleTimeoutMillis
+            val done = CountDownLatch(2)
+            submitTunnelCopy(client.getInputStream(), upstreamSocket, uploadedBytes, done)
+            submitTunnelCopy(upstreamSocket.getInputStream(), client, downloadedBytes, done)
+            try {
+                done.await()
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                tunnelFailures.incrementAndGet()
+                runCatching { client.close() }
+                runCatching { upstreamSocket.close() }
             }
-            val upstreamToClient = thread(name = "whitedns-http-u2c", isDaemon = true) {
-                copyAndCloseOutput(upstreamSocket.getInputStream(), client)
-            }
-            clientToUpstream.join()
-            upstreamToClient.join()
         }
     }
 
-    private fun copyAndCloseOutput(input: InputStream, outputSocket: Socket) {
+    private fun submitTunnelCopy(
+        input: InputStream,
+        outputSocket: Socket,
+        byteCounter: AtomicLong,
+        done: CountDownLatch,
+    ) {
+        val slots = tunnelSlots ?: throw IOException("HTTP proxy bridge is stopped")
+        val executor = tunnelExecutor ?: throw IOException("HTTP proxy bridge is stopped")
+        if (!slots.tryAcquire()) {
+            throw IOException("HTTP proxy tunnel capacity exhausted")
+        }
+        try {
+            executor.execute {
+                try {
+                    copyAndCloseOutput(input, outputSocket, byteCounter)
+                } finally {
+                    slots.release()
+                    done.countDown()
+                }
+            }
+        } catch (error: RuntimeException) {
+            slots.release()
+            done.countDown()
+            throw error
+        }
+    }
+
+    private fun copyAndCloseOutput(input: InputStream, outputSocket: Socket, byteCounter: AtomicLong) {
         runCatching {
-            input.copyTo(outputSocket.getOutputStream())
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) {
+                    break
+                }
+                outputSocket.getOutputStream().write(buffer, 0, count)
+                byteCounter.addAndGet(count.toLong())
+            }
+            outputSocket.getOutputStream().flush()
+        }.onFailure {
+            tunnelFailures.incrementAndGet()
         }
         runCatching { outputSocket.shutdownOutput() }
         runCatching { outputSocket.close() }
@@ -178,7 +355,7 @@ class HttpProxyBridge {
         val input = socket.getInputStream()
         val output = socket.getOutputStream()
 
-        val useAuth = !socksUsername.isNullOrEmpty()
+        val useAuth = !socksUsername.isNullOrBlank() && !socksPassword.isNullOrBlank()
         output.write(byteArrayOf(0x05, 0x01, if (useAuth) 0x02 else 0x00))
         output.flush()
         val methodReply = input.readExactly(2)
@@ -243,7 +420,11 @@ class HttpProxyBridge {
         return socket
     }
 
-    private fun rewriteHttpRequest(parts: List<String>, headers: List<String>): ProxiedRequest? {
+    private fun rewriteHttpRequest(
+        parts: List<String>,
+        headers: List<String>,
+        limits: HttpProxyBridgeLimits,
+    ): ProxiedRequest? {
         val uri = runCatching { URI(parts[1]) }.getOrNull()
         val host: String
         val port: Int
@@ -264,10 +445,13 @@ class HttpProxyBridge {
                 ?.substringAfter(':')
                 ?.trim()
                 ?: return null
-            val target = parseHostPort(hostHeader, defaultPort = 80) ?: return null
+            val target = parseHostPort(hostHeader, defaultPort = 80, maxHostLength = limits.maxHostLength) ?: return null
             host = target.host
             port = target.port
             path = parts[1].takeIf { it.startsWith("/") } ?: return null
+        }
+        if (host.length > limits.maxHostLength) {
+            return null
         }
 
         val headerBytes = buildString {
@@ -292,7 +476,7 @@ class HttpProxyBridge {
     }
 
     private fun isAuthorized(headers: List<String>, username: String?, password: String?): Boolean {
-        if (username.isNullOrEmpty()) {
+        if (username.isNullOrBlank() || password.isNullOrBlank()) {
             return true
         }
         val header = headers.firstOrNull { it.startsWith("Proxy-Authorization:", ignoreCase = true) }
@@ -305,26 +489,31 @@ class HttpProxyBridge {
         val decoded = runCatching {
             String(Base64.decode(header.substringAfter(' ').trim(), Base64.DEFAULT), StandardCharsets.UTF_8)
         }.getOrNull() ?: return false
-        return decoded == "$username:${password.orEmpty()}"
+        return decoded == "$username:$password"
     }
 
-    private fun readHeaders(input: InputStream): List<String>? {
+    private fun readHeaders(input: InputStream, limits: HttpProxyBridgeLimits): List<String>? {
         val headers = mutableListOf<String>()
+        var totalBytes = 0
         while (true) {
-            val line = readHttpLine(input) ?: return null
+            val line = readHttpLine(input, limits) ?: return null
+            totalBytes += line.toByteArray(StandardCharsets.ISO_8859_1).size + 2
+            if (totalBytes > limits.maxHeaderBytes) {
+                return null
+            }
             if (line.isEmpty()) {
                 return headers
             }
             headers += line
-            if (headers.size > MaxHeaderCount) {
+            if (headers.size > limits.maxHeaderCount) {
                 return null
             }
         }
     }
 
-    private fun readHttpLine(input: InputStream): String? {
+    private fun readHttpLine(input: InputStream, limits: HttpProxyBridgeLimits): String? {
         val buffer = ByteArrayOutputStream()
-        while (buffer.size() <= MaxHeaderLineBytes) {
+        while (buffer.size() <= limits.maxHeaderLineBytes) {
             val value = input.read()
             if (value == -1) {
                 return if (buffer.size() == 0) null else buffer.toString(StandardCharsets.ISO_8859_1.name())
@@ -376,6 +565,13 @@ class HttpProxyBridge {
         output.flush()
     }
 
+    private fun writeCapacityErrorAndClose(client: Socket) {
+        runCatching {
+            writeHttpError(client.getOutputStream(), 503, "Service Unavailable")
+        }
+        runCatching { client.close() }
+    }
+
     private data class ProxiedRequest(
         val host: String,
         val port: Int,
@@ -386,12 +582,10 @@ class HttpProxyBridge {
         const val ClientReadTimeoutMillis = 30_000
         const val SocksConnectTimeoutMillis = 3_000
         const val SocksReadTimeoutMillis = 10_000
-        const val MaxHeaderLineBytes = 8_192
-        const val MaxHeaderCount = 128
     }
 }
 
-internal fun parseHttpProxyHostPort(authority: String, defaultPort: Int): Pair<String, Int>? {
+internal fun parseHttpProxyHostPort(authority: String, defaultPort: Int, maxHostLength: Int = 255): Pair<String, Int>? {
     val trimmed = authority.trim()
     if (trimmed.isEmpty()) {
         return null
@@ -408,7 +602,7 @@ internal fun parseHttpProxyHostPort(authority: String, defaultPort: Int): Pair<S
         } else {
             defaultPort
         }
-        return if (host.isNotBlank() && port in 1..65535) host to port else null
+        return if (host.isNotBlank() && host.length <= maxHostLength && port in 1..65535) host to port else null
     }
 
     val colonIndex = trimmed.lastIndexOf(':')
@@ -422,11 +616,19 @@ internal fun parseHttpProxyHostPort(authority: String, defaultPort: Int): Pair<S
     } else {
         defaultPort
     }
-    return if (host.isNotBlank() && port in 1..65535) host to port else null
+    return if (host.isNotBlank() && host.length <= maxHostLength && port in 1..65535) host to port else null
 }
 
-private fun parseHostPort(authority: String, defaultPort: Int): HostPort? {
-    return parseHttpProxyHostPort(authority, defaultPort)?.let { (host, port) ->
+private fun parseHostPort(authority: String, defaultPort: Int, maxHostLength: Int): HostPort? {
+    return parseHttpProxyHostPort(authority, defaultPort, maxHostLength)?.let { (host, port) ->
         HostPort(host, port)
+    }
+}
+
+private fun namedThreadFactory(threadName: String): ThreadFactory {
+    return ThreadFactory { runnable ->
+        Thread(runnable, threadName).apply {
+            isDaemon = true
+        }
     }
 }
