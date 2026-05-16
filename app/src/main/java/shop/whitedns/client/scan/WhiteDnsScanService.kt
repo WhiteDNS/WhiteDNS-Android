@@ -36,6 +36,7 @@ import shop.whitedns.client.R
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsScanState
 import shop.whitedns.client.model.WhiteDnsScanStatus
+import shop.whitedns.client.model.WhiteDnsScanDefaults
 import shop.whitedns.client.model.WhiteDnsSettings
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
@@ -809,7 +810,7 @@ class WhiteDnsScanService : Service() {
                     id = sessionId,
                     sourceName = sourceName,
                     resolverFilePath = resolverFile.absolutePath,
-                    workerCount = workerCount.coerceAtLeast(1),
+                    workerCount = workerCount.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount),
                     initialValidResolvers = initialValidResolvers,
                     initialRejectedResolvers = initialRejectedResolvers,
                     initialCompletedResolvers = initialCompletedResolvers,
