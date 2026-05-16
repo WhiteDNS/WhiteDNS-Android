@@ -218,5 +218,27 @@
     <string name="cd_empty_profiles">No profiles configured</string>
     <string name="cd_empty_logs">No logs available</string>
     <string name="cd_empty_apps">No apps available</string>
+
+    <!-- Accessibility — Missing Labels -->
+    <string name="cd_parallel_test_expand">Expand parallel test configurations</string>
+    <string name="cd_parallel_test_collapse">Collapse parallel test configurations</string>
+    <string name="cd_navigate_to_tab">Navigate to %1$s</string>
+    <string name="cd_profile_tab_selected">%1$s, selected tab</string>
+    <string name="cd_profile_tab_unselected">%1$s tab</string>
+    <string name="cd_telegram_link">Open WhiteDNS Telegram community, opens external app</string>
+    <string name="cd_select_profile_item">Select %1$s profile</string>
+    <string name="cd_logo_telegram">WhiteDNS logo, opens Telegram community</string>
+    <string name="cd_menu_button">Open app menu</string>
+    <string name="cd_copy_address">Copy %1$s to clipboard</string>
+    <string name="cd_enable_vpn_notification">Enable VPN notification permission</string>
+    <string name="cd_allow_background_vpn">Allow WhiteDNS to run in background</string>
+    <string name="cd_split_tunnel_app_toggle">Toggle %1$s in split tunnel</string>
+    <string name="cd_stat_card_detail">%1$s: %2$s, tap for details</string>
+    <string name="cd_section_expand">Expand %1$s section</string>
+    <string name="cd_section_collapse">Collapse %1$s section</string>
+    <string name="cd_toggle_row_on">%1$s, enabled, tap to disable</string>
+    <string name="cd_toggle_row_off">%1$s, disabled, tap to enable</string>
+    <string name="cd_scan_autosave_enabled">Scan auto-save enabled</string>
+    <string name="cd_worker_count_slider">Worker count slider, currently %1$d workers</string>
 </resources>
 
