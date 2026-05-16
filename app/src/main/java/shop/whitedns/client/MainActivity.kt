@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
                             ConnectionStatus.CONNECTED -> viewModel.disconnect()
                         }
                     },
+                    onTestProfileClick = viewModel::testCurrentProfileReadiness,
                     onScanFileSelected = viewModel::beginScanFromFile,
                     onScanDefaultListSelected = viewModel::beginScanFromDefaultResolvers,
                     onScanStartClick = viewModel::startPreparedScan,

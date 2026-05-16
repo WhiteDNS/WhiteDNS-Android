@@ -21,6 +21,92 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun duplicateConnectionProfileCopiesRuntimeFieldsAndSelectsCopy() {
+        val resolverProfile = ResolverProfile(
+            id = "resolver-main",
+            name = "Main resolvers",
+            resolverText = "1.1.1.1",
+        )
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+            customServerEncryptionKey = "secret-key",
+            customServerEncryptionMethod = 2,
+            resolverProfileId = resolverProfile.id,
+            connectionMode = "vpn",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile),
+            resolverProfiles = listOf(resolverProfile),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = sourceProfile.id,
+            nowMillis = 1234L,
+        )
+        val profiles = duplicatedSettings.normalizedConnectionProfiles()
+        val copiedProfile = duplicatedSettings.selectedConnectionProfile()
+
+        assertEquals(2, profiles.size)
+        assertEquals("profile-copy-1234", copiedProfile.id)
+        assertEquals("Main server Copy", copiedProfile.name)
+        assertEquals(sourceProfile.customServerDomain, copiedProfile.customServerDomain)
+        assertEquals(sourceProfile.customServerEncryptionKey, copiedProfile.customServerEncryptionKey)
+        assertEquals(sourceProfile.customServerEncryptionMethod, copiedProfile.customServerEncryptionMethod)
+        assertEquals(sourceProfile.resolverProfileId, copiedProfile.resolverProfileId)
+        assertEquals(sourceProfile.connectionMode, copiedProfile.connectionMode)
+        assertEquals(copiedProfile.id, duplicatedSettings.selectedConnectionProfileId)
+    }
+
+    @Test
+    fun duplicateConnectionProfileLeavesSettingsUnchangedForUnknownProfile() {
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = "missing-profile",
+            nowMillis = 1234L,
+        )
+
+        assertEquals(settings.syncSelectedConnectionProfileFields(), duplicatedSettings)
+    }
+
+    @Test
+    fun duplicateConnectionProfileKeepsCopyIdsAndNamesUnique() {
+        val sourceProfile = ConnectionProfile(
+            id = "profile-main",
+            name = "Main server",
+            customServerDomain = "main.example.com",
+        )
+        val existingCopy = sourceProfile.copy(
+            id = "profile-copy-1234",
+            name = "Main server Copy",
+        )
+        val settings = WhiteDnsSettings(
+            selectedConnectionProfileId = sourceProfile.id,
+            connectionProfiles = listOf(sourceProfile, existingCopy),
+        )
+
+        val duplicatedSettings = settings.duplicateConnectionProfile(
+            profileId = sourceProfile.id,
+            nowMillis = 1234L,
+        )
+        val copiedProfile = duplicatedSettings.selectedConnectionProfile()
+
+        assertEquals("profile-copy-1234-2", copiedProfile.id)
+        assertEquals("Main server Copy 2", copiedProfile.name)
+    }
+
+    @Test
     fun runtimeConnectionSettingsEnableTunneledDnsForProxyMode() {
         val runtimeSettings = WhiteDnsSettings(
             connectionMode = "proxy",
@@ -736,9 +822,40 @@ class WhiteDnsModelsTest {
         assertEquals(WhiteDnsParallelTest.MaxSelectedConfigs, cappedIds.size)
         assertEquals(
             WhiteDnsParallelTest.defaultConfigIds +
-                profiles.take(3).map { WhiteDnsParallelTest.settingConfigId(it.id) },
+                profiles.take(WhiteDnsParallelTest.MaxSelectedConfigs - WhiteDnsParallelTest.defaultConfigIds.size)
+                    .map { WhiteDnsParallelTest.settingConfigId(it.id) },
             cappedIds,
         )
+    }
+
+    @Test
+    fun applyMiladTelegramPresetCarriesFieldTestedSettings() {
+        val preset = WhiteDnsAutoTunePresets.all.first { it.id == "field-milad-telegram" }
+        val settings = WhiteDnsSettings()
+            .applyAutoTunePreset(preset)
+        val resolvedSettings = settings.resolve()
+
+        assertEquals("Milad Telegram Proxy", preset.label)
+        assertEquals("127.0.0.1", resolvedSettings.listenIp)
+        assertEquals(10886, resolvedSettings.listenPort)
+        assertEquals(true, resolvedSettings.httpProxyEnabled)
+        assertEquals(10887, resolvedSettings.httpProxyPort)
+        assertEquals(false, resolvedSettings.socks5Authentication)
+        assertEquals(3, resolvedSettings.balancingStrategy)
+        assertEquals(3, resolvedSettings.uploadDuplication)
+        assertEquals(4, resolvedSettings.downloadDuplication)
+        assertEquals(5, resolvedSettings.minUploadMtu)
+        assertEquals(30, resolvedSettings.maxUploadMtu)
+        assertEquals(300, resolvedSettings.minDownloadMtu)
+        assertEquals(300, resolvedSettings.maxDownloadMtu)
+        assertEquals(3, resolvedSettings.mtuTestRetriesResolvers)
+        assertEquals(3.0, resolvedSettings.mtuTestTimeoutResolvers, 0.0)
+        assertEquals(100, resolvedSettings.mtuTestParallelismResolvers)
+        assertEquals(32, resolvedSettings.mtuTestParallelismLogs)
+        assertEquals(64, resolvedSettings.dnsResponseFragmentStoreCapacity)
+        assertEquals(30, resolvedSettings.pingWatchdogSeconds)
+        assertEquals(true, resolvedSettings.trafficWarmupEnabled)
+        assertEquals("WARN", resolvedSettings.logLevel)
     }
 
     @Test
@@ -1113,6 +1230,78 @@ class WhiteDnsModelsTest {
         )
 
         assertEquals(freshState, recovered)
+    }
+
+    @Test
+    fun validateConnectionSettingsRequiresServerProfileAndResolvers() {
+        val validation = validateConnectionSettings(WhiteDnsSettings())
+
+        assertEquals(false, validation.canConnect)
+        assertTrue(validation.fatalIssues.any { it.field == "server" })
+        assertTrue(validation.fatalIssues.any { it.field == "resolvers" })
+    }
+
+    @Test
+    fun validateConnectionSettingsAcceptsCompleteSetup() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1\n8.8.8.8",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(true, validation.canConnect)
+        assertEquals(emptyList<WhiteDnsValidationIssue>(), validation.fatalIssues)
+    }
+
+    @Test
+    fun validateConnectionSettingsRejectsExposedProxyWithoutCompleteCredentials() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1",
+            listenIp = "0.0.0.0",
+            socks5Authentication = true,
+            socksUsername = "",
+            socksPassword = "password",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(false, validation.canConnect)
+        assertTrue(validation.fatalIssues.any { it.field == "socks5Authentication" })
+        assertEquals(false, settings.resolve().socks5Authentication)
+    }
+
+    @Test
+    fun validateConnectionSettingsWarnsOnLargeResolverParallelism() {
+        val settings = WhiteDnsSettings(
+            customServerDomain = "example.com",
+            customServerEncryptionKey = "secret",
+            resolverText = "1.1.1.1",
+            mtuTestParallelismResolvers = "129",
+        ).syncSelectedConnectionProfileFields()
+
+        val validation = validateConnectionSettings(settings)
+
+        assertEquals(true, validation.canConnect)
+        assertTrue(validation.warnings.any { it.field == "resolverTestParallelism" })
+    }
+
+    @Test
+    fun resolverTestParallelismPresetRecognizesBuiltInsAndCustomValues() {
+        assertEquals("64", WhiteDnsOptions.resolverTestParallelismPreset("64"))
+        assertEquals("128", WhiteDnsOptions.resolverTestParallelismPreset("128"))
+        assertEquals(WhiteDnsOptions.ResolverTestParallelismCustom, WhiteDnsOptions.resolverTestParallelismPreset("256"))
+    }
+
+    @Test
+    fun normalizeServerDomainsAcceptsCommaSpaceAndBracketedText() {
+        assertEquals(
+            listOf("one.example.com", "two.example.com", "three.example.com"),
+            normalizeServerDomains("[one.example.com, two.example.com] 'three.example.com'"),
+        )
     }
 
     private fun decodeStormDnsProfilePayload(link: String): String {

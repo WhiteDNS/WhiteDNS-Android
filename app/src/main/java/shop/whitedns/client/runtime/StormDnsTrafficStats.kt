@@ -10,6 +10,20 @@ data class StormDnsTrafficStats(
     val uploadSpeedBytesPerSecond: Long,
 )
 
+fun StormDnsTrafficStats.estimateDeduplicatedTraffic(
+    uploadDuplication: Int,
+    downloadDuplication: Int,
+): StormDnsTrafficStats {
+    val safeUploadDuplication = uploadDuplication.coerceAtLeast(1).toLong()
+    val safeDownloadDuplication = downloadDuplication.coerceAtLeast(1).toLong()
+    return copy(
+        downloadBytes = downloadBytes.divideRoundedUp(safeDownloadDuplication),
+        uploadBytes = uploadBytes.divideRoundedUp(safeUploadDuplication),
+        downloadSpeedBytesPerSecond = downloadSpeedBytesPerSecond.divideRoundedUp(safeDownloadDuplication),
+        uploadSpeedBytesPerSecond = uploadSpeedBytesPerSecond.divideRoundedUp(safeUploadDuplication),
+    )
+}
+
 class StormDnsTrafficAccounting {
     private var lastRawStats: StormDnsTrafficStats? = null
     private var accumulatedDownloadBytes: Long = 0L
@@ -111,6 +125,15 @@ private fun parseDataAmount(
         else -> return null
     }
     return (amount * multiplier).roundToLong().coerceAtLeast(0)
+}
+
+private fun Long.divideRoundedUp(divisor: Long): Long {
+    val safeValue = coerceAtLeast(0)
+    return if (safeValue == 0L) {
+        0L
+    } else {
+        1L + ((safeValue - 1L) / divisor.coerceAtLeast(1L))
+    }
 }
 
 private val AnsiEscapeRegex = Regex("\\u001B\\[[;\\d]*m")

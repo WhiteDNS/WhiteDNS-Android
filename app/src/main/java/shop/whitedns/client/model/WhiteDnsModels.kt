@@ -224,6 +224,30 @@ data class ResolverTextValidation(
         get() = normalizedResolvers.isNotEmpty() && invalidEntries.isEmpty()
 }
 
+object WhiteDnsValidationSeverity {
+    const val Fatal = "fatal"
+    const val Warning = "warning"
+}
+
+data class WhiteDnsValidationIssue(
+    val severity: String,
+    val field: String,
+    val message: String,
+)
+
+data class WhiteDnsSettingsValidation(
+    val issues: List<WhiteDnsValidationIssue>,
+) {
+    val fatalIssues: List<WhiteDnsValidationIssue>
+        get() = issues.filter { it.severity == WhiteDnsValidationSeverity.Fatal }
+
+    val warnings: List<WhiteDnsValidationIssue>
+        get() = issues.filter { it.severity == WhiteDnsValidationSeverity.Warning }
+
+    val canConnect: Boolean
+        get() = fatalIssues.isEmpty()
+}
+
 data class WhiteDnsSettings(
     val selectedConnectionProfileId: String = ConnectionProfile.DefaultId,
     val connectionProfiles: List<ConnectionProfile> = listOf(ConnectionProfile.defaultProfile()),
@@ -366,6 +390,12 @@ data class ConnectionStats(
     val uploadSpeedBytesPerSecond: Long = 0,
     val peakSpeedBytesPerSecond: Long = 0,
     val connectedApps: Int = 0,
+    val estimatedPayloadDownloadBytes: Long = 0,
+    val estimatedPayloadUploadBytes: Long = 0,
+    val estimatedPayloadTotalBytes: Long = 0,
+    val estimatedPayloadDownloadSpeedBytesPerSecond: Long = 0,
+    val estimatedPayloadUploadSpeedBytesPerSecond: Long = 0,
+    val hasEstimatedPayloadTraffic: Boolean = false,
 )
 
 data class ResolverRuntimeState(
@@ -513,6 +543,7 @@ data class WhiteDnsUiState(
     val connectionStats: ConnectionStats = ConnectionStats(),
     val resolverRuntimeState: ResolverRuntimeState = ResolverRuntimeState(),
     val connectionProgress: ConnectionProgressState = ConnectionProgressState(),
+    val profileReadiness: ConnectionVerificationState = ConnectionVerificationState(),
     val connectionVerification: ConnectionVerificationState = ConnectionVerificationState(),
     val autoTuneTrialResults: List<AutoTuneTrialResult> = emptyList(),
     val scanState: WhiteDnsScanState = WhiteDnsScanState(),
@@ -534,10 +565,19 @@ object WhiteDnsOptions {
     const val SplitTunnelModeOff = "off"
     const val SplitTunnelModeInclude = "include"
     const val SplitTunnelModeExclude = "exclude"
+    const val ResolverTestParallelismCustom = "custom"
 
     val connectionModes = listOf(
         Choice("proxy", "Proxy Mode"),
         Choice("vpn", "Full VPN"),
+    )
+
+    val resolverTestParallelismPresets = listOf(
+        Choice("32", "32 - Light"),
+        Choice("64", "64 - Balanced"),
+        Choice("100", "100 - Current"),
+        Choice("128", "128 - Deep"),
+        Choice(ResolverTestParallelismCustom, "Custom"),
     )
 
     val themeModes = listOf(
@@ -602,6 +642,14 @@ object WhiteDnsOptions {
 
     fun splitTunnelModeLabel(mode: String): String {
         return splitTunnelModes.firstOrNull { it.value == mode }?.label ?: "All Apps"
+    }
+
+    fun resolverTestParallelismPreset(value: String): String {
+        val trimmed = value.trim()
+        return resolverTestParallelismPresets
+            .firstOrNull { choice -> choice.value == trimmed }
+            ?.value
+            ?: ResolverTestParallelismCustom
     }
 }
 
@@ -918,6 +966,32 @@ fun WhiteDnsSettings.upsertConnectionProfile(profile: ConnectionProfile): WhiteD
     ).syncSelectedConnectionProfileFields()
 }
 
+fun WhiteDnsSettings.duplicateConnectionProfile(
+    profileId: String,
+    nowMillis: Long = System.currentTimeMillis(),
+): WhiteDnsSettings {
+    val profiles = normalizedConnectionProfiles()
+    val sourceProfile = profiles.firstOrNull { it.id == profileId }
+        ?: return copy(connectionProfiles = profiles).syncSelectedConnectionProfileFields()
+    val nextProfileId = uniqueConnectionProfileCopyId(
+        baseId = "profile-copy-$nowMillis",
+        existingIds = profiles.map { it.id }.toSet(),
+    )
+    val nextProfileName = uniqueConnectionProfileCopyName(
+        baseName = sourceProfile.name,
+        existingNames = profiles.map { it.name }.toSet(),
+    )
+    val copiedProfile = sourceProfile.copy(
+        id = nextProfileId,
+        name = nextProfileName,
+        serverMode = "custom",
+    )
+    return copy(
+        connectionProfiles = profiles + copiedProfile,
+        selectedConnectionProfileId = nextProfileId,
+    ).syncSelectedConnectionProfileFields()
+}
+
 fun WhiteDnsSettings.upsertResolverProfile(profile: ResolverProfile): WhiteDnsSettings {
     if (profile.id == ResolverProfile.DefaultId) {
         return syncSelectedConnectionProfileFields()
@@ -1127,6 +1201,30 @@ fun WhiteDnsSettings.deleteConnectionProfile(profileId: String): WhiteDnsSetting
         connectionProfiles = remainingProfiles,
         selectedConnectionProfileId = nextSelectedId,
     ).syncSelectedConnectionProfileFields()
+}
+
+private fun uniqueConnectionProfileCopyId(baseId: String, existingIds: Set<String>): String {
+    if (baseId !in existingIds) {
+        return baseId
+    }
+    var suffix = 2
+    while ("$baseId-$suffix" in existingIds) {
+        suffix += 1
+    }
+    return "$baseId-$suffix"
+}
+
+private fun uniqueConnectionProfileCopyName(baseName: String, existingNames: Set<String>): String {
+    val normalizedBaseName = baseName.trim().ifBlank { "Connection" }
+    val firstCopyName = "$normalizedBaseName Copy"
+    if (firstCopyName !in existingNames) {
+        return firstCopyName
+    }
+    var suffix = 2
+    while ("$firstCopyName $suffix" in existingNames) {
+        suffix += 1
+    }
+    return "$firstCopyName $suffix"
 }
 
 fun WhiteDnsSettings.duplicateConnectionProfileCount(): Int {
@@ -1458,8 +1556,10 @@ private enum class ResolverTextEntryType {
 }
 
 private const val DefaultResolverPort = 53
+private const val MaxRecommendedResolvers = 256
 
 private val ResolverIpv6Chars = Regex("^[0-9A-Fa-f:.]+$")
+private val ServerDomainLabelRegex = Regex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 private fun normalizeSplitTunnelMode(raw: String): String {
     return when (raw) {
@@ -1487,6 +1587,24 @@ private fun normalizeThemeMode(raw: String): String {
     }
 }
 
+fun normalizeServerDomainText(raw: String): String {
+    return normalizeServerDomains(raw).joinToString(separator = "\n")
+}
+
+fun normalizeServerDomains(raw: String): List<String> {
+    return raw
+        .replace("[", " ")
+        .replace("]", " ")
+        .replace("\"", " ")
+        .replace("'", " ")
+        .split(Regex("[,;\\s]+"))
+        .asSequence()
+        .map { it.trim().trimEnd('.') }
+        .filter(String::isNotEmpty)
+        .distinct()
+        .toList()
+}
+
 private fun normalizePackageNames(raw: List<String>): List<String> {
     return raw
         .asSequence()
@@ -1495,6 +1613,142 @@ private fun normalizePackageNames(raw: List<String>): List<String> {
         .distinct()
         .sorted()
         .toList()
+}
+
+fun validateConnectionSettings(settings: WhiteDnsSettings): WhiteDnsSettingsValidation {
+    val normalizedSettings = settings.syncSelectedConnectionProfileFields()
+    val runtimeSettings = normalizedSettings.runtimeConnectionSettings()
+    val resolvedSettings = runtimeSettings.resolve()
+    val connectionProfile = normalizedSettings.selectedConnectionProfile()
+    val resolverValidation = validateResolverText(runtimeSettings.resolverText)
+    val issues = mutableListOf<WhiteDnsValidationIssue>()
+
+    fun fatal(field: String, message: String) {
+        issues += WhiteDnsValidationIssue(WhiteDnsValidationSeverity.Fatal, field, message)
+    }
+
+    fun warning(field: String, message: String) {
+        issues += WhiteDnsValidationIssue(WhiteDnsValidationSeverity.Warning, field, message)
+    }
+
+    val serverDomains = normalizeServerDomains(connectionProfile.customServerDomain)
+    if (serverDomains.isEmpty() || connectionProfile.customServerEncryptionKey.isBlank()) {
+        fatal("server", "Custom StormDNS domain and encryption key are required")
+    } else if (serverDomains.any { !isValidServerDomain(it) }) {
+        fatal("server", "One or more custom StormDNS domains are not valid")
+    }
+
+    if (resolverValidation.normalizedResolvers.isEmpty()) {
+        fatal("resolvers", "Resolvers are required to connect")
+    }
+    if (resolverValidation.invalidEntries.isNotEmpty()) {
+        fatal("resolvers", "Resolver list contains invalid entries")
+    }
+    if (resolverValidation.normalizedResolvers.size > MaxRecommendedResolvers) {
+        warning("resolvers", "Large resolver lists can slow startup and increase battery use")
+    }
+
+    validatePortText(runtimeSettings.listenPort, "listenPort", "SOCKS listen port") { field, message ->
+        fatal(field, message)
+    }
+    if (runtimeSettings.httpProxyEnabled) {
+        validatePortText(runtimeSettings.httpProxyPort, "httpProxyPort", "HTTP proxy port") { field, message ->
+            fatal(field, message)
+        }
+        if (resolvedSettings.httpProxyPort == resolvedSettings.listenPort) {
+            fatal("httpProxyPort", "HTTP proxy port must differ from the SOCKS listen port")
+        }
+    }
+    if (runtimeSettings.localDnsEnabled) {
+        validatePortText(runtimeSettings.localDnsPort, "localDnsPort", "Local DNS port") { field, message ->
+            fatal(field, message)
+        }
+    }
+    if (runtimeSettings.localDnsEnabled && resolvedSettings.localDnsPort == resolvedSettings.listenPort) {
+        fatal("localDnsPort", "Local DNS port must differ from the SOCKS listen port")
+    }
+    if (runtimeSettings.localDnsEnabled && runtimeSettings.httpProxyEnabled &&
+        resolvedSettings.localDnsPort == resolvedSettings.httpProxyPort
+    ) {
+        fatal("localDnsPort", "Local DNS port must differ from the HTTP proxy port")
+    }
+
+    if (
+        resolvedSettings.connectionMode == "proxy" &&
+        isLanReachableListenIp(resolvedSettings.listenIp) &&
+        !hasCompleteSocksCredentials(
+            enabled = resolvedSettings.socks5Authentication,
+            username = resolvedSettings.socksUsername,
+            password = resolvedSettings.socksPassword,
+        )
+    ) {
+        fatal("socks5Authentication", "LAN-reachable proxy requires a SOCKS5 username and password")
+    }
+
+    if (resolvedSettings.rxTxWorkers > 32 || resolvedSettings.tunnelProcessWorkers > 32) {
+        warning("workers", "High worker counts can increase CPU and battery use")
+    }
+    if (resolvedSettings.mtuTestParallelismResolvers > 128) {
+        warning("resolverTestParallelism", "Very high resolver test parallelism can increase upload, CPU, and battery use")
+    }
+    if (resolvedSettings.txChannelSize > 8192 || resolvedSettings.rxChannelSize > 8192) {
+        warning("queues", "Large queues can increase memory use")
+    }
+    if (resolvedSettings.maxUploadMtu < resolvedSettings.minUploadMtu ||
+        resolvedSettings.maxDownloadMtu < resolvedSettings.minDownloadMtu
+    ) {
+        fatal("mtu", "Maximum MTU values must be greater than or equal to minimum MTU values")
+    }
+    if (resolvedSettings.localHandshakeTimeoutSeconds < 1.0 ||
+        resolvedSettings.socksUdpAssociateReadTimeoutSeconds < 1.0 ||
+        resolvedSettings.tunnelPacketTimeoutSeconds < 1.0
+    ) {
+        warning("timeouts", "Very short runtime timeouts can cause unstable connections")
+    }
+
+    return WhiteDnsSettingsValidation(issues)
+}
+
+private fun validatePortText(
+    raw: String,
+    field: String,
+    label: String,
+    fatal: (String, String) -> Unit,
+) {
+    val port = raw.trim().toIntOrNull()
+    if (port == null || port !in 1..65535) {
+        fatal(field, "$label must be between 1 and 65535")
+    }
+}
+
+private fun isValidServerDomain(raw: String): Boolean {
+    val domain = raw.trim().trimEnd('.')
+    if (domain.isBlank() || domain.length > 253 || domain.any(Char::isWhitespace)) {
+        return false
+    }
+    if (domain.startsWith("[") && domain.endsWith("]")) {
+        return domain.length > 2
+    }
+    return domain.split('.').all { label ->
+        label.isNotBlank() && ServerDomainLabelRegex.matches(label)
+    }
+}
+
+private fun isLanReachableListenIp(raw: String): Boolean {
+    val value = raw.trim()
+    return value.isNotBlank() &&
+        value != "127.0.0.1" &&
+        value != "localhost" &&
+        value != "::1" &&
+        value != "[::1]"
+}
+
+private fun hasCompleteSocksCredentials(
+    enabled: Boolean,
+    username: String,
+    password: String,
+): Boolean {
+    return enabled && username.isNotBlank() && password.isNotBlank()
 }
 
 fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
@@ -1541,6 +1795,11 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         .coerceAtLeast(resolvedMinUploadMtu)
     val resolvedMaxDownloadMtu = boundedInt(maxDownloadMtu, defaultValue = 3000, minValue = 1, maxValue = 65535)
         .coerceAtLeast(resolvedMinDownloadMtu)
+    val resolvedSocksUsername = socksUsername.take(255)
+    val resolvedSocksPassword = socksPassword.take(255)
+    val resolvedSocks5Authentication = socks5Authentication &&
+        resolvedSocksUsername.isNotBlank() &&
+        resolvedSocksPassword.isNotBlank()
 
     return ResolvedWhiteDnsSettings(
         connectionMode = when (connectionMode) {
@@ -1553,9 +1812,9 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         listenPort = boundedInt(listenPort, defaultValue = 10886, minValue = 1, maxValue = 65535),
         httpProxyEnabled = httpProxyEnabled,
         httpProxyPort = boundedInt(httpProxyPort, defaultValue = 10887, minValue = 1, maxValue = 65535),
-        socks5Authentication = socks5Authentication,
-        socksUsername = socksUsername.take(255),
-        socksPassword = socksPassword.take(255),
+        socks5Authentication = resolvedSocks5Authentication,
+        socksUsername = resolvedSocksUsername,
+        socksPassword = resolvedSocksPassword,
         balancingStrategy = listOf(1, 2, 3, 4).firstOrNull { it == balancingStrategy } ?: 3,
         uploadDuplication = boundedInt(uploadDuplication, defaultValue = 3, minValue = 1, maxValue = 30),
         downloadDuplication = boundedInt(downloadDuplication, defaultValue = 7, minValue = 1, maxValue = 30),
