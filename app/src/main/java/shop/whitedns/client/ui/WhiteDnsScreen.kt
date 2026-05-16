@@ -6201,12 +6201,16 @@ private fun SplitTunnelAppRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
+            .semantics {
+                contentDescription = context.getString(R.string.cd_split_tunnel_app_toggle, app.label)
+            }
             .clickable {
                 haptic.performLight()
                 onToggle()
