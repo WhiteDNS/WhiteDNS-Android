@@ -5791,6 +5791,7 @@ private fun DonationWalletField(
 
 @Composable
 private fun NotificationPermissionBanner(onClick: () -> Unit) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -5826,6 +5827,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_enable_vpn_notification) }
                 .clickable {
                     haptic.performMedium()
                     onClick()
@@ -5851,6 +5853,7 @@ private fun BatteryOptimizationBanner(
     onClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -5910,6 +5913,7 @@ private fun BatteryOptimizationBanner(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_allow_background_vpn) }
                 .clickable {
                     haptic.performMedium()
                     onClick()
