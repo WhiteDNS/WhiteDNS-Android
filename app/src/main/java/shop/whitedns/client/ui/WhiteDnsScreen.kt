@@ -5455,6 +5455,7 @@ private fun HeaderCard(
                     .clip(RoundedCornerShape(9.dp))
                     .background(WhiteDnsPalette.SurfaceAlt)
                     .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(9.dp))
+                    .semantics { contentDescription = context.getString(R.string.cd_logo_telegram) }
                     .clickable {
                         haptic.performLight()
                         openWhiteDnsTelegram(context)
@@ -5491,6 +5492,7 @@ private fun HeaderCard(
                         if (overflowExpanded) WhiteDnsPalette.Accent.copy(alpha = 0.28f) else WhiteDnsPalette.Border,
                         RoundedCornerShape(10.dp),
                     )
+                    .semantics { contentDescription = context.getString(R.string.cd_menu_button) }
                     .clickable {
                         haptic.performLight()
                         overflowExpanded = true
