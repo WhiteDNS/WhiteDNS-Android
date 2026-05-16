@@ -1880,6 +1880,7 @@ private fun ProfileTabSwitch(
     selectedTab: ProfileTab,
     onTabSelected: (ProfileTab) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
@@ -1904,6 +1905,13 @@ private fun ProfileTabSwitch(
                             Color.Transparent
                         },
                     )
+                    .semantics {
+                        contentDescription = if (selected) {
+                            context.getString(R.string.cd_profile_tab_selected, tab.label)
+                        } else {
+                            context.getString(R.string.cd_profile_tab_unselected, tab.label)
+                        }
+                    }
                     .clickable {
                         haptic.performLight()
                         onTabSelected(tab)
