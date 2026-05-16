@@ -1545,7 +1545,7 @@ private fun ScanInfoNotice(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Check,
-                contentDescription = "Scanner info",
+                contentDescription = stringResource(R.string.cd_scan_autosave_enabled),
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(16.dp),
             )
