@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.UUID
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
@@ -77,6 +78,7 @@ class WhiteDnsProxyService : Service() {
                     sessionId = currentSessionId,
                     message = "Proxy service stopped",
                 )
+                deleteCurrentLaunchRequest()
                 exitForeground()
                 stopSelf()
                 START_NOT_STICKY
@@ -89,6 +91,7 @@ class WhiteDnsProxyService : Service() {
                 } catch (error: Exception) {
                     logError("Failed to start proxy service", error)
                     stopProxyRuntime()
+                    deleteCurrentLaunchRequest()
                     exitForeground()
                     stopSelf()
                     START_NOT_STICKY
@@ -109,6 +112,7 @@ class WhiteDnsProxyService : Service() {
             sessionId = currentSessionId,
             message = "Proxy service stopped",
         )
+        deleteCurrentLaunchRequest()
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
@@ -116,9 +120,13 @@ class WhiteDnsProxyService : Service() {
 
     private fun startProxy(intent: Intent?) {
         val previousJob = startJob
-        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
+        val previousSessionId = currentSessionId
+        val sessionId = resolveSessionId(intent)
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
+            if (previousSessionId.isNotBlank() && previousSessionId != sessionId) {
+                RuntimeLaunchRequestStore.delete(applicationContext, previousSessionId)
+            }
             currentSessionId = sessionId
             stopping = false
             var startedOnce = false
@@ -177,6 +185,7 @@ class WhiteDnsProxyService : Service() {
                     )
                     if (!startedOnce) {
                         logError("Failed to start WhiteDNS proxy", error)
+                        RuntimeLaunchRequestStore.delete(applicationContext, sessionId)
                         exitForeground()
                         stopSelf()
                         return@launch
@@ -193,6 +202,13 @@ class WhiteDnsProxyService : Service() {
                 }
             }
         }
+    }
+
+    private fun resolveSessionId(intent: Intent?): String {
+        return intent
+            ?.getStringExtra(ExtraSessionId)
+            ?.takeIf(String::isNotBlank)
+            ?: UUID.randomUUID().toString()
     }
 
     private suspend fun startStormDns(
@@ -313,6 +329,10 @@ class WhiteDnsProxyService : Service() {
         }.onFailure { error ->
             Log.w(Tag, "Failed to stop StormDNS", error)
         }
+    }
+
+    private fun deleteCurrentLaunchRequest() {
+        RuntimeLaunchRequestStore.delete(applicationContext, currentSessionId)
     }
 
     private fun startTrafficKeepalive(resolvedSettings: ResolvedWhiteDnsSettings) {
@@ -525,7 +545,15 @@ class WhiteDnsProxyService : Service() {
             val launchSettings = settings ?: WhiteDnsSettingsStore(context).load()
             val launchServerProfile = serverProfile
                 ?: selectServerProfile(launchSettings)
-                ?: throw IllegalStateException("No StormDNS server profile configured")
+            if (launchServerProfile == null) {
+                WhiteDnsRuntimeStateStore.markFailed(
+                    context = context,
+                    mode = WhiteDnsRuntimeStateStore.ModeProxy,
+                    sessionId = sessionId,
+                    message = "No StormDNS server profile configured",
+                )
+                return
+            }
             RuntimeLaunchRequestStore.save(
                 context = context,
                 requestId = sessionId,

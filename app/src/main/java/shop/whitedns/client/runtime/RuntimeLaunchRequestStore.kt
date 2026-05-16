@@ -1,7 +1,9 @@
 package shop.whitedns.client.runtime
 
 import android.content.Context
+import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
 import shop.whitedns.client.model.ConnectionProfile
@@ -19,6 +21,7 @@ data class RuntimeLaunchRequest(
 object RuntimeLaunchRequestStore {
     private const val DirectoryName = "runtime-launch"
     private const val Extension = ".json"
+    internal const val DefaultRequestMaxAgeMillis = 24L * 60L * 60L * 1_000L
     private val SafeIdRegex = Regex("[A-Za-z0-9._-]+")
 
     fun save(
@@ -33,8 +36,17 @@ object RuntimeLaunchRequestStore {
             serverProfile = serverProfile,
             settings = settings.runtimeConnectionSettings().syncSelectedConnectionProfileFields(),
         )
-        launchDirectory(context).mkdirs()
-        requestFile(context, requestId).writeText(encode(request).toString(), Charsets.UTF_8)
+        val directory = launchDirectory(context)
+        directory.mkdirs()
+        pruneStaleRequestFiles(
+            directory = directory,
+            nowMillis = System.currentTimeMillis(),
+            maxAgeMillis = DefaultRequestMaxAgeMillis,
+        )
+        writeAtomically(
+            file = requestFile(directory, requestId),
+            text = encode(request).toString(),
+        )
         return request
     }
 
@@ -42,7 +54,7 @@ object RuntimeLaunchRequestStore {
         if (!requestId.isSafeRequestId()) {
             return null
         }
-        val file = requestFile(context, requestId)
+        val file = requestFile(launchDirectory(context), requestId)
         if (!file.isFile) {
             return null
         }
@@ -53,16 +65,79 @@ object RuntimeLaunchRequestStore {
 
     fun delete(context: Context, requestId: String) {
         if (requestId.isSafeRequestId()) {
-            requestFile(context, requestId).delete()
+            runCatching {
+                requestFile(launchDirectory(context), requestId).delete()
+            }
         }
+    }
+
+    fun pruneStale(
+        context: Context,
+        nowMillis: Long = System.currentTimeMillis(),
+        maxAgeMillis: Long = DefaultRequestMaxAgeMillis,
+    ): Int {
+        return pruneStaleRequestFiles(
+            directory = launchDirectory(context),
+            nowMillis = nowMillis,
+            maxAgeMillis = maxAgeMillis,
+        )
+    }
+
+    internal fun pruneStaleRequestFiles(
+        directory: File,
+        nowMillis: Long,
+        maxAgeMillis: Long = DefaultRequestMaxAgeMillis,
+    ): Int {
+        var deletedCount = 0
+        staleRequestFiles(directory, nowMillis, maxAgeMillis).forEach { file ->
+            if (runCatching { file.delete() }.getOrDefault(false)) {
+                deletedCount += 1
+            }
+        }
+        return deletedCount
+    }
+
+    internal fun staleRequestFiles(
+        directory: File,
+        nowMillis: Long,
+        maxAgeMillis: Long = DefaultRequestMaxAgeMillis,
+    ): List<File> {
+        if (!directory.isDirectory) {
+            return emptyList()
+        }
+        val cutoffMillis = nowMillis - maxAgeMillis.coerceAtLeast(0L)
+        val files = directory.listFiles() ?: return emptyList()
+        return files
+            .asSequence()
+            .filter { file ->
+                file.isFile &&
+                    file.name.endsWith(Extension) &&
+                    file.name.removeSuffix(Extension).isSafeRequestId() &&
+                    file.lastModified() < cutoffMillis
+            }
+            .sortedBy(File::getName)
+            .toList()
     }
 
     private fun launchDirectory(context: Context): File {
         return File(context.noBackupFilesDir, DirectoryName)
     }
 
-    private fun requestFile(context: Context, requestId: String): File {
-        return File(launchDirectory(context), "$requestId$Extension")
+    private fun requestFile(directory: File, requestId: String): File {
+        return File(directory, "$requestId$Extension")
+    }
+
+    private fun writeAtomically(file: File, text: String) {
+        val atomicFile = AtomicFile(file)
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (error: Exception) {
+            stream?.let(atomicFile::failWrite)
+            throw error
+        }
     }
 
     private fun encode(request: RuntimeLaunchRequest): JSONObject {
