@@ -390,6 +390,12 @@ data class ConnectionStats(
     val uploadSpeedBytesPerSecond: Long = 0,
     val peakSpeedBytesPerSecond: Long = 0,
     val connectedApps: Int = 0,
+    val estimatedPayloadDownloadBytes: Long = 0,
+    val estimatedPayloadUploadBytes: Long = 0,
+    val estimatedPayloadTotalBytes: Long = 0,
+    val estimatedPayloadDownloadSpeedBytesPerSecond: Long = 0,
+    val estimatedPayloadUploadSpeedBytesPerSecond: Long = 0,
+    val hasEstimatedPayloadTraffic: Boolean = false,
 )
 
 data class ResolverRuntimeState(

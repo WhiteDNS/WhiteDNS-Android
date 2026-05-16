@@ -822,9 +822,40 @@ class WhiteDnsModelsTest {
         assertEquals(WhiteDnsParallelTest.MaxSelectedConfigs, cappedIds.size)
         assertEquals(
             WhiteDnsParallelTest.defaultConfigIds +
-                profiles.take(3).map { WhiteDnsParallelTest.settingConfigId(it.id) },
+                profiles.take(WhiteDnsParallelTest.MaxSelectedConfigs - WhiteDnsParallelTest.defaultConfigIds.size)
+                    .map { WhiteDnsParallelTest.settingConfigId(it.id) },
             cappedIds,
         )
+    }
+
+    @Test
+    fun applyMiladTelegramPresetCarriesFieldTestedSettings() {
+        val preset = WhiteDnsAutoTunePresets.all.first { it.id == "field-milad-telegram" }
+        val settings = WhiteDnsSettings()
+            .applyAutoTunePreset(preset)
+        val resolvedSettings = settings.resolve()
+
+        assertEquals("Milad Telegram Proxy", preset.label)
+        assertEquals("127.0.0.1", resolvedSettings.listenIp)
+        assertEquals(10886, resolvedSettings.listenPort)
+        assertEquals(true, resolvedSettings.httpProxyEnabled)
+        assertEquals(10887, resolvedSettings.httpProxyPort)
+        assertEquals(false, resolvedSettings.socks5Authentication)
+        assertEquals(3, resolvedSettings.balancingStrategy)
+        assertEquals(3, resolvedSettings.uploadDuplication)
+        assertEquals(4, resolvedSettings.downloadDuplication)
+        assertEquals(5, resolvedSettings.minUploadMtu)
+        assertEquals(30, resolvedSettings.maxUploadMtu)
+        assertEquals(300, resolvedSettings.minDownloadMtu)
+        assertEquals(300, resolvedSettings.maxDownloadMtu)
+        assertEquals(3, resolvedSettings.mtuTestRetriesResolvers)
+        assertEquals(3.0, resolvedSettings.mtuTestTimeoutResolvers, 0.0)
+        assertEquals(100, resolvedSettings.mtuTestParallelismResolvers)
+        assertEquals(32, resolvedSettings.mtuTestParallelismLogs)
+        assertEquals(64, resolvedSettings.dnsResponseFragmentStoreCapacity)
+        assertEquals(30, resolvedSettings.pingWatchdogSeconds)
+        assertEquals(true, resolvedSettings.trafficWarmupEnabled)
+        assertEquals("WARN", resolvedSettings.logLevel)
     }
 
     @Test

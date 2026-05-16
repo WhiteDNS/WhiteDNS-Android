@@ -76,6 +76,7 @@ import shop.whitedns.client.runtime.WhiteDnsRuntimeState
 import shop.whitedns.client.runtime.WhiteDnsRuntimeStateStore
 import shop.whitedns.client.runtime.WhiteDnsTrafficWarmup
 import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
+import shop.whitedns.client.runtime.estimateDeduplicatedTraffic
 import shop.whitedns.client.runtime.formatTrafficSpeed
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.runtime.parseStormDnsResolverStateLine
@@ -1990,6 +1991,11 @@ class WhiteDnsViewModel(
             countTrackedSocksStreams(),
         )
         stormDnsTrafficAccounting.latest()?.let { stats ->
+            val resolvedSettings = uiState.settings.resolve()
+            val estimatedPayloadStats = stats.estimateDeduplicatedTraffic(
+                uploadDuplication = resolvedSettings.uploadDuplication,
+                downloadDuplication = resolvedSettings.downloadDuplication,
+            )
             val peakSpeed = maxOf(
                 uiState.connectionStats.peakSpeedBytesPerSecond,
                 stats.downloadSpeedBytesPerSecond + stats.uploadSpeedBytesPerSecond,
@@ -2002,6 +2008,13 @@ class WhiteDnsViewModel(
                 uploadSpeedBytesPerSecond = stats.uploadSpeedBytesPerSecond,
                 peakSpeedBytesPerSecond = peakSpeed,
                 connectedApps = connectedApps,
+                estimatedPayloadDownloadBytes = estimatedPayloadStats.downloadBytes,
+                estimatedPayloadUploadBytes = estimatedPayloadStats.uploadBytes,
+                estimatedPayloadTotalBytes = estimatedPayloadStats.downloadBytes + estimatedPayloadStats.uploadBytes,
+                estimatedPayloadDownloadSpeedBytesPerSecond = estimatedPayloadStats.downloadSpeedBytesPerSecond,
+                estimatedPayloadUploadSpeedBytesPerSecond = estimatedPayloadStats.uploadSpeedBytesPerSecond,
+                hasEstimatedPayloadTraffic = resolvedSettings.uploadDuplication > 1 ||
+                    resolvedSettings.downloadDuplication > 1,
             )
         }
 
@@ -2041,6 +2054,12 @@ class WhiteDnsViewModel(
             uploadSpeedBytesPerSecond = uploadSpeed,
             peakSpeedBytesPerSecond = peakSpeed,
             connectedApps = connectedApps,
+            estimatedPayloadDownloadBytes = downloadBytes,
+            estimatedPayloadUploadBytes = uploadBytes,
+            estimatedPayloadTotalBytes = downloadBytes + uploadBytes,
+            estimatedPayloadDownloadSpeedBytesPerSecond = downloadSpeed,
+            estimatedPayloadUploadSpeedBytesPerSecond = uploadSpeed,
+            hasEstimatedPayloadTraffic = false,
         )
     }
 

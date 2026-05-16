@@ -115,4 +115,22 @@ class StormDnsTrafficStatsTest {
         assertEquals(25L, next.downloadBytes)
         assertEquals(10L, next.uploadBytes)
     }
+
+    @Test
+    fun estimateDeduplicatedTrafficDividesTunnelCountersByDirectionDuplication() {
+        val stats = StormDnsTrafficStats(
+            downloadBytes = 401L,
+            uploadBytes = 301L,
+            downloadSpeedBytesPerSecond = 81L,
+            uploadSpeedBytesPerSecond = 61L,
+        ).estimateDeduplicatedTraffic(
+            uploadDuplication = 3,
+            downloadDuplication = 4,
+        )
+
+        assertEquals(101L, stats.downloadBytes)
+        assertEquals(101L, stats.uploadBytes)
+        assertEquals(21L, stats.downloadSpeedBytesPerSecond)
+        assertEquals(21L, stats.uploadSpeedBytesPerSecond)
+    }
 }

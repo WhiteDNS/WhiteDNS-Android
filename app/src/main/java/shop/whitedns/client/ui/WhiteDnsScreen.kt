@@ -1071,7 +1071,7 @@ private fun ParallelTestSelectionPanel(
                 )
                 ParallelTestConfigRow(
                     label = "WhiteDNS configs",
-                    detail = "Adds 7 suggested configs",
+                    detail = "Adds ${whiteDnsConfigIds.size} suggested configs",
                     checked = allWhiteDnsSelected,
                     enabled = canAddWhiteDnsConfigs,
                     onToggle = {
@@ -7056,36 +7056,77 @@ private fun ResolverRuntimeDialog(
 private fun LiveSpeedStrip(
     stats: ConnectionStats,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(WhiteDnsPalette.Surface)
             .border(2.dp, WhiteDnsPalette.Border, RoundedCornerShape(18.dp))
             .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SpeedIndicator(
-            icon = Icons.Filled.Download,
-            iconContentDescription = stringResource(R.string.cd_icon_download),
-            label = "Down",
-            value = formatDataSpeed(stats.downloadSpeedBytesPerSecond),
-            modifier = Modifier.weight(1f),
-        )
-        SpeedIndicator(
-            icon = Icons.Filled.Upload,
-            iconContentDescription = stringResource(R.string.cd_icon_upload),
-            label = "Up",
-            value = formatDataSpeed(stats.uploadSpeedBytesPerSecond),
-            modifier = Modifier.weight(1f),
-        )
-        SpeedIndicator(
-            icon = Icons.Filled.DataUsage,
-            iconContentDescription = stringResource(R.string.cd_icon_data_usage),
-            label = "Total Usage",
-            value = formatDataSize(stats.totalDataUsageBytes),
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SpeedIndicator(
+                icon = Icons.Filled.Download,
+                iconContentDescription = stringResource(R.string.cd_icon_download),
+                label = "Down",
+                value = formatDataSpeed(stats.downloadSpeedBytesPerSecond),
+                modifier = Modifier.weight(1f),
+            )
+            SpeedIndicator(
+                icon = Icons.Filled.Upload,
+                iconContentDescription = stringResource(R.string.cd_icon_upload),
+                label = "Up",
+                value = formatDataSpeed(stats.uploadSpeedBytesPerSecond),
+                modifier = Modifier.weight(1f),
+            )
+            SpeedIndicator(
+                icon = Icons.Filled.DataUsage,
+                iconContentDescription = stringResource(R.string.cd_icon_data_usage),
+                label = if (stats.hasEstimatedPayloadTraffic) "Tunnel Total" else "Total Usage",
+                value = formatDataSize(stats.totalDataUsageBytes),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (stats.hasEstimatedPayloadTraffic) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SpeedIndicator(
+                    icon = Icons.Filled.Download,
+                    iconContentDescription = stringResource(R.string.cd_icon_download),
+                    label = "Payload Down",
+                    value = formatDataSpeed(stats.estimatedPayloadDownloadSpeedBytesPerSecond),
+                    modifier = Modifier.weight(1f),
+                )
+                SpeedIndicator(
+                    icon = Icons.Filled.Upload,
+                    iconContentDescription = stringResource(R.string.cd_icon_upload),
+                    label = "Payload Up",
+                    value = formatDataSpeed(stats.estimatedPayloadUploadSpeedBytesPerSecond),
+                    modifier = Modifier.weight(1f),
+                )
+                SpeedIndicator(
+                    icon = Icons.Filled.DataUsage,
+                    iconContentDescription = stringResource(R.string.cd_icon_data_usage),
+                    label = "Payload Est.",
+                    value = formatDataSize(stats.estimatedPayloadTotalBytes),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                text = "Tunnel usage includes duplicate DNS packets, warmup, retries, and protocol overhead. Payload estimate divides tunnel counters by the configured duplication counts.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 10.sp,
+                    color = WhiteDnsPalette.Muted,
+                    lineHeight = 14.sp,
+                ),
+            )
+        }
     }
 }
 
@@ -7909,6 +7950,18 @@ private fun buildDiagnosticsText(
         appendLine("Traffic total: ${formatDataSize(uiState.connectionStats.totalDataUsageBytes)}")
         appendLine("Traffic down: ${formatDataSpeed(uiState.connectionStats.downloadSpeedBytesPerSecond)}")
         appendLine("Traffic up: ${formatDataSpeed(uiState.connectionStats.uploadSpeedBytesPerSecond)}")
+        if (uiState.connectionStats.hasEstimatedPayloadTraffic) {
+            appendLine("Estimated payload total: ${formatDataSize(uiState.connectionStats.estimatedPayloadTotalBytes)}")
+            appendLine(
+                "Estimated payload down: " +
+                    formatDataSpeed(uiState.connectionStats.estimatedPayloadDownloadSpeedBytesPerSecond),
+            )
+            appendLine(
+                "Estimated payload up: " +
+                    formatDataSpeed(uiState.connectionStats.estimatedPayloadUploadSpeedBytesPerSecond),
+            )
+            appendLine("Traffic note: tunnel counters include duplication and DNS/protocol overhead")
+        }
         appendLine("Connected apps: ${uiState.connectionStats.connectedApps}")
         appendLine("Active resolvers: ${uiState.resolverRuntimeState.activeResolvers.size}")
         appendLine("Valid resolvers: ${uiState.resolverRuntimeState.validResolvers.size}")
