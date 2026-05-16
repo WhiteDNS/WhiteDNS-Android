@@ -6620,11 +6620,15 @@ private fun ResolverRuntimeValue(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(10.dp))
+            .semantics {
+                contentDescription = context.getString(R.string.cd_stat_card_detail, label, value)
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
