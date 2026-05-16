@@ -1953,6 +1953,9 @@ private fun FooterLink() {
             text = WhiteDnsTelegramUrl,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
+                .semantics {
+                    contentDescription = context.getString(R.string.cd_telegram_link)
+                }
                 .clickable {
                     haptic.performLight()
                     openWhiteDnsTelegram(context)
