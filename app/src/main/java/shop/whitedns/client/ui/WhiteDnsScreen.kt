@@ -2708,6 +2708,7 @@ private fun HomeSelectorSheetRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
@@ -2720,6 +2721,9 @@ private fun HomeSelectorSheetRow(
                 if (selected) WhiteDnsPalette.Accent.copy(alpha = 0.28f) else WhiteDnsPalette.Border,
                 RoundedCornerShape(12.dp),
             )
+            .semantics {
+                contentDescription = context.getString(R.string.cd_select_profile_item, item.title)
+            }
             .clickable {
                 haptic.performLight()
                 onClick()
