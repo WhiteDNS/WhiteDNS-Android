@@ -7521,6 +7521,7 @@ private fun LogActionButton(
             .clip(RoundedCornerShape(8.dp))
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(8.dp))
+            .semantics { contentDescription = label }
             .clickable {
                 haptic.performLight()
                 onClick()
