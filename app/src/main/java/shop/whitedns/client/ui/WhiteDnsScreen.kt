@@ -7830,6 +7830,7 @@ private fun SectionCard(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val isOpen = expanded || !collapsible
     val rotation by animateFloatAsState(
@@ -7873,10 +7874,18 @@ private fun SectionCard(
                 .fillMaxWidth()
                 .let { modifier ->
                     if (collapsible) {
-                        modifier.clickable {
-                            haptic.performLight()
-                            onToggle()
-                        }
+                        modifier
+                            .semantics {
+                                contentDescription = if (expanded) {
+                                    context.getString(R.string.cd_section_collapse, title)
+                                } else {
+                                    context.getString(R.string.cd_section_expand, title)
+                                }
+                            }
+                            .clickable {
+                                haptic.performLight()
+                                onToggle()
+                            }
                     } else {
                         modifier
                     }
