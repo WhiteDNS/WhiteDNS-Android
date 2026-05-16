@@ -1680,6 +1680,7 @@ private fun ScanWorkerSlider(
     enabled: Boolean,
     onWorkerCountChange: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1696,7 +1697,6 @@ private fun ScanWorkerSlider(
                 ),
             )
         }
-        val context = LocalContext.current
         Slider(
             value = workerCount.toFloat(),
             onValueChange = { value ->
