@@ -1808,6 +1808,7 @@ private fun BottomNavigationBar(
     selectedTab: WhiteDnsTab,
     onTabSelected: (WhiteDnsTab) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -1840,6 +1841,11 @@ private fun BottomNavigationBar(
                         .weight(1f)
                         .clip(RoundedCornerShape(14.dp))
                         .background(background)
+                        .semantics {
+                            contentDescription = context.getString(
+                                R.string.cd_navigate_to_tab, tab.label
+                            )
+                        }
                         .clickable {
                             haptic.performLight()
                             onTabSelected(tab)
