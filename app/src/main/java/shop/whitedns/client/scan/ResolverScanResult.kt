@@ -24,6 +24,15 @@ data class ResolverScanResult(
         get() = resolverScanScore(this)
 }
 
+data class ResolverScanRecommendation(
+    val resolver: String,
+    val score: Int,
+    val observationCount: Int,
+    val successfulServerCount: Int,
+    val bestLatencyMillis: Int?,
+    val lastObservedAtMillis: Long,
+)
+
 fun resolverScanScore(result: ResolverScanResult): Int {
     if (!result.isValid) {
         return 0
@@ -57,6 +66,39 @@ fun rankResolverScanResults(results: Iterable<ResolverScanResult>): List<Resolve
             compareByDescending<ResolverScanResult> { it.score }
                 .thenBy { it.latencyMillis ?: Int.MAX_VALUE }
                 .thenByDescending { it.observedAtMillis }
+                .thenBy { it.resolver },
+        )
+}
+
+fun summarizeResolverScanRecommendations(
+    results: Iterable<ResolverScanResult>,
+): List<ResolverScanRecommendation> {
+    return results
+        .filter { it.isValid && it.resolver.isNotBlank() }
+        .groupBy { it.resolver }
+        .map { (resolver, resolverResults) ->
+            val successfulServerCount = resolverResults
+                .mapNotNull { it.serverDomain.takeIf(String::isNotBlank) }
+                .distinct()
+                .size
+            val bestScore = resolverResults.maxOf { it.score }
+            val stabilityBonus = ((resolverResults.size - 1).coerceAtMost(4) * 2) +
+                (successfulServerCount.coerceAtMost(4) * 3)
+            ResolverScanRecommendation(
+                resolver = resolver,
+                score = (bestScore + stabilityBonus).coerceIn(1, 100),
+                observationCount = resolverResults.size,
+                successfulServerCount = successfulServerCount,
+                bestLatencyMillis = resolverResults.mapNotNull { it.latencyMillis }.minOrNull(),
+                lastObservedAtMillis = resolverResults.maxOf { it.observedAtMillis },
+            )
+        }
+        .sortedWith(
+            compareByDescending<ResolverScanRecommendation> { it.score }
+                .thenBy { it.bestLatencyMillis ?: Int.MAX_VALUE }
+                .thenByDescending { it.successfulServerCount }
+                .thenByDescending { it.observationCount }
+                .thenByDescending { it.lastObservedAtMillis }
                 .thenBy { it.resolver },
         )
 }

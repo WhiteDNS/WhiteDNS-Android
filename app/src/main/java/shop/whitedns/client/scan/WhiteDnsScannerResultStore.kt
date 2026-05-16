@@ -27,8 +27,16 @@ object WhiteDnsScannerResultStore {
         if (structuredResults.isEmpty()) {
             return readValidResolvers(context).take(limit)
         }
-        return rankResolverScanResults(structuredResults)
+        return summarizeResolverScanRecommendations(structuredResults)
             .map { it.resolver }
+            .take(limit.coerceAtLeast(1))
+    }
+
+    fun readResolverRecommendations(
+        context: Context,
+        limit: Int = 64,
+    ): List<ResolverScanRecommendation> {
+        return summarizeResolverScanRecommendations(readStructuredResults(context))
             .take(limit.coerceAtLeast(1))
     }
 

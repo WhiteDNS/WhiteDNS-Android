@@ -75,4 +75,42 @@ class ResolverScanResultTest {
 
         assertEquals(result, resolverScanResultFromJson(result.toJsonObject()))
     }
+
+    @Test
+    fun summarizeResolverScanRecommendationsRewardsRepeatedServerSuccess() {
+        val recommendations = summarizeResolverScanRecommendations(
+            listOf(
+                ResolverScanResult(
+                    resolver = "8.8.8.8",
+                    status = ResolverScanResultStatus.Valid,
+                    serverDomain = "server-a.example.com",
+                    latencyMillis = 95,
+                    attempts = 1,
+                    observedAtMillis = 10L,
+                ),
+                ResolverScanResult(
+                    resolver = "8.8.8.8",
+                    status = ResolverScanResultStatus.Valid,
+                    serverDomain = "server-b.example.com",
+                    latencyMillis = 110,
+                    attempts = 1,
+                    observedAtMillis = 20L,
+                ),
+                ResolverScanResult(
+                    resolver = "1.1.1.1",
+                    status = ResolverScanResultStatus.Valid,
+                    serverDomain = "server-a.example.com",
+                    latencyMillis = 95,
+                    attempts = 1,
+                    observedAtMillis = 30L,
+                ),
+            ),
+        )
+
+        assertEquals("8.8.8.8", recommendations.first().resolver)
+        assertEquals(2, recommendations.first().observationCount)
+        assertEquals(2, recommendations.first().successfulServerCount)
+        assertEquals(95, recommendations.first().bestLatencyMillis)
+        assertTrue(recommendations.first().score > recommendations.last().score)
+    }
 }
