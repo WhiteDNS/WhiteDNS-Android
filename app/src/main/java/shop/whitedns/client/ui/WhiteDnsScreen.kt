@@ -280,7 +280,7 @@ private enum class WhiteDnsTab(
 }
 
 private const val ScanWorkerMin = 1
-private const val ScanWorkerMax = 32
+private const val ScanWorkerMax = WhiteDnsScanDefaults.MaxWorkerCount
 
 private enum class CompactActionTone {
     Default,
@@ -1284,6 +1284,14 @@ private fun ScanTabContent(
     val scanState = uiState.scanState
     val workerCount = (uiState.scanWorkerCount.toIntOrNull() ?: WhiteDnsScanDefaults.DefaultWorkerCount)
         .coerceIn(ScanWorkerMin, ScanWorkerMax)
+    val scanBudget = remember(workerCount) {
+        WhiteDnsScanDefaults.workerBudgetFor(workerCount)
+    }
+    val scanWorkerNote = when {
+        workerCount >= WhiteDnsScanDefaults.HighWorkerWarningThreshold -> "Very high scan budgets can be useful for short expert runs, but they can increase upload, CPU, heat, and battery use."
+        workerCount >= WhiteDnsScanDefaults.WorkerWarningThreshold -> "Deep scan budgets finish faster on strong devices, but they use more battery and network traffic."
+        else -> "Quick and balanced budgets are gentler on battery and usually enough for first-pass testing."
+    }
     val connectionProfiles = remember(uiState.settings) {
         uiState.settings.normalizedConnectionProfiles()
     }
@@ -1356,13 +1364,24 @@ private fun ScanTabContent(
                     },
                 )
             }
+            WhiteDnsDropdownField(
+                label = "Scan Budget",
+                value = scanBudget,
+                options = WhiteDnsScanDefaults.workerBudgets,
+                onValueChange = { budget ->
+                    if (budget != WhiteDnsScanDefaults.CustomWorkerBudget) {
+                        onScanWorkerCountChange(budget)
+                    }
+                },
+                enabled = !scanState.isRunning,
+            )
             ScanWorkerSlider(
                 workerCount = workerCount,
                 enabled = !scanState.isRunning,
                 onWorkerCountChange = { onScanWorkerCountChange(it.toString()) },
             )
             ScanNote(
-                text = "Higher worker values increase battery usage and can impact phone performance.",
+                text = scanWorkerNote,
             )
             WhiteDnsDropdownField(
                 label = "Scan Profile",

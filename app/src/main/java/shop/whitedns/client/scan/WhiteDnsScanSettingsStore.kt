@@ -7,14 +7,14 @@ class WhiteDnsScanSettingsStore(context: Context) {
     private val preferences = context.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)
 
     fun loadWorkerCount(): Int {
-        return preferences
-            .getInt(KeyWorkerCount, WhiteDnsScanDefaults.DefaultWorkerCount)
-            .coerceAtLeast(1)
+        return WhiteDnsScanDefaults.normalizeWorkerCount(
+            preferences.getInt(KeyWorkerCount, WhiteDnsScanDefaults.DefaultWorkerCount),
+        )
     }
 
     fun saveWorkerCount(workerCount: Int) {
         preferences.edit()
-            .putInt(KeyWorkerCount, workerCount.coerceAtLeast(1))
+            .putInt(KeyWorkerCount, WhiteDnsScanDefaults.normalizeWorkerCount(workerCount))
             .apply()
     }
 

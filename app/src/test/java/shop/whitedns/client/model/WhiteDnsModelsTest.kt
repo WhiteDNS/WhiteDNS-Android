@@ -742,6 +742,22 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun workerBudgetForRecognizesBuiltInAndCustomScanBudgets() {
+        assertEquals("4", WhiteDnsScanDefaults.workerBudgetFor(4))
+        assertEquals("64", WhiteDnsScanDefaults.workerBudgetFor(64))
+        assertEquals("128", WhiteDnsScanDefaults.workerBudgetFor(128))
+        assertEquals(WhiteDnsScanDefaults.CustomWorkerBudget, WhiteDnsScanDefaults.workerBudgetFor(7))
+    }
+
+    @Test
+    fun normalizeWorkerCountDefaultsAndBoundsScanBudgets() {
+        assertEquals(WhiteDnsScanDefaults.DefaultWorkerCount, WhiteDnsScanDefaults.normalizeWorkerCount(null))
+        assertEquals(1, WhiteDnsScanDefaults.normalizeWorkerCount(0))
+        assertEquals(64, WhiteDnsScanDefaults.normalizeWorkerCount(64))
+        assertEquals(WhiteDnsScanDefaults.MaxWorkerCount, WhiteDnsScanDefaults.normalizeWorkerCount(999))
+    }
+
+    @Test
     fun resolveUsesFullScanStartupAndBoundsNativeReliabilitySettings() {
         val settings = WhiteDnsSettings(
             startupMode = "invalid",

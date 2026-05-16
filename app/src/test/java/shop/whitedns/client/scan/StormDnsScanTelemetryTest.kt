@@ -7,16 +7,30 @@ import org.junit.Test
 class StormDnsScanTelemetryTest {
     @Test
     fun parseStormDnsScanLineParsesValidResolver() {
-        val telemetry = parseStormDnsScanLine("2026 WD_SCAN event=valid resolver=1.1.1.1:53")
+        val telemetry = parseStormDnsScanLine("2026 WD_SCAN event=valid resolver=1.1.1.1:53 latency_ms=84 attempts=2")
 
-        assertEquals(StormDnsScanTelemetry.Valid("1.1.1.1:53"), telemetry)
+        assertEquals(
+            StormDnsScanTelemetry.Valid(
+                resolver = "1.1.1.1:53",
+                latencyMillis = 84,
+                attempts = 2,
+            ),
+            telemetry,
+        )
     }
 
     @Test
     fun parseStormDnsScanLineParsesRejectedResolver() {
-        val telemetry = parseStormDnsScanLine("2026 WD_SCAN event=rejected resolver=8.8.8.8:53")
+        val telemetry = parseStormDnsScanLine("2026 WD_SCAN event=rejected resolver=8.8.8.8:53 reason=timeout attempts=3")
 
-        assertEquals(StormDnsScanTelemetry.Rejected("8.8.8.8:53"), telemetry)
+        assertEquals(
+            StormDnsScanTelemetry.Rejected(
+                resolver = "8.8.8.8:53",
+                reason = "timeout",
+                attempts = 3,
+            ),
+            telemetry,
+        )
     }
 
     @Test
