@@ -939,12 +939,12 @@ class WhiteDnsViewModel(
     fun updateScanWorkerCount(rawValue: String) {
         val filtered = rawValue.filter(Char::isDigit).take(MaxScanWorkerDigits)
         val workerCount = filtered.toIntOrNull()
-        if (workerCount != null && workerCount > 0) {
-            scanSettingsStore.saveWorkerCount(workerCount.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount))
+        val normalizedWorkerCount = workerCount?.let(WhiteDnsScanDefaults::normalizeWorkerCount)
+        if (normalizedWorkerCount != null) {
+            scanSettingsStore.saveWorkerCount(normalizedWorkerCount)
         }
         uiState = uiState.copy(
-            scanWorkerCount = workerCount
-                ?.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
+            scanWorkerCount = normalizedWorkerCount
                 ?.toString()
                 ?: filtered,
         )
@@ -994,9 +994,9 @@ class WhiteDnsViewModel(
                     scanSettingsStore.saveConnectionProfileId(scanConnectionProfileId)
                     uiState = uiState.copy(scanConnectionProfileId = scanConnectionProfileId)
                 }
-            val workerCount = uiState.scanWorkerCount.toIntOrNull()
-                ?.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
-                ?: WhiteDnsScanDefaults.DefaultWorkerCount
+                val workerCount = WhiteDnsScanDefaults.normalizeWorkerCount(
+                    uiState.scanWorkerCount.toIntOrNull(),
+                )
                 val importingState = WhiteDnsScanState(
                     sessionId = sessionId,
                     status = WhiteDnsScanStatus.Starting,
@@ -1099,9 +1099,9 @@ class WhiteDnsViewModel(
                 setScanFailure(sessionId, "$profileName requires a StormDNS domain and encryption key")
                 return@launch
             }
-            val workerCount = uiState.scanWorkerCount.toIntOrNull()
-                ?.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
-                ?: scanRequest.workerCount.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
+            val workerCount = WhiteDnsScanDefaults.normalizeWorkerCount(
+                uiState.scanWorkerCount.toIntOrNull() ?: scanRequest.workerCount,
+            )
             val resolverFileExists = withContext(Dispatchers.IO) {
                 File(scanRequest.resolverFilePath).isFile
             }
@@ -1246,9 +1246,9 @@ class WhiteDnsViewModel(
                 return@launch
             }
 
-            val workerCount = uiState.scanWorkerCount.toIntOrNull()
-                ?.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
-                ?: scanRequest.workerCount.coerceIn(1, WhiteDnsScanDefaults.MaxWorkerCount)
+            val workerCount = WhiteDnsScanDefaults.normalizeWorkerCount(
+                uiState.scanWorkerCount.toIntOrNull() ?: scanRequest.workerCount,
+            )
             val startingState = WhiteDnsScanState(
                 sessionId = sessionId,
                 status = WhiteDnsScanStatus.Starting,

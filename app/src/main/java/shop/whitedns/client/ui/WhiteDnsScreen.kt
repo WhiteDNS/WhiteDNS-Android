@@ -1288,7 +1288,7 @@ private fun ScanTabContent(
         WhiteDnsScanDefaults.workerBudgetFor(workerCount)
     }
     val scanWorkerNote = when {
-        workerCount >= 64 -> "Very high scan budgets can be useful for short expert runs, but they can increase upload, CPU, heat, and battery use."
+        workerCount >= WhiteDnsScanDefaults.HighWorkerWarningThreshold -> "Very high scan budgets can be useful for short expert runs, but they can increase upload, CPU, heat, and battery use."
         workerCount >= WhiteDnsScanDefaults.WorkerWarningThreshold -> "Deep scan budgets finish faster on strong devices, but they use more battery and network traffic."
         else -> "Quick and balanced budgets are gentler on battery and usually enough for first-pass testing."
     }

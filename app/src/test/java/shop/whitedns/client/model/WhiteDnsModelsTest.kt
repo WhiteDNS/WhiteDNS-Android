@@ -1123,6 +1123,14 @@ class WhiteDnsModelsTest {
         assertEquals(WhiteDnsScanDefaults.CustomWorkerBudget, WhiteDnsScanDefaults.workerBudgetFor(7))
     }
 
+    @Test
+    fun normalizeWorkerCountDefaultsAndBoundsScanBudgets() {
+        assertEquals(WhiteDnsScanDefaults.DefaultWorkerCount, WhiteDnsScanDefaults.normalizeWorkerCount(null))
+        assertEquals(1, WhiteDnsScanDefaults.normalizeWorkerCount(0))
+        assertEquals(64, WhiteDnsScanDefaults.normalizeWorkerCount(64))
+        assertEquals(WhiteDnsScanDefaults.MaxWorkerCount, WhiteDnsScanDefaults.normalizeWorkerCount(999))
+    }
+
     private fun decodeStormDnsProfilePayload(link: String): String {
         val payload = link.removePrefix("stormdns://")
         val paddedPayload = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), '=')
