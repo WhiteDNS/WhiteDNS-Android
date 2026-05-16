@@ -939,6 +939,7 @@ private fun ParallelTestSelectionPanel(
     onExpandedChange: (Boolean) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -976,6 +977,13 @@ private fun ParallelTestSelectionPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
+                .semantics {
+                    contentDescription = if (expanded) {
+                        context.getString(R.string.cd_parallel_test_collapse)
+                    } else {
+                        context.getString(R.string.cd_parallel_test_expand)
+                    }
+                }
                 .clickable {
                     haptic.performLight()
                     onExpandedChange(!expanded)
