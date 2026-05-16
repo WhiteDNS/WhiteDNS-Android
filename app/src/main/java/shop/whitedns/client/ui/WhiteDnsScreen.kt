@@ -5751,6 +5751,7 @@ private fun DonationWalletField(
     address: String,
     onCopy: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column {
         FieldLabel(label)
         Row(
@@ -5759,6 +5760,7 @@ private fun DonationWalletField(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Input)
                 .border(2.5.dp, WhiteDnsPalette.Divider, RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_copy_address, address) }
                 .clickable(onClick = onCopy)
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
