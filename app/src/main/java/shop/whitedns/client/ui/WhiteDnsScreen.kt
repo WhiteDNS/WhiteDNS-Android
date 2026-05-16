@@ -191,6 +191,8 @@ import shop.whitedns.client.model.validateResolverText
 import shop.whitedns.client.model.WhiteDnsAutoTunePresets
 import shop.whitedns.client.model.WhiteDnsParallelTest
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
+import shop.whitedns.client.security.RedactionSecrets
+import shop.whitedns.client.security.SecretRedactor
 import shop.whitedns.client.storm.StormDnsConfigRenderer
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -4551,6 +4553,15 @@ private fun ConnectionProfileExportDialog(
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             val link = linkResult.getOrNull()
             if (link != null) {
+                Text(
+                    text = "This export includes connection secrets. Only share it with people or devices you trust.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 11.sp,
+                        color = WhiteDnsPalette.Warning,
+                        lineHeight = 15.sp,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
                 if (showQr && !link.contains('\n')) {
                     ProfileQrPreview(link = link)
                     Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
@@ -7876,7 +7887,7 @@ private fun buildDiagnosticsText(
     val verification = uiState.connectionVerification
     val appVersion = appVersionName(context)
 
-    return buildString {
+    val rawDiagnostics = buildString {
         appendLine("WhiteDNS diagnostics")
         appendLine("App version: ${appVersion.ifBlank { "unknown" }}")
         appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
@@ -7910,7 +7921,30 @@ private fun buildDiagnosticsText(
         uiState.connectionLogs.forEach { log ->
             appendLine(log)
         }
-    }.trimEnd()
+    }
+    return SecretRedactor.redact(
+        source = rawDiagnostics,
+        secrets = diagnosticRedactionSecrets(context, settings),
+    ).trimEnd()
+}
+
+private fun diagnosticRedactionSecrets(
+    context: Context,
+    settings: WhiteDnsSettings,
+): RedactionSecrets {
+    val profiles = settings.normalizedConnectionProfiles()
+    val resolvedSettings = settings.resolve()
+    return RedactionSecrets(
+        serverDomains = profiles.map { it.customServerDomain },
+        encryptionKeys = profiles.map { it.customServerEncryptionKey },
+        socksUsernames = listOf(resolvedSettings.socksUsername),
+        socksPasswords = listOf(resolvedSettings.socksPassword),
+        runtimePaths = listOf(
+            context.filesDir.absolutePath,
+            context.cacheDir.absolutePath,
+            context.noBackupFilesDir.absolutePath,
+        ),
+    )
 }
 
 private fun readResolverTextFromUri(context: Context, uri: Uri): Result<String> {

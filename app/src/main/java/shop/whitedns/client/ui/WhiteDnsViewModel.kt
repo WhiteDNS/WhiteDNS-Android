@@ -80,6 +80,8 @@ import shop.whitedns.client.runtime.formatTrafficSpeed
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.runtime.parseStormDnsResolverStateLine
 import shop.whitedns.client.runtime.parseStormDnsTrafficStatsLine
+import shop.whitedns.client.security.RedactionSecrets
+import shop.whitedns.client.security.SecretRedactor
 import shop.whitedns.client.scan.WhiteDnsScanLaunchRequest
 import shop.whitedns.client.scan.WhiteDnsScanRequestStore
 import shop.whitedns.client.scan.WhiteDnsScanService
@@ -1617,9 +1619,7 @@ class WhiteDnsViewModel(
     }
 
     private fun prependConnectionLog(message: String): List<String> {
-        val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
-            .trim()
+        val cleanMessage = redactRuntimeText(message).trim()
         if (cleanMessage.isEmpty()) {
             return uiState.connectionLogs
         }
@@ -2319,14 +2319,27 @@ class WhiteDnsViewModel(
     }
 
     private fun appendLogOnMain(message: String) {
-        val cleanMessage = message
-            .replace(Regex("\\u001B\\[[;\\d]*m"), "")
-            .trim()
+        val cleanMessage = redactRuntimeText(message).trim()
         if (cleanMessage.isEmpty()) {
             return
         }
         val nextLogs = (listOf(cleanMessage) + uiState.connectionLogs).take(MaxConnectionLogs)
         uiState = uiState.copy(connectionLogs = nextLogs)
+    }
+
+    private fun redactRuntimeText(message: String): String {
+        val settings = uiState.settings
+        val profiles = settings.normalizedConnectionProfiles()
+        val resolvedSettings = settings.resolve()
+        return SecretRedactor.redact(
+            source = message,
+            secrets = RedactionSecrets(
+                serverDomains = profiles.map { it.customServerDomain },
+                encryptionKeys = profiles.map { it.customServerEncryptionKey },
+                socksUsernames = listOf(resolvedSettings.socksUsername),
+                socksPasswords = listOf(resolvedSettings.socksPassword),
+            ),
+        )
     }
 
     private companion object {
