@@ -1696,6 +1696,7 @@ private fun ScanWorkerSlider(
                 ),
             )
         }
+        val context = LocalContext.current
         Slider(
             value = workerCount.toFloat(),
             onValueChange = { value ->
@@ -1704,6 +1705,9 @@ private fun ScanWorkerSlider(
             enabled = enabled,
             valueRange = ScanWorkerMin.toFloat()..ScanWorkerMax.toFloat(),
             steps = ScanWorkerMax - ScanWorkerMin - 1,
+            modifier = Modifier.semantics {
+                contentDescription = context.getString(R.string.cd_worker_count_slider, workerCount)
+            },
             colors = SliderDefaults.colors(
                 thumbColor = WhiteDnsPalette.Accent,
                 activeTrackColor = WhiteDnsPalette.Accent,
@@ -8020,11 +8024,19 @@ private fun ToggleRow(
     enabled: Boolean,
     onToggle: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription = if (enabled) {
+                    context.getString(R.string.cd_toggle_row_on, label)
+                } else {
+                    context.getString(R.string.cd_toggle_row_off, label)
+                }
+            }
             .clickable {
                 haptic.performLight()
                 onToggle()
