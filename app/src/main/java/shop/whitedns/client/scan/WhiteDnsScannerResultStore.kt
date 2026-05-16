@@ -5,11 +5,13 @@ import android.util.AtomicFile
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import org.json.JSONObject
 import shop.whitedns.client.model.ResolverTextValidation
 import shop.whitedns.client.model.validateResolverText
 
 object WhiteDnsScannerResultStore {
     const val ResultFileName = "Scanner result"
+    const val StructuredResultFileName = "scanner_results.jsonl"
     private val ResultFileLock = Any()
 
     fun resultFile(context: Context): File {
@@ -18,6 +20,29 @@ object WhiteDnsScannerResultStore {
 
     fun readValidResolvers(context: Context): List<String> {
         return readValidResolverSet(context).toList()
+    }
+
+    fun readRecommendedResolvers(context: Context, limit: Int = 64): List<String> {
+        val structuredResults = readStructuredResults(context)
+        if (structuredResults.isEmpty()) {
+            return readValidResolvers(context).take(limit)
+        }
+        return rankResolverScanResults(structuredResults)
+            .map { it.resolver }
+            .take(limit.coerceAtLeast(1))
+    }
+
+    fun readStructuredResults(context: Context): List<ResolverScanResult> {
+        return runCatching {
+            val file = structuredResultFile(context)
+            if (!file.isFile) {
+                emptyList()
+            } else {
+                file.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                    lines.mapNotNull(::decodeStructuredResultLine).toList()
+                }
+            }
+        }.getOrDefault(emptyList())
     }
 
     fun readValidResolverSet(context: Context): Set<String> {
@@ -57,6 +82,21 @@ object WhiteDnsScannerResultStore {
                     stream.write(resolver.toByteArray(Charsets.UTF_8))
                     wroteResolver = true
                 }
+            }
+        }
+    }
+
+    fun appendStructuredResult(context: Context, result: ResolverScanResult) {
+        val normalizedResolver = normalizeResolverEntry(result.resolver) ?: return
+        val normalizedResult = result.copy(resolver = normalizedResolver)
+        synchronized(ResultFileLock) {
+            val target = structuredResultFile(context)
+            target.parentFile?.mkdirs()
+            FileOutputStream(target, true).use { stream ->
+                if (target.length() > 0L) {
+                    stream.write("\n".toByteArray(Charsets.UTF_8))
+                }
+                stream.write(normalizedResult.toJsonObject().toString().toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -241,6 +281,20 @@ object WhiteDnsScannerResultStore {
 
     private fun resultDirectory(context: Context): File {
         return File(File(context.noBackupFilesDir, "stormdns"), "scan")
+    }
+
+    private fun structuredResultFile(context: Context): File {
+        return File(resultDirectory(context), StructuredResultFileName)
+    }
+
+    private fun decodeStructuredResultLine(line: String): ResolverScanResult? {
+        val trimmed = line.trim()
+        if (trimmed.isBlank()) {
+            return null
+        }
+        return runCatching {
+            resolverScanResultFromJson(JSONObject(trimmed))
+        }.getOrNull()
     }
 
     private fun stripScanResolverPort(resolver: String): String {

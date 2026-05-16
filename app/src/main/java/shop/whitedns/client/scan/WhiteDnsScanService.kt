@@ -242,6 +242,8 @@ class WhiteDnsScanService : Service() {
                             workerStats = workerStats,
                             validResolvers = validResolvers,
                             rejectedResolvers = rejectedResolvers,
+                            resultSourceName = sourceName,
+                            resultServerDomain = serverProfile.domain,
                             stateLock = stateLock,
                             publishAggregate = ::publishAggregate,
                         )
@@ -295,6 +297,8 @@ class WhiteDnsScanService : Service() {
         workerStats: Array<WorkerScanStats>,
         validResolvers: MutableSet<String>,
         rejectedResolvers: MutableSet<String>,
+        resultSourceName: String,
+        resultServerDomain: String,
         stateLock: Any,
         publishAggregate: (String, String, Boolean) -> Unit,
     ) {
@@ -325,6 +329,18 @@ class WhiteDnsScanService : Service() {
                 if (added) {
                     WhiteDnsScannerResultStore.appendValidResolvers(applicationContext, listOf(resolver))
                 }
+                WhiteDnsScannerResultStore.appendStructuredResult(
+                    applicationContext,
+                    ResolverScanResult(
+                        resolver = resolver,
+                        status = ResolverScanResultStatus.Valid,
+                        sourceName = resultSourceName,
+                        serverDomain = resultServerDomain,
+                        latencyMillis = telemetry.latencyMillis,
+                        attempts = telemetry.attempts,
+                        observedAtMillis = System.currentTimeMillis(),
+                    ),
+                )
                 publishAggregate(WhiteDnsScanStatus.Running, "Found $validCount valid resolvers", false)
             }
             is StormDnsScanTelemetry.Rejected -> {
@@ -334,6 +350,19 @@ class WhiteDnsScanService : Service() {
                         rejectedResolvers += resolver
                     }
                 }
+                WhiteDnsScannerResultStore.appendStructuredResult(
+                    applicationContext,
+                    ResolverScanResult(
+                        resolver = resolver,
+                        status = ResolverScanResultStatus.Rejected,
+                        sourceName = resultSourceName,
+                        serverDomain = resultServerDomain,
+                        latencyMillis = telemetry.latencyMillis,
+                        attempts = telemetry.attempts,
+                        reason = telemetry.reason,
+                        observedAtMillis = System.currentTimeMillis(),
+                    ),
+                )
                 publishAggregate(WhiteDnsScanStatus.Running, "Scanning", false)
             }
             is StormDnsScanTelemetry.Complete -> {
@@ -544,6 +573,11 @@ class WhiteDnsScanService : Service() {
         )
         File(resultsDir, "valid_resolvers.txt").writeText(
             state.validResolverEntries.joinToString(separator = "\n"),
+            Charsets.UTF_8,
+        )
+        File(resultsDir, "recommended_resolvers.txt").writeText(
+            WhiteDnsScannerResultStore.readRecommendedResolvers(applicationContext)
+                .joinToString(separator = "\n"),
             Charsets.UTF_8,
         )
         File(resultsDir, "rejected_resolvers.txt").writeText(

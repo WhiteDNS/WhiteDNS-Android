@@ -1,8 +1,19 @@
 package shop.whitedns.client.scan
 
 sealed class StormDnsScanTelemetry {
-    data class Valid(val resolver: String) : StormDnsScanTelemetry()
-    data class Rejected(val resolver: String) : StormDnsScanTelemetry()
+    data class Valid(
+        val resolver: String,
+        val latencyMillis: Int? = null,
+        val attempts: Int? = null,
+    ) : StormDnsScanTelemetry()
+
+    data class Rejected(
+        val resolver: String,
+        val reason: String = "",
+        val latencyMillis: Int? = null,
+        val attempts: Int? = null,
+    ) : StormDnsScanTelemetry()
+
     data class Complete(
         val total: Int,
         val valid: Int,
@@ -24,10 +35,23 @@ fun parseStormDnsScanLine(line: String): StormDnsScanTelemetry? {
     return when (fields["event"]) {
         "valid" -> fields["resolver"]
             ?.takeIf(String::isNotBlank)
-            ?.let(StormDnsScanTelemetry::Valid)
+            ?.let { resolver ->
+                StormDnsScanTelemetry.Valid(
+                    resolver = resolver,
+                    latencyMillis = fields.optionalPositiveInt("latency_ms", "latency"),
+                    attempts = fields.optionalPositiveInt("attempts"),
+                )
+            }
         "rejected" -> fields["resolver"]
             ?.takeIf(String::isNotBlank)
-            ?.let(StormDnsScanTelemetry::Rejected)
+            ?.let { resolver ->
+                StormDnsScanTelemetry.Rejected(
+                    resolver = resolver,
+                    reason = fields["reason"].orEmpty(),
+                    latencyMillis = fields.optionalPositiveInt("latency_ms", "latency"),
+                    attempts = fields.optionalPositiveInt("attempts"),
+                )
+            }
         "complete" -> StormDnsScanTelemetry.Complete(
             total = fields["total"].toIntOrZero(),
             valid = fields["valid"].toIntOrZero(),
@@ -39,6 +63,12 @@ fun parseStormDnsScanLine(line: String): StormDnsScanTelemetry? {
 
 private fun String?.toIntOrZero(): Int {
     return this?.toIntOrNull() ?: 0
+}
+
+private fun Map<String, String>.optionalPositiveInt(vararg names: String): Int? {
+    return names.firstNotNullOfOrNull { name ->
+        this[name]?.toIntOrNull()?.takeIf { it > 0 }
+    }
 }
 
 private const val ScanMarker = "WD_SCAN"
