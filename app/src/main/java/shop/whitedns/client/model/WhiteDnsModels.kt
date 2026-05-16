@@ -1541,6 +1541,11 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         .coerceAtLeast(resolvedMinUploadMtu)
     val resolvedMaxDownloadMtu = boundedInt(maxDownloadMtu, defaultValue = 3000, minValue = 1, maxValue = 65535)
         .coerceAtLeast(resolvedMinDownloadMtu)
+    val resolvedSocksUsername = socksUsername.take(255)
+    val resolvedSocksPassword = socksPassword.take(255)
+    val resolvedSocks5Authentication = socks5Authentication &&
+        resolvedSocksUsername.isNotBlank() &&
+        resolvedSocksPassword.isNotBlank()
 
     return ResolvedWhiteDnsSettings(
         connectionMode = when (connectionMode) {
@@ -1553,9 +1558,9 @@ fun WhiteDnsSettings.resolve(): ResolvedWhiteDnsSettings {
         listenPort = boundedInt(listenPort, defaultValue = 10886, minValue = 1, maxValue = 65535),
         httpProxyEnabled = httpProxyEnabled,
         httpProxyPort = boundedInt(httpProxyPort, defaultValue = 10887, minValue = 1, maxValue = 65535),
-        socks5Authentication = socks5Authentication,
-        socksUsername = socksUsername.take(255),
-        socksPassword = socksPassword.take(255),
+        socks5Authentication = resolvedSocks5Authentication,
+        socksUsername = resolvedSocksUsername,
+        socksPassword = resolvedSocksPassword,
         balancingStrategy = listOf(1, 2, 3, 4).firstOrNull { it == balancingStrategy } ?: 3,
         uploadDuplication = boundedInt(uploadDuplication, defaultValue = 3, minValue = 1, maxValue = 30),
         downloadDuplication = boundedInt(downloadDuplication, defaultValue = 7, minValue = 1, maxValue = 30),

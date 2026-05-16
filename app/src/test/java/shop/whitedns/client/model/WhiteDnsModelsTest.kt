@@ -667,6 +667,17 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun resolveDisablesSocksAuthenticationWhenCredentialsAreBlank() {
+        val resolvedSettings = WhiteDnsSettings(
+            socks5Authentication = true,
+            socksUsername = "",
+            socksPassword = "secret",
+        ).resolve()
+
+        assertEquals(false, resolvedSettings.socks5Authentication)
+    }
+
+    @Test
     fun resolveUsesAppMtuDefaults() {
         val resolvedSettings = WhiteDnsSettings().resolve()
 

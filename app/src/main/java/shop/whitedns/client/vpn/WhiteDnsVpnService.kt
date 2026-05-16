@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -76,6 +77,7 @@ class WhiteDnsVpnService : VpnService() {
             ActionStop -> {
                 startJob?.cancel()
                 stopVpn()
+                deleteCurrentLaunchRequest()
                 exitForeground()
                 stopSelf()
                 START_NOT_STICKY
@@ -88,6 +90,7 @@ class WhiteDnsVpnService : VpnService() {
                 } catch (error: Exception) {
                     logError("Failed to start foreground VPN service", error)
                     stopVpn()
+                    deleteCurrentLaunchRequest()
                     exitForeground()
                     stopSelf()
                     START_NOT_STICKY
@@ -99,6 +102,7 @@ class WhiteDnsVpnService : VpnService() {
     override fun onDestroy() {
         startJob?.cancel()
         stopVpn()
+        deleteCurrentLaunchRequest()
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
@@ -192,9 +196,13 @@ class WhiteDnsVpnService : VpnService() {
 
     private fun startVpn(intent: Intent?) {
         val previousJob = startJob
-        val sessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
+        val previousSessionId = currentSessionId
+        val sessionId = resolveSessionId(intent)
         startJob = serviceScope.launch {
             previousJob?.cancelAndJoin()
+            if (previousSessionId.isNotBlank() && previousSessionId != sessionId) {
+                RuntimeLaunchRequestStore.delete(applicationContext, previousSessionId)
+            }
             currentSessionId = sessionId
             try {
                 val launchRequest = RuntimeLaunchRequestStore.load(applicationContext, sessionId)
@@ -231,6 +239,13 @@ class WhiteDnsVpnService : VpnService() {
                 failAndStopVpn("Failed to start WhiteDNS VPN", error)
             }
         }
+    }
+
+    private fun resolveSessionId(intent: Intent?): String {
+        return intent
+            ?.getStringExtra(ExtraSessionId)
+            ?.takeIf(String::isNotBlank)
+            ?: UUID.randomUUID().toString()
     }
 
     private suspend fun startStormDnsAndVpn(
@@ -599,8 +614,13 @@ class WhiteDnsVpnService : VpnService() {
         updateForegroundNotification("VPN disconnected")
         reportFailure(failureMessage)
         stopVpn()
+        deleteCurrentLaunchRequest()
         exitForeground()
         stopSelf()
+    }
+
+    private fun deleteCurrentLaunchRequest() {
+        RuntimeLaunchRequestStore.delete(applicationContext, currentSessionId)
     }
 
     private fun reportFailure(message: String) {
@@ -657,7 +677,15 @@ class WhiteDnsVpnService : VpnService() {
             val launchSettings = settings ?: WhiteDnsSettingsStore(context).load()
             val launchServerProfile = serverProfile
                 ?: selectServerProfile(launchSettings)
-                ?: throw IllegalStateException("No StormDNS server profile configured")
+            if (launchServerProfile == null) {
+                WhiteDnsRuntimeStateStore.markFailed(
+                    context = context,
+                    mode = WhiteDnsRuntimeStateStore.ModeVpn,
+                    sessionId = sessionId,
+                    message = "No StormDNS server profile configured",
+                )
+                return
+            }
             RuntimeLaunchRequestStore.save(
                 context = context,
                 requestId = sessionId,
