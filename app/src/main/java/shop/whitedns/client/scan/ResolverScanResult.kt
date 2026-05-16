@@ -33,6 +33,41 @@ data class ResolverScanRecommendation(
     val lastObservedAtMillis: Long,
 )
 
+const val MaxStoredResolverScanResults = 5_000
+const val MaxResolverScanTextLength = 160
+const val ResolverScanResultRetentionMillis = 30L * 24L * 60L * 60L * 1_000L
+
+fun normalizeResolverScanResult(result: ResolverScanResult): ResolverScanResult {
+    return result.copy(
+        status = when (result.status) {
+            ResolverScanResultStatus.Valid -> ResolverScanResultStatus.Valid
+            ResolverScanResultStatus.Rejected -> ResolverScanResultStatus.Rejected
+            else -> ResolverScanResultStatus.Rejected
+        },
+        sourceName = result.sourceName.trim().take(MaxResolverScanTextLength),
+        serverDomain = result.serverDomain.trim().trimEnd('.').lowercase().take(MaxResolverScanTextLength),
+        latencyMillis = result.latencyMillis?.takeIf { it > 0 },
+        attempts = result.attempts?.takeIf { it > 0 },
+        reason = result.reason.trim().replace(WhitespaceRegex, " ").take(MaxResolverScanTextLength),
+        observedAtMillis = result.observedAtMillis.coerceAtLeast(0L),
+    )
+}
+
+fun trimResolverScanResultHistory(
+    results: Iterable<ResolverScanResult>,
+    nowMillis: Long,
+): List<ResolverScanResult> {
+    val cutoffMillis = (nowMillis - ResolverScanResultRetentionMillis).coerceAtLeast(0L)
+    return results
+        .map(::normalizeResolverScanResult)
+        .filter { it.observedAtMillis == 0L || it.observedAtMillis >= cutoffMillis }
+        .sortedWith(
+            compareBy<ResolverScanResult> { it.observedAtMillis }
+                .thenBy { it.resolver },
+        )
+        .takeLast(MaxStoredResolverScanResults)
+}
+
 fun resolverScanScore(result: ResolverScanResult): Int {
     if (!result.isValid) {
         return 0
@@ -135,3 +170,5 @@ private fun JSONObject.optionalPositiveInt(name: String): Int? {
     }
     return optInt(name).takeIf { it > 0 }
 }
+
+private val WhitespaceRegex = Regex("\\s+")

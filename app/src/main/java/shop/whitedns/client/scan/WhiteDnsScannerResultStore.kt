@@ -95,17 +95,16 @@ object WhiteDnsScannerResultStore {
     }
 
     fun appendStructuredResult(context: Context, result: ResolverScanResult) {
-        val normalizedResolver = normalizeResolverEntry(result.resolver) ?: return
-        val normalizedResult = result.copy(resolver = normalizedResolver)
+        val normalizedResult = normalizeStructuredResult(result) ?: return
         synchronized(ResultFileLock) {
             val target = structuredResultFile(context)
             target.parentFile?.mkdirs()
-            FileOutputStream(target, true).use { stream ->
-                if (target.length() > 0L) {
-                    stream.write("\n".toByteArray(Charsets.UTF_8))
-                }
-                stream.write(normalizedResult.toJsonObject().toString().toByteArray(Charsets.UTF_8))
-            }
+            val retainedResults = trimResolverScanResultHistory(
+                results = readStructuredResults(target) + normalizedResult,
+                nowMillis = normalizedResult.observedAtMillis.takeIf { it > 0L }
+                    ?: System.currentTimeMillis(),
+            )
+            writeStructuredResults(target, retainedResults)
         }
     }
 
@@ -279,6 +278,22 @@ object WhiteDnsScannerResultStore {
         }
     }
 
+    private fun writeStructuredResults(target: File, results: List<ResolverScanResult>) {
+        val atomicFile = AtomicFile(target)
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            val payload = results.joinToString(separator = "\n") { result ->
+                result.toJsonObject().toString()
+            }
+            stream.write(payload.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (error: IOException) {
+            stream?.let(atomicFile::failWrite)
+            throw error
+        }
+    }
+
     private fun replaceFile(source: File, target: File) {
         if (source.renameTo(target)) {
             return
@@ -295,6 +310,16 @@ object WhiteDnsScannerResultStore {
         return File(resultDirectory(context), StructuredResultFileName)
     }
 
+    private fun readStructuredResults(file: File): List<ResolverScanResult> {
+        return if (!file.isFile) {
+            emptyList()
+        } else {
+            file.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                lines.mapNotNull(::decodeStructuredResultLine).toList()
+            }
+        }
+    }
+
     private fun decodeStructuredResultLine(line: String): ResolverScanResult? {
         val trimmed = line.trim()
         if (trimmed.isBlank()) {
@@ -303,6 +328,11 @@ object WhiteDnsScannerResultStore {
         return runCatching {
             resolverScanResultFromJson(JSONObject(trimmed))
         }.getOrNull()
+    }
+
+    private fun normalizeStructuredResult(result: ResolverScanResult): ResolverScanResult? {
+        val normalizedResolver = normalizeResolverEntry(result.resolver) ?: return null
+        return normalizeResolverScanResult(result.copy(resolver = normalizedResolver))
     }
 
     private fun stripScanResolverPort(resolver: String): String {

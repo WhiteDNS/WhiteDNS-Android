@@ -1,6 +1,7 @@
 package shop.whitedns.client.scan
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -112,5 +113,53 @@ class ResolverScanResultTest {
         assertEquals(2, recommendations.first().successfulServerCount)
         assertEquals(95, recommendations.first().bestLatencyMillis)
         assertTrue(recommendations.first().score > recommendations.last().score)
+    }
+
+    @Test
+    fun normalizeResolverScanResultBoundsFreeFormFields() {
+        val normalized = normalizeResolverScanResult(
+            ResolverScanResult(
+                resolver = "1.1.1.1",
+                status = "unknown",
+                sourceName = " source ".repeat(40),
+                serverDomain = "Server.Example.COM.",
+                latencyMillis = -1,
+                attempts = 0,
+                reason = " timed   out\nwhile testing ",
+                observedAtMillis = -10L,
+            ),
+        )
+
+        assertEquals(ResolverScanResultStatus.Rejected, normalized.status)
+        assertEquals("server.example.com", normalized.serverDomain)
+        assertNull(normalized.latencyMillis)
+        assertNull(normalized.attempts)
+        assertEquals("timed out while testing", normalized.reason)
+        assertEquals(0L, normalized.observedAtMillis)
+        assertTrue(normalized.sourceName.length <= MaxResolverScanTextLength)
+    }
+
+    @Test
+    fun trimResolverScanResultHistoryDropsOldRowsAndKeepsNewestBoundedRows() {
+        val nowMillis = ResolverScanResultRetentionMillis + 10_000L
+        val results = listOf(
+            ResolverScanResult(
+                resolver = "9.9.9.9",
+                status = ResolverScanResultStatus.Valid,
+                observedAtMillis = 1L,
+            ),
+        ) + (1..(MaxStoredResolverScanResults + 4)).map { index ->
+            ResolverScanResult(
+                resolver = "1.1.1.$index",
+                status = ResolverScanResultStatus.Valid,
+                observedAtMillis = nowMillis + index,
+            )
+        }
+
+        val trimmed = trimResolverScanResultHistory(results, nowMillis = nowMillis)
+
+        assertEquals(MaxStoredResolverScanResults, trimmed.size)
+        assertEquals("1.1.1.5", trimmed.first().resolver)
+        assertEquals("1.1.1.${MaxStoredResolverScanResults + 4}", trimmed.last().resolver)
     }
 }
