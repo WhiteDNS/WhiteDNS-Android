@@ -18,9 +18,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import shop.whitedns.client.model.WhiteDnsLanguage
 import shop.whitedns.client.model.WhiteDnsThemeMode
 
 object WhiteDnsSpacing {
@@ -415,11 +417,13 @@ private val WhiteDnsTypography = Typography(
 @Composable
 fun WhiteDnsTheme(
     themeMode: String = WhiteDnsThemeMode.System,
+    languageCode: String = WhiteDnsLanguage.En,
     content: @Composable () -> Unit,
 ) {
     val darkTheme = shouldUseDarkTheme(themeMode)
     val palette = if (darkTheme) WhiteDnsPaletteDark else WhiteDnsPaletteLight
     val colorScheme = if (darkTheme) WhiteDnsColorSchemeDark else WhiteDnsColorSchemeLight
+    val layoutDirection = if (languageCode == WhiteDnsLanguage.Fa) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -434,7 +438,10 @@ fun WhiteDnsTheme(
         }
     }
 
-    CompositionLocalProvider(LocalWhiteDnsPalette provides palette) {
+    CompositionLocalProvider(
+        LocalWhiteDnsPalette provides palette,
+        androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = WhiteDnsTypography,

@@ -44,7 +44,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            WhiteDnsTheme(themeMode = viewModel.uiState.settings.themeMode) {
+            WhiteDnsTheme(
+                themeMode = viewModel.uiState.settings.themeMode,
+                languageCode = viewModel.uiState.settings.languageCode,
+            ) {
                 val context = LocalContext.current
                 var shouldConnectAfterNotificationPermission by rememberSaveable { mutableStateOf(false) }
                 val vpnPermissionLauncher = rememberLauncherForActivityResult(

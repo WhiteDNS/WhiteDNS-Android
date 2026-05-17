@@ -460,6 +460,8 @@ private fun ConnectTabContent(
             HeaderCard(
                 themeMode = settings.themeMode,
                 onThemeModeChange = { onSettingsChange(settings.copy(themeMode = it)) },
+                languageCode = settings.languageCode,
+                onLanguageCodeChange = { onSettingsChange(settings.copy(languageCode = it)) },
             )
 
             Column(
@@ -1197,6 +1199,8 @@ private fun ProfilesTabContent(
         HeaderCard(
             themeMode = uiState.settings.themeMode,
             onThemeModeChange = { onSettingsChange(uiState.settings.copy(themeMode = it)) },
+            languageCode = uiState.settings.languageCode,
+            onLanguageCodeChange = { onSettingsChange(uiState.settings.copy(languageCode = it)) },
         )
         Column(
             modifier = Modifier
@@ -1265,6 +1269,8 @@ private fun LogsTabContent(
         HeaderCard(
             themeMode = uiState.settings.themeMode,
             onThemeModeChange = { onSettingsChange(uiState.settings.copy(themeMode = it)) },
+            languageCode = uiState.settings.languageCode,
+            onLanguageCodeChange = { onSettingsChange(uiState.settings.copy(languageCode = it)) },
         )
         Column(
             modifier = Modifier
@@ -1336,6 +1342,8 @@ private fun ScanTabContent(
         HeaderCard(
             themeMode = uiState.settings.themeMode,
             onThemeModeChange = { onSettingsChange(uiState.settings.copy(themeMode = it)) },
+            languageCode = uiState.settings.languageCode,
+            onLanguageCodeChange = { onSettingsChange(uiState.settings.copy(languageCode = it)) },
         )
         Column(
             modifier = Modifier
@@ -5433,6 +5441,8 @@ private fun RuntimeWorkersSettingsGroup(
 private fun HeaderCard(
     themeMode: String,
     onThemeModeChange: (String) -> Unit,
+    languageCode: String,
+    onLanguageCodeChange: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
@@ -5619,6 +5629,8 @@ private fun HeaderCard(
         AppSettingsDialog(
             themeMode = themeMode,
             onThemeModeChange = onThemeModeChange,
+            languageCode = languageCode,
+            onLanguageCodeChange = onLanguageCodeChange,
             onDismiss = { showAppSettingsDialog = false },
         )
     }
@@ -5643,9 +5655,72 @@ private fun openWhiteDnsTelegram(context: Context) {
 }
 
 @Composable
+private fun LanguageModeSegmentedControl(
+    selectedCode: String,
+    onCodeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptic = rememberHapticFeedback()
+    val options = listOf("en" to "English", "fa" to "فارسی")
+
+    Column(modifier = modifier) {
+        FieldLabel("Language")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(WhiteDnsPalette.Surface)
+                .border(1.5.dp, WhiteDnsPalette.ControlBorder, RoundedCornerShape(12.dp))
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            options.forEach { (code, label) ->
+                val selected = selectedCode == code
+                val background by animateColorAsState(
+                    targetValue = if (selected) WhiteDnsPalette.Accent else Color.Transparent,
+                    animationSpec = tween(180),
+                    label = "langSegmentBackground",
+                )
+                val textColor by animateColorAsState(
+                    targetValue = if (selected) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
+                    animationSpec = tween(180),
+                    label = "langSegmentText",
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(background)
+                        .clickable(enabled = !selected) {
+                            haptic.performLight()
+                            onCodeChange(code)
+                        }
+                        .padding(horizontal = 6.dp, vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 10.sp,
+                            color = textColor,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            letterSpacing = 0.4.sp,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AppSettingsDialog(
     themeMode: String,
     onThemeModeChange: (String) -> Unit,
+    languageCode: String,
+    onLanguageCodeChange: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -5670,6 +5745,12 @@ private fun AppSettingsDialog(
             ThemeModeSegmentedControl(
                 selectedMode = themeMode,
                 onModeChange = onThemeModeChange,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            LanguageModeSegmentedControl(
+                selectedCode = languageCode,
+                onCodeChange = onLanguageCodeChange,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.lg))
