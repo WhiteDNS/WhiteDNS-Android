@@ -364,12 +364,13 @@ private fun ConnectTabContent(
     val splitTunnelAppLabels = remember(splitTunnelApps) {
         splitTunnelApps.associate { it.packageName to it.label }
     }
-    val connectionSelectorItems = remember(connectionProfiles) {
+    val serverRouteMissingStr = WhiteDnsL10n.serverRouteMissing
+    val connectionSelectorItems = remember(connectionProfiles, serverRouteMissingStr) {
         connectionProfiles.map { profile ->
             HomeSelectorItem(
                 id = profile.id,
                 title = profile.name,
-                detail = profile.customServerDomain.ifBlank { "Server route missing" },
+                detail = profile.customServerDomain.ifBlank { serverRouteMissingStr },
             )
         }
     }
@@ -609,9 +610,9 @@ private fun ConnectTabContent(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         HomeSelectorCard(
-                            label = "Connection",
+                            label = WhiteDnsL10n.sectionConnection,
                             value = selectedConnectionProfile.name,
-                            detail = selectedConnectionProfile.customServerDomain.ifBlank { "Server route missing" },
+                            detail = selectedConnectionProfile.customServerDomain.ifBlank { WhiteDnsL10n.serverRouteMissing },
                             selected = true,
                             enabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
                             onClick = { openSelector(HomeSelectorType.CONNECTION) },
@@ -621,7 +622,7 @@ private fun ConnectTabContent(
                             },
                         )
                         HomeSelectorCard(
-                            label = "Resolver",
+                            label = WhiteDnsL10n.sectionResolver,
                             value = selectedResolverProfile?.name ?: "Resolver Profile",
                             detail = resolverSelectorDetail,
                             selected = selectedResolverProfile != null,
@@ -2007,8 +2008,12 @@ private fun ConnectionModeSegmentedControl(
 ) {
     val haptic = rememberHapticFeedback()
 
+    val modeOptions: List<Pair<String, String>> = listOf(
+        "proxy" to WhiteDnsL10n.connectionModeProxy,
+        "vpn" to WhiteDnsL10n.connectionModeVpn,
+    )
     Column(modifier = modifier) {
-        FieldLabel("Mode")
+        FieldLabel(WhiteDnsL10n.fieldMode)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2018,8 +2023,8 @@ private fun ConnectionModeSegmentedControl(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            WhiteDnsOptions.connectionModes.forEach { mode ->
-                val selected = selectedMode == mode.value
+            modeOptions.forEach { (modeValue, modeLabel) ->
+                val selected = selectedMode == modeValue
                 val background by animateColorAsState(
                     targetValue = if (selected) {
                         WhiteDnsPalette.Accent
@@ -2046,13 +2051,13 @@ private fun ConnectionModeSegmentedControl(
                         .background(background)
                         .clickable(enabled = enabled && !selected) {
                             haptic.performLight()
-                            onModeChange(mode.value)
+                            onModeChange(modeValue)
                         }
                         .padding(horizontal = 6.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = mode.label,
+                        text = modeLabel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -2809,11 +2814,12 @@ private fun ConnectionSetupCard(
     onAddConnectionClick: () -> Unit,
     onAddResolverProfileClick: () -> Unit,
 ) {
-    val serverRoute = selectedConnectionProfile.customServerDomain.ifBlank { "Server route missing" }
+    val serverRouteMissing = WhiteDnsL10n.serverRouteMissing
+    val serverRoute = selectedConnectionProfile.customServerDomain.ifBlank { serverRouteMissing }
     val connectionIssue = when {
         selectedConnectionProfile.customServerDomain.isBlank() &&
             selectedConnectionProfile.customServerEncryptionKey.isBlank() -> "Server route and key missing"
-        selectedConnectionProfile.customServerDomain.isBlank() -> "Server route missing"
+        selectedConnectionProfile.customServerDomain.isBlank() -> serverRouteMissing
         selectedConnectionProfile.customServerEncryptionKey.isBlank() -> "Encryption key missing"
         else -> null
     }
@@ -2826,8 +2832,8 @@ private fun ConnectionSetupCard(
             iconContentDescription = stringResource(
                 if (connectionIssue == null) R.string.cd_icon_link else R.string.cd_icon_warning
             ),
-            label = "Connection",
-            value = selectedConnectionProfile.name.ifBlank { "Connection" },
+            label = WhiteDnsL10n.sectionConnection,
+            value = selectedConnectionProfile.name.ifBlank { WhiteDnsL10n.sectionConnection },
             detail = connectionIssue ?: serverRoute,
             color = if (connectionIssue == null) WhiteDnsPalette.AccentText else WhiteDnsPalette.WarningText,
         )

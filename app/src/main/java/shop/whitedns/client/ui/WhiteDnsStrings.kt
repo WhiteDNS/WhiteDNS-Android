@@ -33,8 +33,13 @@ interface WhiteDnsStrings {
     val languageFa: String
 
     // Connection mode
+    val fieldMode: String
     val connectionModeProxy: String
     val connectionModeVpn: String
+
+    // Section labels
+    val sectionConnection: String
+    val sectionResolver: String
 
     // Banners
     val bannerBatteryTitle: String
@@ -129,8 +134,11 @@ object EnglishStrings : WhiteDnsStrings {
     override val languageEn = "English"
     override val languageFa = "فارسی"
 
-    override val connectionModeProxy = "Proxy"
+    override val fieldMode = "Mode"
+    override val connectionModeProxy = "Proxy Mode"
     override val connectionModeVpn = "Full VPN"
+    override val sectionConnection = "Connection"
+    override val sectionResolver = "Resolver"
 
     override val bannerBatteryTitle = "BACKGROUND VPN MAY STOP"
     override val bannerBatteryBody = "Allow WhiteDNS to ignore battery optimization so the VPN keeps running after you leave the app."
@@ -215,8 +223,11 @@ object PersianStrings : WhiteDnsStrings {
     override val languageEn = "English"
     override val languageFa = "فارسی"
 
-    override val connectionModeProxy = "پروکسی"
+    override val fieldMode = "حالت"
+    override val connectionModeProxy = "حالت پروکسی"
     override val connectionModeVpn = "VPN کامل"
+    override val sectionConnection = "اتصال"
+    override val sectionResolver = "ریزالور"
 
     override val bannerBatteryTitle = "VPN پس‌زمینه ممکن است متوقف شود"
     override val bannerBatteryBody = "به WhiteDNS اجازه دهید بهینه‌سازی باتری را نادیده بگیرد تا VPN بعد از خروج از برنامه فعال بماند."

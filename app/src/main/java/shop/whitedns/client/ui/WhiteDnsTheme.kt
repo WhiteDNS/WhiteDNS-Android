@@ -204,8 +204,11 @@ object WhiteDnsL10n {
     val themeModeAuto: String @Composable get() = LocalWhiteDnsStrings.current.themeModeAuto
     val themeModeLight: String @Composable get() = LocalWhiteDnsStrings.current.themeModeLight
     val themeModeDark: String @Composable get() = LocalWhiteDnsStrings.current.themeModeDark
+    val fieldMode: String @Composable get() = LocalWhiteDnsStrings.current.fieldMode
     val connectionModeProxy: String @Composable get() = LocalWhiteDnsStrings.current.connectionModeProxy
     val connectionModeVpn: String @Composable get() = LocalWhiteDnsStrings.current.connectionModeVpn
+    val sectionConnection: String @Composable get() = LocalWhiteDnsStrings.current.sectionConnection
+    val sectionResolver: String @Composable get() = LocalWhiteDnsStrings.current.sectionResolver
     val bannerBatteryTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerBatteryTitle
     val bannerBatteryBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerBatteryBody
     val bannerAllowBackground: String @Composable get() = LocalWhiteDnsStrings.current.bannerAllowBackground
