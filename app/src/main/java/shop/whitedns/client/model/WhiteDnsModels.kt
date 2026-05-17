@@ -238,6 +238,7 @@ data class WhiteDnsSettings(
     val connectionMode: String = "proxy",
     val protocolType: String = "SOCKS5",
     val themeMode: String = WhiteDnsThemeMode.System,
+    val languageCode: String = WhiteDnsLanguage.En,
     val resolverText: String = "",
     val listenIp: String = "127.0.0.1",
     val listenPort: String = "10886",
@@ -452,6 +453,11 @@ object WhiteDnsThemeMode {
     const val System = "system"
     const val Light = "light"
     const val Dark = "dark"
+}
+
+object WhiteDnsLanguage {
+    const val En = "en"
+    const val Fa = "fa"
 }
 
 data class WhiteDnsScanState(
@@ -696,6 +702,7 @@ fun WhiteDnsSettings.syncSelectedConnectionProfileFields(): WhiteDnsSettings {
     val selected = profiles.firstOrNull { it.id == selectedConnectionProfileId } ?: profiles.first()
     val selectedConnectionMode = normalizeConnectionMode(connectionMode)
     val selectedThemeMode = normalizeThemeMode(themeMode)
+    val selectedLanguageCode = normalizeLanguageCode(languageCode)
     val modeSyncedProfiles = profiles.map { profile ->
         if (profile.id == selected.id) {
             profile.copy(connectionMode = selectedConnectionMode)
@@ -725,6 +732,7 @@ fun WhiteDnsSettings.syncSelectedConnectionProfileFields(): WhiteDnsSettings {
         customServerEncryptionMethod = selected.customServerEncryptionMethod,
         connectionMode = selectedConnectionMode,
         themeMode = selectedThemeMode,
+        languageCode = selectedLanguageCode,
         splitTunnelMode = normalizeSplitTunnelMode(splitTunnelMode),
         splitTunnelPackages = normalizePackageNames(splitTunnelPackages),
     )
@@ -1484,6 +1492,13 @@ private fun normalizeThemeMode(raw: String): String {
         WhiteDnsThemeMode.Dark,
         -> raw
         else -> WhiteDnsThemeMode.System
+    }
+}
+
+private fun normalizeLanguageCode(raw: String): String {
+    return when (raw) {
+        WhiteDnsLanguage.Fa -> WhiteDnsLanguage.Fa
+        else -> WhiteDnsLanguage.En
     }
 }
 

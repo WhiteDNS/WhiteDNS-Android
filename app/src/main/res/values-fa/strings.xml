@@ -3,31 +3,241 @@
     <string name="app_name">وایت‌دی‌ان‌اس</string>
 
     <!-- Navigation -->
-    <string name="cd_tab_profiles">تب پروفایل‌ها - مدیریت پروفایل‌های اتصال و تحلیل‌گر</string>
-    <string name="cd_tab_connect">تب اتصال - کنترل اتصال وی‌پی‌ان</string>
-    <string name="cd_tab_logs">تب گزارش‌ها - مشاهده گزارش‌های اتصال</string>
-    <string name="cd_back_button">بازگشت</string>
-    <string name="cd_close_dialog">بستن پنجره</string>
+    <string name="cd_tab_profiles">تب پروفایل‌ها - مدیریت پروفایل‌های اتصال و ریزالور</string>
+    <string name="cd_tab_connect">تب اتصال - کنترل اتصال VPN</string>
+    <string name="cd_tab_logs">تب لاگ‌ها - مشاهده لاگ‌های اتصال</string>
+    <string name="cd_back_button">بازگشت به عقب</string>
+    <string name="cd_close_dialog">بستن دیالوگ</string>
 
-    <!-- Accessibility — Missing Labels -->
-    <string name="cd_parallel_test_expand">بسط تنظیمات آزمایش موازی</string>
-    <string name="cd_parallel_test_collapse">بستن تنظیمات آزمایش موازی</string>
+    <!-- Connect Button States -->
+    <string name="cd_connect_button_disconnected">دکمه اتصال - ضربه بزنید برای شروع VPN</string>
+    <string name="cd_connect_button_connecting">در حال اتصال - برقراری اتصال VPN</string>
+    <string name="cd_connect_button_connected">دکمه قطع - ضربه بزنید برای قطع VPN</string>
+    <string name="cd_connect_button_disabled">دکمه اتصال - غیرفعال</string>
+
+    <!-- Profile Actions -->
+    <string name="cd_profile_edit">ویرایش پروفایل</string>
+    <string name="cd_profile_delete">حذف پروفایل</string>
+    <string name="cd_profile_apply">اعمال پروفایل</string>
+    <string name="cd_profile_qr">مشاهده کد QR پروفایل</string>
+    <string name="cd_profile_export">خروجی گرفتن از تنظیمات پروفایل</string>
+    <string name="cd_profile_drag">کشیدن برای تغییر ترتیب پروفایل</string>
+    <string name="cd_profile_add">افزودن پروفایل جدید</string>
+    <string name="cd_profile_import">وارد کردن پروفایل از لینک</string>
+    <string name="cd_profile_copy">کپی لینک پروفایل</string>
+
+    <!-- Icons and Indicators -->
+    <string name="cd_icon_upload">ترافیک آپلود</string>
+    <string name="cd_icon_download">ترافیک دانلود</string>
+    <string name="cd_icon_data_usage">مصرف داده</string>
+    <string name="cd_icon_apps">برنامه‌های متصل</string>
+    <string name="cd_icon_settings">تنظیمات</string>
+    <string name="cd_icon_info">اطلاعات</string>
+    <string name="cd_icon_warning">هشدار</string>
+    <string name="cd_icon_error">خطا</string>
+    <string name="cd_icon_success">موفقیت</string>
+    <string name="cd_icon_link">لینک</string>
+    <string name="cd_icon_check">انتخاب شده</string>
+    <string name="cd_icon_close">بستن</string>
+    <string name="cd_icon_add">افزودن</string>
+    <string name="cd_icon_remove">حذف</string>
+    <string name="cd_loading_spinner">نشانگر بارگذاری</string>
+
+    <!-- Status Indicators -->
+    <string name="cd_status_connected">VPN متصل</string>
+    <string name="cd_status_disconnected">VPN قطع</string>
+    <string name="cd_status_connecting">VPN در حال اتصال</string>
+    <string name="cd_connection_mode_vpn">حالت VPN</string>
+    <string name="cd_connection_mode_proxy">حالت پروکسی</string>
+
+    <!-- Form Inputs -->
+    <string name="cd_input_connection_name">ورودی نام پروفایل اتصال</string>
+    <string name="cd_input_resolver_name">ورودی نام پروفایل ریزالور</string>
+    <string name="cd_input_domain">ورودی دامنه سرور</string>
+    <string name="cd_input_encryption_key">ورودی کلید رمزنگاری</string>
+    <string name="cd_input_listen_ip">ورودی آدرس IP شنود</string>
+    <string name="cd_input_listen_port">ورودی پورت شنود</string>
+    <string name="cd_input_proxy_host">ورودی هاست پروکسی</string>
+    <string name="cd_input_proxy_port">ورودی پورت پروکسی</string>
+    <string name="cd_input_username">ورودی نام کاربری</string>
+    <string name="cd_input_password">ورودی رمز عبور</string>
+    <string name="cd_input_mtu">ورودی مقدار MTU</string>
+    <string name="cd_input_route">ورودی روت</string>
+    <string name="cd_input_package_name">ورودی نام پکیج</string>
+
+    <!-- Dropdowns -->
+    <string name="cd_dropdown_encryption_method">منوی کشویی روش رمزنگاری</string>
+    <string name="cd_dropdown_connection_profile">منوی کشویی پروفایل اتصال</string>
+    <string name="cd_dropdown_resolver_profile">منوی کشویی پروفایل ریزالور</string>
+    <string name="cd_dropdown_advanced_settings">منوی کشویی تنظیمات پیشرفته</string>
+    <string name="cd_dropdown_log_level">منوی کشویی سطح لاگ</string>
+    <string name="cd_dropdown_dns_mode">منوی کشویی حالت DNS</string>
+
+    <!-- Toggles and Switches -->
+    <string name="cd_toggle_traffic_warmup_on">گرم کردن ترافیک فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_traffic_warmup_off">گرم کردن ترافیک غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_toggle_split_tunnel_on">تونل اسپلیت فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_split_tunnel_off">تونل اسپلیت غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_toggle_http_bridge_on">بریج HTTP فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_http_bridge_off">بریج HTTP غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_toggle_compression_on">فشرده‌سازی فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_compression_off">فشرده‌سازی غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_toggle_duplication_on">تکثیر فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_duplication_off">تکثیر غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_toggle_custom_dns_on">DNS سفارشی فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_custom_dns_off">DNS سفارشی غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_switch_connection_mode">سوئیچ حالت اتصال</string>
+
+    <!-- Checkboxes -->
+    <string name="cd_checkbox_app_selected">برنامه برای تونل اسپلیت انتخاب شده</string>
+    <string name="cd_checkbox_app_unselected">برنامه برای تونل اسپلیت انتخاب نشده</string>
+    <string name="cd_checkbox_include_routes">شامل کردن روت‌ها فعال</string>
+    <string name="cd_checkbox_exclude_routes">مستثنی کردن روت‌ها فعال</string>
+
+    <!-- Dialog Actions -->
+    <string name="cd_dialog_save">ذخیره تغییرات</string>
+    <string name="cd_dialog_cancel">لغو</string>
+    <string name="cd_dialog_confirm">تأیید</string>
+    <string name="cd_dialog_delete">حذف</string>
+    <string name="cd_dialog_export">خروجی</string>
+    <string name="cd_dialog_import">ورودی</string>
+
+    <!-- Banners and Alerts -->
+    <string name="cd_banner_dismiss">رد کردن بنر</string>
+    <string name="cd_banner_notification_permission">مجوز اعلان مورد نیاز است</string>
+    <string name="cd_banner_battery_optimization">درخواست بهینه‌سازی باتری</string>
+    <string name="cd_banner_vpn_performance_warning">هشدار عملکرد VPN</string>
+    <string name="cd_banner_grant_permission">اعطای مجوز</string>
+    <string name="cd_banner_settings">باز کردن تنظیمات</string>
+
+    <!-- Progress and Loading -->
+    <string name="cd_progress_connecting">نشانگر پیشرفت اتصال</string>
+    <string name="cd_progress_mtu_scan">پیشرفت اسکن MTU</string>
+    <string name="cd_progress_validation">اعتبارسنجی در حال انجام</string>
+    <string name="cd_progress_import">در حال وارد کردن پروفایل</string>
+    <string name="cd_progress_export">در حال خروجی گرفتن پروفایل</string>
+
+    <!-- Statistics -->
+    <string name="cd_stat_upload_speed">نشانگر سرعت آپلود</string>
+    <string name="cd_stat_download_speed">نشانگر سرعت دانلود</string>
+    <string name="cd_stat_data_usage">نشانگر مصرف داده</string>
+    <string name="cd_stat_connected_apps">تعداد برنامه‌های متصل</string>
+    <string name="cd_stat_active_resolvers">تعداد ریزالورهای فعال</string>
+    <string name="cd_stat_valid_resolvers">تعداد ریزالورهای معتبر</string>
+
+    <!-- Resolver States -->
+    <string name="cd_resolver_active">ریزالور فعال</string>
+    <string name="cd_resolver_inactive">ریزالور غیرفعال</string>
+    <string name="cd_resolver_valid">ریزالور معتبر</string>
+    <string name="cd_resolver_invalid">ریزالور نامعتبر</string>
+
+    <!-- Split Tunnel -->
+    <string name="cd_split_tunnel_mode_include">حالت شامل - فقط برنامه‌های انتخاب شده از VPN استفاده می‌کنند</string>
+    <string name="cd_split_tunnel_mode_exclude">حالت مستثنی - همه برنامه‌ها به جز انتخاب شده‌ها از VPN استفاده می‌کنند</string>
+    <string name="cd_split_tunnel_app_list">انتخاب برنامه برای تونل اسپلیت</string>
+
+    <!-- Header and Branding -->
+    <string name="cd_app_logo">لوگوی WhiteDNS</string>
+    <string name="cd_donate_button">کمک مالی برای حمایت از توسعه</string>
+    <string name="cd_version_info">اطلاعات نسخه برنامه</string>
+
+    <!-- Advanced Settings -->
+    <string name="cd_advanced_settings_expand">گسترش تنظیمات پیشرفته</string>
+    <string name="cd_advanced_settings_collapse">جمع کردن تنظیمات پیشرفته</string>
+    <string name="cd_advanced_settings_edit">ویرایش تنظیمات پیشرفته</string>
+    <string name="cd_mtu_auto">تشخیص خودکار MTU</string>
+    <string name="cd_mtu_manual">مقدار دستی MTU</string>
+
+    <!-- Connection Logs -->
+    <string name="cd_logs_copy">کپی لاگ‌ها به کلیپ‌بورد</string>
+    <string name="cd_logs_clear">پاک کردن لاگ‌ها</string>
+    <string name="cd_logs_scroll">اسکرول لاگ‌ها</string>
+    <string name="cd_log_entry">ورودی لاگ</string>
+
+    <!-- QR Code -->
+    <string name="cd_qr_code">کد QR پروفایل برای اشتراک‌گذاری</string>
+    <string name="cd_qr_share">اشتراک‌گذاری کد QR</string>
+    <string name="cd_qr_save">ذخیره تصویر کد QR</string>
+
+    <!-- Validation Messages -->
+    <string name="cd_validation_error">خطای اعتبارسنجی</string>
+    <string name="cd_validation_success">اعتبارسنجی با موفقیت</string>
+    <string name="cd_validation_warning">هشدار اعتبارسنجی</string>
+
+    <!-- Server Selection -->
+    <string name="cd_server_builtin">سرور داخلی</string>
+    <string name="cd_server_custom">سرور سفارشی</string>
+    <string name="cd_server_select">انتخاب سرور</string>
+
+    <!-- Encryption -->
+    <string name="cd_encryption_none">بدون رمزنگاری</string>
+    <string name="cd_encryption_aes">رمزنگاری AES</string>
+    <string name="cd_encryption_chacha">رمزنگاری ChaCha20</string>
+
+    <!-- Connection Verification -->
+    <string name="cd_verification_success">اتصال با موفقیت تأیید شد</string>
+    <string name="cd_verification_failed">تأیید اتصال ناموفق بود</string>
+    <string name="cd_verification_pending">تأیید اتصال در انتظار</string>
+
+    <!-- Profile Types -->
+    <string name="cd_profile_type_connection">پروفایل اتصال</string>
+    <string name="cd_profile_type_resolver">پروفایل ریزالور</string>
+    <string name="cd_profile_type_advanced">پروفایل تنظیمات پیشرفته</string>
+
+    <!-- Actions with State -->
+    <string name="cd_action_start">شروع VPN</string>
+    <string name="cd_action_stop">توقف VPN</string>
+    <string name="cd_action_restart">راه‌اندازی مجدد VPN</string>
+    <string name="cd_action_reconnect">اتصال مجدد</string>
+
+    <!-- Sensitive Data Warning -->
+    <string name="cd_export_warning">هشدار: خروجی حاوی داده‌های حساس است</string>
+    <string name="cd_export_confirm">تأیید خروجی داده‌های حساس</string>
+
+    <!-- Resolver Configuration -->
+    <string name="cd_resolver_add">افزودن ریزالور</string>
+    <string name="cd_resolver_remove">حذف ریزالور</string>
+    <string name="cd_resolver_validate">اعتبارسنجی ریزالور</string>
+    <string name="cd_resolver_config">تنظیمات ریزالور</string>
+
+    <!-- Network Settings -->
+    <string name="cd_network_listen_address">آدرس شنود شبکه</string>
+    <string name="cd_network_proxy_settings">تنظیمات پروکسی</string>
+    <string name="cd_network_dns_settings">تنظیمات DNS</string>
+
+    <!-- Performance Settings -->
+    <string name="cd_performance_mtu">تنظیمات MTU</string>
+    <string name="cd_performance_workers">تنظیمات رشته‌های کاری</string>
+    <string name="cd_performance_balancing">تنظیمات بالانس بار</string>
+
+    <!-- Drag and Drop -->
+    <string name="cd_drag_handle">دسته کشیدن - نگه دارید برای تغییر ترتیب</string>
+    <string name="cd_reorder_item">تغییر ترتیب آیتم</string>
+
+    <!-- Empty States -->
+    <string name="cd_empty_profiles">هیچ پروفایلی تنظیم نشده</string>
+    <string name="cd_empty_logs">هیچ لاگی موجود نیست</string>
+    <string name="cd_empty_apps">هیچ برنامه‌ای موجود نیست</string>
+
+    <!-- Accessibility — Special Labels -->
+    <string name="cd_parallel_test_expand">گسترش تنظیمات تست موازی</string>
+    <string name="cd_parallel_test_collapse">جمع کردن تنظیمات تست موازی</string>
     <string name="cd_navigate_to_tab">رفتن به %1$s</string>
     <string name="cd_profile_tab_selected">%1$s، تب انتخاب شده</string>
     <string name="cd_profile_tab_unselected">تب %1$s</string>
-    <string name="cd_telegram_link">باز کردن کمونیتی تلگرام وایت‌دی‌ان‌اس - برنامه خارجی</string>
+    <string name="cd_telegram_link">باز کردن انجمن تلگرام WhiteDNS، برنامه خارجی باز می‌شود</string>
     <string name="cd_select_profile_item">انتخاب پروفایل %1$s</string>
-    <string name="cd_logo_telegram">لوگوی وایت‌دی‌ان‌اس، باز کردن کمونیتی تلگرام</string>
+    <string name="cd_logo_telegram">لوگوی WhiteDNS، باز کردن انجمن تلگرام</string>
     <string name="cd_menu_button">باز کردن منوی برنامه</string>
-    <string name="cd_copy_address">کپی کردن %1$s به حافظه موقت</string>
-    <string name="cd_enable_vpn_notification">فعال کردن اطلاع‌رسانی وی‌پی‌ان</string>
-    <string name="cd_allow_background_vpn">اجازه دادن به وایت‌دی‌ان‌اس برای اجرا در پس‌زمینه</string>
-    <string name="cd_split_tunnel_app_toggle">تغییر %1$s در تونل تقسیم شده</string>
+    <string name="cd_copy_address">کپی %1$s به کلیپ‌بورد</string>
+    <string name="cd_enable_vpn_notification">فعال کردن مجوز اعلان VPN</string>
+    <string name="cd_allow_background_vpn">اجازه اجرای WhiteDNS در پس‌زمینه</string>
+    <string name="cd_split_tunnel_app_toggle">تغییر وضعیت %1$s در تونل اسپلیت</string>
     <string name="cd_stat_card_detail">%1$s: %2$s، ضربه برای جزئیات</string>
-    <string name="cd_section_expand">بسط بخش %1$s</string>
-    <string name="cd_section_collapse">بستن بخش %1$s</string>
-    <string name="cd_toggle_row_on">%1$s، فعال - ضربه برای غیرفعال کردن</string>
-    <string name="cd_toggle_row_off">%1$s، غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_section_expand">گسترش بخش %1$s</string>
+    <string name="cd_section_collapse">جمع کردن بخش %1$s</string>
+    <string name="cd_toggle_row_on">%1$s، فعال، ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_row_off">%1$s، غیرفعال، ضربه برای فعال کردن</string>
     <string name="cd_scan_autosave_enabled">ذخیره خودکار اسکن فعال</string>
-    <string name="cd_worker_count_slider">لغزنده تعداد کارگر، در حال حاضر %1$d کارگر</string>
+    <string name="cd_worker_count_slider">اسلایدر تعداد ورکر، در حال حاضر %1$d ورکر</string>
 </resources>

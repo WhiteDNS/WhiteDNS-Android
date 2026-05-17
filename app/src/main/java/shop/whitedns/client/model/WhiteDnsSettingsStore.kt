@@ -83,6 +83,7 @@ class WhiteDnsSettingsStore(
             connectionMode = legacyConnectionMode,
             protocolType = preferences.getString(KeyProtocolType, defaults.protocolType) ?: defaults.protocolType,
             themeMode = preferences.getString(KeyThemeMode, defaults.themeMode) ?: defaults.themeMode,
+            languageCode = preferences.getString(KeyLanguageCode, defaults.languageCode) ?: defaults.languageCode,
             resolverText = if (resolverText == LegacyDefaultResolverText) defaults.resolverText else resolverText,
             listenIp = preferences.getString(KeyListenIp, defaults.listenIp) ?: defaults.listenIp,
             listenPort = preferences.getString(KeyListenPort, defaults.listenPort) ?: defaults.listenPort,
@@ -230,6 +231,7 @@ class WhiteDnsSettingsStore(
             .putString(KeyConnectionMode, normalizedSettings.connectionMode)
             .putString(KeyProtocolType, normalizedSettings.protocolType)
             .putString(KeyThemeMode, normalizedSettings.themeMode)
+            .putString(KeyLanguageCode, normalizedSettings.languageCode)
             .putString(KeyResolverText, normalizedSettings.resolverText)
             .putString(KeyListenIp, normalizedSettings.listenIp)
             .putString(KeyListenPort, normalizedSettings.listenPort)
@@ -692,6 +694,7 @@ class WhiteDnsSettingsStore(
         const val KeyConnectionMode = "connection_mode"
         const val KeyProtocolType = "protocol_type"
         const val KeyThemeMode = "theme_mode"
+        const val KeyLanguageCode = "language_code"
         const val KeyResolverText = "resolver_text"
         const val KeyListenIp = "listen_ip"
         const val KeyListenPort = "listen_port"
