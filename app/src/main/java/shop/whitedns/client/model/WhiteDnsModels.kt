@@ -580,6 +580,11 @@ object WhiteDnsOptions {
         Choice(WhiteDnsThemeMode.Dark, "Dark"),
     )
 
+    val languages = listOf(
+        Choice(WhiteDnsLanguage.En, "English"),
+        Choice(WhiteDnsLanguage.Fa, "فارسی"),
+    )
+
     val splitTunnelModes = listOf(
         Choice(SplitTunnelModeOff, "All Apps"),
         Choice(SplitTunnelModeInclude, "Only Selected"),
