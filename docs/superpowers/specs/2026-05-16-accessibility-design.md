@@ -66,7 +66,7 @@ import androidx.compose.ui.semantics.semantics
 | Copy address Row (~line 5724) | Add `.semantics { contentDescription = stringResource(R.string.cd_copy_address, address) }` |
 | Enable VPN notification Box (~line 5789) | Add `.semantics { contentDescription = stringResource(R.string.cd_enable_vpn_notification) }` |
 | Allow background VPN Box (~line 5873) | Add `.semantics { contentDescription = stringResource(R.string.cd_allow_background_vpn) }` |
-| SplitTunnelAppRow Row (~line 6168) | Add `.semantics { contentDescription = stringResource(R.string.cd_split_tunnel_app_toggle, app.appName) }` |
+| SplitTunnelAppRow Row (~line 6168) | Add `.semantics { contentDescription = stringResource(R.string.cd_split_tunnel_app_toggle, app.label) }` |
 | Stat card Column (~line 6581) | Add `.semantics { contentDescription = stringResource(R.string.cd_stat_card_detail, label, value) }` |
 | LogActionButton Box (~line 7473) | Add `.semantics { contentDescription = label }` |
 | SectionCard collapsible Row (~lines 7826–7831) | Add `.semantics { contentDescription = if (expanded) stringResource(R.string.cd_section_collapse, title) else stringResource(R.string.cd_section_expand, title) }` inside the `let` block before `.clickable` |
