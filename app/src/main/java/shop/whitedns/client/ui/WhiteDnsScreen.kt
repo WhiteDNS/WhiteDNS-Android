@@ -567,7 +567,7 @@ private fun ConnectTabContent(
                         .padding(top = WhiteDnsSpacing.md),
                 ) {
                     ToggleRow(
-                        label = "Parallel Test",
+                        label = WhiteDnsL10n.parallelTest,
                         enabled = settings.autoTuneEnabled,
                         onToggle = {
                             val selectedIds = WhiteDnsParallelTest.normalizeConfigIds(
@@ -1215,9 +1215,9 @@ private fun ProfilesTabContent(
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             InfoCard(
                 title = when (selectedProfileTab) {
-                    ProfileTab.CONNECTION -> "CONNECTION PROFILES"
-                    ProfileTab.RESOLVER -> "RESOLVER PROFILES"
-                    ProfileTab.SETTING -> "SETTING PROFILES"
+                    ProfileTab.CONNECTION -> WhiteDnsL10n.selectorConnectionProfiles.uppercase()
+                    ProfileTab.RESOLVER -> WhiteDnsL10n.selectorResolverProfiles.uppercase()
+                    ProfileTab.SETTING -> WhiteDnsL10n.selectorSettingProfiles.uppercase()
                 },
             ) {
                 when (selectedProfileTab) {
@@ -1251,6 +1251,21 @@ private enum class ProfileTab(val label: String) {
     CONNECTION("Connection"),
     RESOLVER("Resolver"),
     SETTING("Setting"),
+}
+
+@Composable
+private fun tabLabel(tab: WhiteDnsTab): String = when (tab) {
+    WhiteDnsTab.PROFILES -> WhiteDnsL10n.tabProfiles
+    WhiteDnsTab.CONNECT -> WhiteDnsL10n.tabConnect
+    WhiteDnsTab.SCAN -> WhiteDnsL10n.tabScan
+    WhiteDnsTab.LOGS -> WhiteDnsL10n.tabLogs
+}
+
+@Composable
+private fun profileTabLabel(tab: ProfileTab): String = when (tab) {
+    ProfileTab.CONNECTION -> WhiteDnsL10n.profileTabConnection
+    ProfileTab.RESOLVER -> WhiteDnsL10n.profileTabResolver
+    ProfileTab.SETTING -> WhiteDnsL10n.profileTabSetting
 }
 
 @Composable
@@ -1838,6 +1853,7 @@ private fun BottomNavigationBar(
         ) {
             WhiteDnsTab.entries.forEach { tab ->
                 val selected = selectedTab == tab
+                val localizedLabel = tabLabel(tab)
                 val background by animateColorAsState(
                     targetValue = if (selected) WhiteDnsPalette.AccentSurface else Color.Transparent,
                     animationSpec = tween(180),
@@ -1855,7 +1871,7 @@ private fun BottomNavigationBar(
                         .background(background)
                         .semantics {
                             contentDescription = context.getString(
-                                R.string.cd_navigate_to_tab, tab.label
+                                R.string.cd_navigate_to_tab, localizedLabel
                             )
                         }
                         .clickable {
@@ -1868,12 +1884,12 @@ private fun BottomNavigationBar(
                 ) {
                     Icon(
                         imageVector = tab.icon,
-                        contentDescription = tab.label,
+                        contentDescription = localizedLabel,
                         tint = color,
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        text = tab.label,
+                        text = localizedLabel,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 9.sp,
                             color = color,
@@ -1906,6 +1922,7 @@ private fun ProfileTabSwitch(
     ) {
         ProfileTab.entries.forEach { tab ->
             val selected = selectedTab == tab
+            val localizedProfileLabel = profileTabLabel(tab)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -1919,9 +1936,9 @@ private fun ProfileTabSwitch(
                     )
                     .semantics {
                         contentDescription = if (selected) {
-                            context.getString(R.string.cd_profile_tab_selected, tab.label)
+                            context.getString(R.string.cd_profile_tab_selected, localizedProfileLabel)
                         } else {
-                            context.getString(R.string.cd_profile_tab_unselected, tab.label)
+                            context.getString(R.string.cd_profile_tab_unselected, localizedProfileLabel)
                         }
                     }
                     .clickable {
@@ -1932,7 +1949,7 @@ private fun ProfileTabSwitch(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = tab.label,
+                    text = localizedProfileLabel,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -2059,8 +2076,13 @@ private fun ThemeModeSegmentedControl(
 ) {
     val haptic = rememberHapticFeedback()
 
+    val themeOptions: List<Pair<String, String>> = listOf(
+        "dark" to WhiteDnsL10n.themeModeDark,
+        "light" to WhiteDnsL10n.themeModeLight,
+        "system" to WhiteDnsL10n.themeModeAuto,
+    )
     Column(modifier = modifier) {
-        FieldLabel("Theme")
+        FieldLabel(WhiteDnsL10n.fieldTheme)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2070,8 +2092,8 @@ private fun ThemeModeSegmentedControl(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            WhiteDnsOptions.themeModes.forEach { mode ->
-                val selected = selectedMode == mode.value
+            themeOptions.forEach { (modeValue, modeLabel) ->
+                val selected = selectedMode == modeValue
                 val background by animateColorAsState(
                     targetValue = if (selected) WhiteDnsPalette.Accent else Color.Transparent,
                     animationSpec = tween(180),
@@ -2082,7 +2104,6 @@ private fun ThemeModeSegmentedControl(
                     animationSpec = tween(180),
                     label = "themeModeSegmentText",
                 )
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -2090,13 +2111,13 @@ private fun ThemeModeSegmentedControl(
                         .background(background)
                         .clickable(enabled = !selected) {
                             haptic.performLight()
-                            onModeChange(mode.value)
+                            onModeChange(modeValue)
                         }
                         .padding(horizontal = 6.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = mode.label,
+                        text = modeLabel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -5661,10 +5682,13 @@ private fun LanguageModeSegmentedControl(
     modifier: Modifier = Modifier,
 ) {
     val haptic = rememberHapticFeedback()
-    val options = listOf("en" to "English", "fa" to "فارسی")
+    val options: List<Pair<String, String>> = listOf(
+        "en" to WhiteDnsL10n.languageEn,
+        "fa" to WhiteDnsL10n.languageFa,
+    )
 
     Column(modifier = modifier) {
-        FieldLabel("Language")
+        FieldLabel(WhiteDnsL10n.fieldLanguage)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -5733,7 +5757,7 @@ private fun AppSettingsDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "APP SETTINGS",
+                text = WhiteDnsL10n.appSettingsTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -5756,7 +5780,7 @@ private fun AppSettingsDialog(
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.lg))
             CompactActionButton(
                 modifier = Modifier.fillMaxWidth(),
-                label = "CLOSE",
+                label = WhiteDnsL10n.btnClose,
                 emphasized = true,
                 enabled = true,
                 onClick = onDismiss,
@@ -5955,7 +5979,7 @@ private fun BatteryOptimizationBanner(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "BACKGROUND VPN MAY STOP",
+                text = WhiteDnsL10n.bannerBatteryTitle,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 10.sp,
@@ -5984,7 +6008,7 @@ private fun BatteryOptimizationBanner(
         }
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.iconSpacing))
         Text(
-            text = "Allow WhiteDNS to ignore battery optimization so the VPN keeps running after you leave the app.",
+            text = WhiteDnsL10n.bannerBatteryBody,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
@@ -6007,7 +6031,7 @@ private fun BatteryOptimizationBanner(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "ALLOW BACKGROUND VPN",
+                text = WhiteDnsL10n.bannerAllowBackground,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 9.sp,
                     color = WhiteDnsPalette.WarningText,
@@ -6404,10 +6428,13 @@ private fun ConnectButton(
     val successColor = WhiteDnsPalette.Success
     val circleSize = 156.dp
     val outerRingSize = 198.dp
+    val connectStr = WhiteDnsL10n.btnConnect
+    val connectingStr = WhiteDnsL10n.btnConnecting
+    val stopStr = WhiteDnsL10n.btnStop
     val label = when (status) {
-        ConnectionStatus.DISCONNECTED -> "CONNECT"
-        ConnectionStatus.CONNECTING -> "CONNECTING"
-        ConnectionStatus.CONNECTED -> "STOP"
+        ConnectionStatus.DISCONNECTED -> connectStr
+        ConnectionStatus.CONNECTING -> connectingStr
+        ConnectionStatus.CONNECTED -> stopStr
     }
     val labelColor = when (status) {
         ConnectionStatus.CONNECTED -> WhiteDnsPalette.WarningText

@@ -180,6 +180,73 @@ object WhiteDnsPaletteLight : WhiteDnsPaletteColors {
 
 private val LocalWhiteDnsPalette = staticCompositionLocalOf<WhiteDnsPaletteColors> { WhiteDnsPaletteDark }
 
+internal val LocalWhiteDnsStrings = staticCompositionLocalOf<WhiteDnsStrings> { EnglishStrings }
+
+object WhiteDnsL10n {
+    val tabProfiles: String @Composable get() = LocalWhiteDnsStrings.current.tabProfiles
+    val tabConnect: String @Composable get() = LocalWhiteDnsStrings.current.tabConnect
+    val tabScan: String @Composable get() = LocalWhiteDnsStrings.current.tabScan
+    val tabLogs: String @Composable get() = LocalWhiteDnsStrings.current.tabLogs
+    val btnConnect: String @Composable get() = LocalWhiteDnsStrings.current.btnConnect
+    val btnConnecting: String @Composable get() = LocalWhiteDnsStrings.current.btnConnecting
+    val btnStop: String @Composable get() = LocalWhiteDnsStrings.current.btnStop
+    val btnClose: String @Composable get() = LocalWhiteDnsStrings.current.btnClose
+    val btnSave: String @Composable get() = LocalWhiteDnsStrings.current.btnSave
+    val btnCancel: String @Composable get() = LocalWhiteDnsStrings.current.btnCancel
+    val btnCreate: String @Composable get() = LocalWhiteDnsStrings.current.btnCreate
+    val btnImport: String @Composable get() = LocalWhiteDnsStrings.current.btnImport
+    val btnDelete: String @Composable get() = LocalWhiteDnsStrings.current.btnDelete
+    val btnCopy: String @Composable get() = LocalWhiteDnsStrings.current.btnCopy
+    val btnShare: String @Composable get() = LocalWhiteDnsStrings.current.btnShare
+    val appSettingsTitle: String @Composable get() = LocalWhiteDnsStrings.current.appSettingsTitle
+    val fieldTheme: String @Composable get() = LocalWhiteDnsStrings.current.fieldTheme
+    val fieldLanguage: String @Composable get() = LocalWhiteDnsStrings.current.fieldLanguage
+    val themeModeAuto: String @Composable get() = LocalWhiteDnsStrings.current.themeModeAuto
+    val themeModeLight: String @Composable get() = LocalWhiteDnsStrings.current.themeModeLight
+    val themeModeDark: String @Composable get() = LocalWhiteDnsStrings.current.themeModeDark
+    val connectionModeProxy: String @Composable get() = LocalWhiteDnsStrings.current.connectionModeProxy
+    val connectionModeVpn: String @Composable get() = LocalWhiteDnsStrings.current.connectionModeVpn
+    val bannerBatteryTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerBatteryTitle
+    val bannerBatteryBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerBatteryBody
+    val bannerAllowBackground: String @Composable get() = LocalWhiteDnsStrings.current.bannerAllowBackground
+    val bannerNotificationTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerNotificationTitle
+    val bannerNotificationBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerNotificationBody
+    val bannerEnableNotification: String @Composable get() = LocalWhiteDnsStrings.current.bannerEnableNotification
+    val bannerVpnWarningTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerVpnWarningTitle
+    val bannerVpnWarningBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerVpnWarningBody
+    val parallelTest: String @Composable get() = LocalWhiteDnsStrings.current.parallelTest
+    val profileTabConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileTabConnection
+    val profileTabResolver: String @Composable get() = LocalWhiteDnsStrings.current.profileTabResolver
+    val profileTabSetting: String @Composable get() = LocalWhiteDnsStrings.current.profileTabSetting
+    val menuAppSettings: String @Composable get() = LocalWhiteDnsStrings.current.menuAppSettings
+    val menuDonate: String @Composable get() = LocalWhiteDnsStrings.current.menuDonate
+    val logsTitle: String @Composable get() = LocalWhiteDnsStrings.current.logsTitle
+    val logsClear: String @Composable get() = LocalWhiteDnsStrings.current.logsClear
+    val logsCopy: String @Composable get() = LocalWhiteDnsStrings.current.logsCopy
+    val scanBtnStart: String @Composable get() = LocalWhiteDnsStrings.current.scanBtnStart
+    val scanBtnStop: String @Composable get() = LocalWhiteDnsStrings.current.scanBtnStop
+    val scanBtnSaveAs: String @Composable get() = LocalWhiteDnsStrings.current.scanBtnSaveAs
+    val scanBtnResume: String @Composable get() = LocalWhiteDnsStrings.current.scanBtnResume
+    val scanStatusTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusTitle
+    val scanLabelTotal: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelTotal
+    val scanLabelValid: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelValid
+    val scanLabelRejected: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelRejected
+    val scanLabelStatus: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelStatus
+    val scanLabelSource: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelSource
+    val scanLabelWorkers: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelWorkers
+    val scanLabelProgress: String @Composable get() = LocalWhiteDnsStrings.current.scanLabelProgress
+    val scanAutoSave: String @Composable get() = LocalWhiteDnsStrings.current.scanAutoSave
+    val supportTitle: String @Composable get() = LocalWhiteDnsStrings.current.supportTitle
+    val supportBody: String @Composable get() = LocalWhiteDnsStrings.current.supportBody
+    val resolverRequired: String @Composable get() = LocalWhiteDnsStrings.current.resolverRequired
+    val serverRouteMissing: String @Composable get() = LocalWhiteDnsStrings.current.serverRouteMissing
+    val selectorConnectionProfiles: String @Composable get() = LocalWhiteDnsStrings.current.selectorConnectionProfiles
+    val selectorResolverProfiles: String @Composable get() = LocalWhiteDnsStrings.current.selectorResolverProfiles
+    val selectorSettingProfiles: String @Composable get() = LocalWhiteDnsStrings.current.selectorSettingProfiles
+    val languageEn: String @Composable get() = LocalWhiteDnsStrings.current.languageEn
+    val languageFa: String @Composable get() = LocalWhiteDnsStrings.current.languageFa
+}
+
 object WhiteDnsPalette {
     val Background: Color
         @Composable get() = LocalWhiteDnsPalette.current.Background
@@ -438,8 +505,10 @@ fun WhiteDnsTheme(
         }
     }
 
+    val strings = if (languageCode == WhiteDnsLanguage.Fa) PersianStrings else EnglishStrings
     CompositionLocalProvider(
         LocalWhiteDnsPalette provides palette,
+        LocalWhiteDnsStrings provides strings,
         androidx.compose.ui.platform.LocalLayoutDirection provides layoutDirection,
     ) {
         MaterialTheme(
