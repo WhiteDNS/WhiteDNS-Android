@@ -248,6 +248,15 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun syncSelectedConnectionProfileFieldsNormalizesLanguageCode() {
+        val settings = WhiteDnsSettings(languageCode = "invalid")
+
+        val syncedSettings = settings.syncSelectedConnectionProfileFields()
+
+        assertEquals(WhiteDnsLanguage.En, syncedSettings.languageCode)
+    }
+
+    @Test
     fun moveConnectionProfileReordersCustomProfilesForSelectionLists() {
         val first = ConnectionProfile(id = "profile-first", name = "First", serverMode = "custom")
         val second = ConnectionProfile(id = "profile-second", name = "Second", serverMode = "custom")
