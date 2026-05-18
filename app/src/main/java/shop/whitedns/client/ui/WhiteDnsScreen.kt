@@ -365,39 +365,56 @@ private fun ConnectTabContent(
         splitTunnelApps.associate { it.packageName to it.label }
     }
     val serverRouteMissingStr = WhiteDnsL10n.serverRouteMissing
-    val connectionSelectorItems = remember(connectionProfiles, serverRouteMissingStr) {
+    val shareChooserClientConfigLabel = WhiteDnsL10n.shareChooserClientConfig
+    val advancedProfileModifiedSuffixLabel = WhiteDnsL10n.advancedProfileModifiedSuffix
+    val resolverCountSingular = WhiteDnsL10n.resolverCountOneTemplate
+    val resolverCountPlural = WhiteDnsL10n.resolverCountTemplate
+    val noSavedListsStr = WhiteDnsL10n.homeSelectorNoSavedLists
+    val notSelectedStr = WhiteDnsL10n.homeSelectorNotSelected
+    val defaultConnectionLabel = WhiteDnsL10n.setupDefaultConnection
+    val defaultResolverLabel = WhiteDnsL10n.setupDefaultResolver
+    val defaultAdvancedLabel = WhiteDnsL10n.setupDefaultAdvanced
+    val connectionSelectorItems = remember(connectionProfiles, serverRouteMissingStr, defaultConnectionLabel) {
         connectionProfiles.map { profile ->
             HomeSelectorItem(
                 id = profile.id,
-                title = profile.name,
+                title = if (profile.id == ConnectionProfile.DefaultId) defaultConnectionLabel else profile.name,
                 detail = profile.customServerDomain.ifBlank { serverRouteMissingStr },
             )
         }
     }
-    val resolverSelectorItems = remember(resolverProfiles) {
+    val resolverSelectorItems = remember(resolverProfiles, resolverCountSingular, resolverCountPlural, defaultResolverLabel) {
         resolverProfiles.map { profile ->
             HomeSelectorItem(
                 id = profile.id,
-                title = profile.name,
-                detail = resolverCountLabel(validateResolverText(profile.resolverText).normalizedResolvers.size),
+                title = if (profile.id == ResolverProfile.DefaultId) defaultResolverLabel else profile.name,
+                detail = resolverCountLabel(
+                    validateResolverText(profile.resolverText).normalizedResolvers.size,
+                    resolverCountSingular,
+                    resolverCountPlural,
+                ),
             )
         }
     }
-    val advancedSelectorItems = remember(advancedProfiles) {
+    val advancedSelectorItems = remember(advancedProfiles, defaultAdvancedLabel) {
         advancedProfiles.map { profile ->
             HomeSelectorItem(
                 id = profile.id,
-                title = profile.name,
+                title = if (profile.id == AdvancedSettingsProfile.DefaultId) defaultAdvancedLabel else profile.name,
                 detail = advancedProfileSummary(profile),
             )
         }
     }
     val resolverSelectorDetail = selectedResolverProfile?.resolverText?.let { resolverText ->
-        resolverCountLabel(validateResolverText(resolverText).normalizedResolvers.size)
+        resolverCountLabel(
+            validateResolverText(resolverText).normalizedResolvers.size,
+            resolverCountSingular,
+            resolverCountPlural,
+        )
     } ?: if (resolverProfiles.isEmpty()) {
-        "No saved lists"
+        noSavedListsStr
     } else {
-        "Not selected"
+        notSelectedStr
     }
     val hasResolvers = resolverValidation.isValid
     val proxyIpAddress = displayProxyIpAddress(
@@ -611,7 +628,7 @@ private fun ConnectTabContent(
                     ) {
                         HomeSelectorCard(
                             label = WhiteDnsL10n.sectionConnection,
-                            value = selectedConnectionProfile.name,
+                            value = if (selectedConnectionProfile.id == ConnectionProfile.DefaultId) WhiteDnsL10n.setupDefaultConnection else selectedConnectionProfile.name,
                             detail = selectedConnectionProfile.customServerDomain.ifBlank { WhiteDnsL10n.serverRouteMissing },
                             selected = true,
                             enabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
@@ -623,7 +640,11 @@ private fun ConnectTabContent(
                         )
                         HomeSelectorCard(
                             label = WhiteDnsL10n.sectionResolver,
-                            value = selectedResolverProfile?.name ?: "Resolver Profile",
+                            value = when {
+                                selectedResolverProfile == null -> WhiteDnsL10n.homeSelectorResolverProfileFallback
+                                selectedResolverProfile.id == ResolverProfile.DefaultId -> WhiteDnsL10n.setupDefaultResolver
+                                else -> selectedResolverProfile.name
+                            },
                             detail = resolverSelectorDetail,
                             selected = selectedResolverProfile != null,
                             enabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED,
@@ -673,7 +694,7 @@ private fun ConnectTabContent(
             ) {
                 Text(
                     modifier = Modifier.padding(top = 10.dp),
-                    text = "You need resolvers to connect.",
+                    text = WhiteDnsL10n.connectNeedResolvers,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 11.sp,
                         color = WhiteDnsPalette.WarningText,
@@ -688,14 +709,16 @@ private fun ConnectTabContent(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(WhiteDnsSpacing.xl))
+                    val invalidIpLabel = WhiteDnsL10n.setupInvalidResolverIp
+                    val noResolversConfiguredLabel = WhiteDnsL10n.setupNoResolversConfigured
                     ConnectionSetupCard(
                         selectedConnectionProfile = selectedConnectionProfile,
                         selectedResolverProfile = selectedResolverProfile,
                         resolverCount = resolverValidation.normalizedResolvers.size,
                         resolverIssue = resolverValidation.invalidEntries.firstOrNull()?.let { invalidEntry ->
-                            "Invalid resolver IP: $invalidEntry"
+                            "$invalidIpLabel: $invalidEntry"
                         } ?: if (resolverValidation.normalizedResolvers.isEmpty()) {
-                            "No resolvers configured"
+                            noResolversConfiguredLabel
                         } else {
                             null
                         },
@@ -727,12 +750,20 @@ private fun ConnectTabContent(
                         .padding(top = 20.dp),
                 ) {
                     ConnectionInfoCard(
-                        connectionProfileName = selectedConnectionProfile.name,
-                        resolverProfileName = selectedResolverProfile?.name ?: "Manual resolvers",
-                        settingProfileName = selectedAdvancedProfile.displayName(dirty = advancedProfileDirty),
+                        connectionProfileName = if (selectedConnectionProfile.id == ConnectionProfile.DefaultId) WhiteDnsL10n.setupDefaultConnection else selectedConnectionProfile.name,
+                        resolverProfileName = when {
+                            selectedResolverProfile == null -> WhiteDnsL10n.setupManualResolvers
+                            selectedResolverProfile.id == ResolverProfile.DefaultId -> WhiteDnsL10n.setupDefaultResolver
+                            else -> selectedResolverProfile.name
+                        },
+                        settingProfileName = if (selectedAdvancedProfile.id == AdvancedSettingsProfile.DefaultId) {
+                            selectedAdvancedProfile.copy(name = WhiteDnsL10n.setupDefaultAdvanced).displayName(dirty = advancedProfileDirty, modifiedSuffix = advancedProfileModifiedSuffixLabel)
+                        } else {
+                            selectedAdvancedProfile.displayName(dirty = advancedProfileDirty, modifiedSuffix = advancedProfileModifiedSuffixLabel)
+                        },
                         listenAddress = proxyAddress,
                         httpProxyAddress = httpProxyAddress,
-                        connectionMode = WhiteDnsOptions.connectionModeLabel(resolvedSettings.connectionMode),
+                        connectionMode = if (resolvedSettings.connectionMode == "vpn") WhiteDnsL10n.connectionModeVpn else WhiteDnsL10n.connectionModeProxy,
                         httpProxyEnabled = resolvedSettings.httpProxyEnabled,
                         protocol = resolvedSettings.protocolType,
                         socksAuthEnabled = resolvedSettings.socks5Authentication,
@@ -765,14 +796,14 @@ private fun ConnectTabContent(
             HomeSelectorSheet(
                 visible = selectorSheetVisible,
                 title = when (activeSelector) {
-                    HomeSelectorType.CONNECTION -> "Connection Profiles"
-                    HomeSelectorType.RESOLVER -> "Resolver Profiles"
-                    HomeSelectorType.ADVANCED -> "Setting Profiles"
+                    HomeSelectorType.CONNECTION -> WhiteDnsL10n.selectorConnectionProfiles
+                    HomeSelectorType.RESOLVER -> WhiteDnsL10n.selectorResolverProfiles
+                    HomeSelectorType.ADVANCED -> WhiteDnsL10n.selectorSettingProfiles
                 },
                 searchPlaceholder = when (activeSelector) {
-                    HomeSelectorType.CONNECTION -> "Search connections"
-                    HomeSelectorType.RESOLVER -> "Search resolvers"
-                    HomeSelectorType.ADVANCED -> "Search setting profiles"
+                    HomeSelectorType.CONNECTION -> WhiteDnsL10n.homeSelectorSearchConnections
+                    HomeSelectorType.RESOLVER -> WhiteDnsL10n.homeSelectorSearchResolvers
+                    HomeSelectorType.ADVANCED -> WhiteDnsL10n.homeSelectorSearchSettings
                 },
                 items = when (activeSelector) {
                     HomeSelectorType.CONNECTION -> connectionSelectorItems
@@ -785,9 +816,9 @@ private fun ConnectTabContent(
                     HomeSelectorType.ADVANCED -> selectedAdvancedProfile.id
                 },
                 emptyMessage = when (activeSelector) {
-                    HomeSelectorType.CONNECTION -> "No connection profiles found."
-                    HomeSelectorType.RESOLVER -> "No resolver profiles found."
-                    HomeSelectorType.ADVANCED -> "No setting profiles found."
+                    HomeSelectorType.CONNECTION -> WhiteDnsL10n.homeSelectorNoConnectionProfiles
+                    HomeSelectorType.RESOLVER -> WhiteDnsL10n.homeSelectorNoResolverProfiles
+                    HomeSelectorType.ADVANCED -> WhiteDnsL10n.homeSelectorNoSettingProfiles
                 },
                 onDismiss = { closeSelector() },
                 onSelect = { itemId ->
@@ -810,7 +841,7 @@ private fun ConnectTabContent(
 
         if (showConnectionTomlDialog) {
             ConnectionProfileExportDialog(
-                title = "DOWNLOAD TOML",
+                title = WhiteDnsL10n.downloadTomlTitle,
                 fieldLabel = "client_config.toml",
                 placeholder = "client_config.toml",
                 showQr = false,
@@ -824,7 +855,7 @@ private fun ConnectTabContent(
                 },
                 onDismiss = { showConnectionTomlDialog = false },
                 onShare = { toml ->
-                    shareClientConfigToml(context, toml)
+                    shareClientConfigToml(context, toml, shareChooserClientConfigLabel)
                 },
             )
         }
@@ -871,7 +902,7 @@ private fun ConnectTabContent(
             val editingProfile = selectedAdvancedProfile.takeIf { it.id != AdvancedSettingsProfile.DefaultId }
             AdvancedSettingsProfileDialog(
                 profile = editingProfile,
-                initialName = editingProfile?.name ?: advancedSaveAsInitialName(selectedAdvancedProfile),
+                initialName = editingProfile?.name ?: advancedSaveAsInitialName(selectedAdvancedProfile, WhiteDnsL10n.homeSelectorCustomAdvanced, WhiteDnsL10n.profileNameCopySuffix),
                 initialSettings = settings,
                 onDismiss = { showAdvancedEditDialog = false },
                 onSave = { profile ->
@@ -996,7 +1027,7 @@ private fun ParallelTestSelectionPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Selected ${selectedIds.size}/${WhiteDnsParallelTest.MaxSelectedConfigs}",
+                text = "${WhiteDnsL10n.connectSelectedCount} ${selectedIds.size}/${WhiteDnsParallelTest.MaxSelectedConfigs}",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
                     color = WhiteDnsPalette.FieldLabel,
@@ -1012,7 +1043,7 @@ private fun ParallelTestSelectionPanel(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = if (expanded) "OPEN" else "CLOSED",
+                    text = if (expanded) WhiteDnsL10n.parallelTestOpenLabel else WhiteDnsL10n.parallelTestClosedLabel,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 9.sp,
                         color = if (expanded) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
@@ -1023,9 +1054,9 @@ private fun ParallelTestSelectionPanel(
                 Icon(
                     imageVector = Icons.Rounded.KeyboardArrowDown,
                     contentDescription = if (expanded) {
-                        "Collapse Parallel Test configs"
+                        WhiteDnsL10n.parallelTestCollapseDescription
                     } else {
-                        "Expand Parallel Test configs"
+                        WhiteDnsL10n.parallelTestExpandDescription
                     },
                     tint = if (expanded) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
                     modifier = Modifier
@@ -1044,7 +1075,7 @@ private fun ParallelTestSelectionPanel(
                 verticalArrangement = Arrangement.spacedBy(WhiteDnsSpacing.sm),
             ) {
                 Text(
-                    text = "Parallel Test starts selected configs as temporary SOCKS proxies, measures speed and ping after each tunnel is ready, then connects with the best result. In Full VPN mode, the test still runs through SOCKS first and starts the Android VPN after a result is selected.",
+                    text = WhiteDnsL10n.parallelTestDescription,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.sp,
                         color = WhiteDnsPalette.Muted,
@@ -1052,8 +1083,8 @@ private fun ParallelTestSelectionPanel(
                     ),
                 )
                 ParallelTestConfigRow(
-                    label = "WhiteDNS configs",
-                    detail = "Adds 7 suggested configs",
+                    label = WhiteDnsL10n.whiteDnsConfigsLabel,
+                    detail = "+7",
                     checked = allWhiteDnsSelected,
                     enabled = canAddWhiteDnsConfigs,
                     onToggle = {
@@ -1071,7 +1102,7 @@ private fun ParallelTestSelectionPanel(
                 if (userProfiles.isNotEmpty()) {
                     Text(
                         modifier = Modifier.padding(top = WhiteDnsSpacing.xs),
-                        text = "Your configs",
+                        text = WhiteDnsL10n.parallelTestYourConfigs,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 10.sp,
                             color = WhiteDnsPalette.FieldLabel,
@@ -1083,7 +1114,7 @@ private fun ParallelTestSelectionPanel(
                         val checked = configId in selectedSet
                         val enabled = checked || selectedIds.size < WhiteDnsParallelTest.MaxSelectedConfigs
                         ParallelTestConfigRow(
-                            label = profile.name.ifBlank { "Setting" },
+                            label = profile.name.ifBlank { WhiteDnsL10n.genericSettingFallback },
                             detail = advancedProfileSummary(profile),
                             checked = checked,
                             enabled = enabled,
@@ -1322,11 +1353,12 @@ private fun ScanTabContent(
     val selectedScanConnectionProfile = connectionProfiles
         .firstOrNull { it.id == uiState.scanConnectionProfileId }
         ?: connectionProfiles.first()
-    val scanConnectionProfileOptions = remember(connectionProfiles) {
+    val connectionFallback = WhiteDnsL10n.genericConnectionFallback
+    val scanConnectionProfileOptions = remember(connectionProfiles, connectionFallback) {
         connectionProfiles.map { profile ->
             Choice(
                 value = profile.id,
-                label = profile.name.ifBlank { "Connection" },
+                label = profile.name.ifBlank { connectionFallback },
             )
         }
     }
@@ -1375,14 +1407,14 @@ private fun ScanTabContent(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "DEFAULT LIST",
+                    label = WhiteDnsL10n.scanDefaultList,
                     emphasized = !scanState.isRunning,
                     enabled = !scanState.isRunning,
                     onClick = onScanDefaultListSelected,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SELECT FILE",
+                    label = WhiteDnsL10n.scanSelectFile,
                     emphasized = false,
                     enabled = !scanState.isRunning,
                     onClick = {
@@ -1396,18 +1428,20 @@ private fun ScanTabContent(
                 onWorkerCountChange = { onScanWorkerCountChange(it.toString()) },
             )
             ScanNote(
-                text = "Higher worker values increase battery usage and can impact phone performance.",
+                text = WhiteDnsL10n.scanWorkerWarning,
             )
             WhiteDnsDropdownField(
-                label = "Scan Profile",
+                label = WhiteDnsL10n.scanProfileLabel,
                 value = selectedScanConnectionProfile.id,
                 options = scanConnectionProfileOptions,
                 onValueChange = onScanConnectionProfileChange,
                 enabled = !scanState.isRunning,
             )
             if (selectedScanProfileNeedsServer) {
+                val scanProfileFallback = WhiteDnsL10n.scanProfileFallback
+                val needsServerSuffix = WhiteDnsL10n.scanProfileNeedsServer
                 ScanWarningBanner(
-                    text = "${selectedScanConnectionProfile.name.ifBlank { "Scan profile" }} needs a server route and key.",
+                    text = "${selectedScanConnectionProfile.name.ifBlank { scanProfileFallback }} $needsServerSuffix",
                 )
             }
             Row(
@@ -1416,7 +1450,7 @@ private fun ScanTabContent(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "START",
+                    label = WhiteDnsL10n.scanBtnStart,
                     emphasized = true,
                     tone = CompactActionTone.Success,
                     enabled = scanCanStart(scanState) && !selectedScanProfileNeedsServer,
@@ -1424,7 +1458,7 @@ private fun ScanTabContent(
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "STOP",
+                    label = WhiteDnsL10n.scanBtnStop,
                     emphasized = false,
                     tone = CompactActionTone.Danger,
                     enabled = scanState.isRunning,
@@ -1433,13 +1467,13 @@ private fun ScanTabContent(
             }
             if (showScanInfoNotice) {
                 ScanInfoNotice(
-                    text = "Scan results will be saved in profiles automatically.",
+                    text = WhiteDnsL10n.scanAutoSave,
                     onDismiss = { showScanInfoNotice = false },
                 )
             }
 
             SectionCard(
-                title = "SCAN STATUS",
+                title = WhiteDnsL10n.scanStatusTitle,
                 expanded = true,
                 icon = Icons.Filled.DataUsage,
                 iconContentDescription = stringResource(R.string.cd_icon_data_usage),
@@ -1451,19 +1485,19 @@ private fun ScanTabContent(
                         CompactMetric(
                             icon = Icons.Filled.DataUsage,
                             iconContentDescription = stringResource(R.string.cd_icon_data_usage),
-                            label = "Total",
+                            label = WhiteDnsL10n.scanLabelTotal,
                             value = scanState.totalResolvers.toString(),
                         ),
                         CompactMetric(
                             icon = Icons.Rounded.Check,
                             iconContentDescription = stringResource(R.string.cd_icon_success),
-                            label = "Valid",
+                            label = WhiteDnsL10n.scanLabelValid,
                             value = scanState.validResolvers.toString(),
                         ),
                         CompactMetric(
                             icon = Icons.Rounded.Close,
                             iconContentDescription = stringResource(R.string.cd_icon_error),
-                            label = "Rejected",
+                            label = WhiteDnsL10n.scanLabelRejected,
                             value = scanState.rejectedResolvers.toString(),
                         ),
                     ),
@@ -1471,12 +1505,12 @@ private fun ScanTabContent(
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
                 ScanProgressBar(fraction = scanState.fraction)
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
-                InfoRow(label = "Status", value = scanStatusLabel(scanState.status))
-                InfoRow(label = "Source", value = scanState.sourceName.ifBlank { "No file selected" })
-                InfoRow(label = "Workers", value = scanState.workerCount.toString())
-                InfoRow(label = "Progress", value = "${scanState.completedResolvers}/${scanState.totalResolvers}")
+                InfoRow(label = WhiteDnsL10n.scanLabelStatus, value = scanStatusLabel(scanState.status))
+                InfoRow(label = WhiteDnsL10n.scanLabelSource, value = scanState.sourceName.ifBlank { WhiteDnsL10n.scanNoFileSelected })
+                InfoRow(label = WhiteDnsL10n.scanLabelWorkers, value = scanState.workerCount.toString())
+                InfoRow(label = WhiteDnsL10n.scanLabelProgress, value = "${scanState.completedResolvers}/${scanState.totalResolvers}")
                 if (scanState.message.isNotBlank()) {
-                    InfoRow(label = "Message", value = scanState.message, multilineValue = true)
+                    InfoRow(label = WhiteDnsL10n.scanMessageLabel, value = scanState.message, multilineValue = true)
                 }
                 if (scanState.workerFailures.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
@@ -1489,7 +1523,7 @@ private fun ScanTabContent(
                 ) {
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
-                        label = "SAVE AS",
+                        label = WhiteDnsL10n.scanBtnSaveAs,
                         emphasized = false,
                         enabled = canSaveAsProfile,
                         onClick = {
@@ -1498,7 +1532,7 @@ private fun ScanTabContent(
                     )
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
-                        label = "RESUME",
+                        label = WhiteDnsL10n.scanBtnResume,
                         emphasized = true,
                         tone = CompactActionTone.Accent,
                         enabled = scanCanResume(scanState),
@@ -1511,10 +1545,12 @@ private fun ScanTabContent(
     }
 
     if (showSaveAsDialog) {
+        val scanResultsName = WhiteDnsL10n.scanResultsTitle
+        val scanResultsSuffix = WhiteDnsL10n.scanResultsSuffix
         ScanSaveAsProfileDialog(
             sourceName = scanState.sourceName,
             resolverCount = saveAsResolverEntries.size,
-            initialName = scanResultProfileInitialName(scanState.sourceName),
+            initialName = scanResultProfileInitialName(scanState.sourceName, scanResultsName, scanResultsSuffix),
             onDismiss = { showSaveAsDialog = false },
             onSave = { name ->
                 onSettingsChange(
@@ -1542,13 +1578,17 @@ private fun scanCanStart(scanState: WhiteDnsScanState): Boolean {
         scanState.completedResolvers < scanState.totalResolvers
 }
 
-private fun scanResultProfileInitialName(sourceName: String): String {
+private fun scanResultProfileInitialName(
+    sourceName: String,
+    defaultName: String,
+    suffix: String,
+): String {
     val trimmed = sourceName.trim()
     if (trimmed.isBlank()) {
-        return "Scan Results"
+        return defaultName
     }
     val withoutExtension = trimmed.substringBeforeLast('.').trim().ifBlank { trimmed }
-    return "$withoutExtension Results"
+    return "$withoutExtension $suffix"
 }
 
 @Composable
@@ -1584,7 +1624,7 @@ private fun ScanInfoNotice(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "SCAN AUTO SAVE",
+                text = WhiteDnsL10n.scanAutoSaveTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 9.sp,
                     color = WhiteDnsPalette.AccentText,
@@ -1615,7 +1655,7 @@ private fun ScanInfoNotice(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Close,
-                contentDescription = "Dismiss scanner info",
+                contentDescription = WhiteDnsL10n.cdDismissScannerInfo,
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(16.dp),
             )
@@ -1633,7 +1673,8 @@ private fun ScanSaveAsProfileDialog(
 ) {
     var name by remember(initialName, sourceName) { mutableStateOf(initialName) }
     val canSave = name.trim().isNotEmpty() && resolverCount > 0
-    val scanLabel = sourceName.ifBlank { "Current scan" }
+    val scanLabel = sourceName.ifBlank { WhiteDnsL10n.scanCurrentScan }
+    val saveBodyTemplate = WhiteDnsL10n.scanSaveBodyTemplate
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -1645,7 +1686,7 @@ private fun ScanSaveAsProfileDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "SAVE SCAN RESULTS",
+                text = WhiteDnsL10n.scanSaveAsTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -1655,7 +1696,7 @@ private fun ScanSaveAsProfileDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             Text(
-                text = "$resolverCount valid resolvers from $scanLabel will be saved as a new resolver profile.",
+                text = "$resolverCount · $scanLabel · $saveBodyTemplate",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
@@ -1664,10 +1705,10 @@ private fun ScanSaveAsProfileDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Name",
+                label = WhiteDnsL10n.scanSaveAsName,
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Scan Results",
+                placeholder = WhiteDnsL10n.scanResultsTitle,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
                 ),
@@ -1679,14 +1720,14 @@ private fun ScanSaveAsProfileDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SAVE",
+                    label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = canSave,
                     onClick = {
@@ -1711,7 +1752,7 @@ private fun ScanWorkerSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FieldLabel("Workers")
+            FieldLabel(WhiteDnsL10n.scanFieldWorkers)
             Text(
                 text = workerCount.toString(),
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -1819,15 +1860,16 @@ private fun ScanWarningBanner(text: String) {
     }
 }
 
+@Composable
 private fun scanStatusLabel(status: String): String {
     return when (status) {
-        WhiteDnsScanStatus.Ready -> "Ready"
-        WhiteDnsScanStatus.Starting -> "Starting"
-        WhiteDnsScanStatus.Running -> "Running"
-        WhiteDnsScanStatus.Completed -> "Completed"
-        WhiteDnsScanStatus.Failed -> "Failed"
-        WhiteDnsScanStatus.Stopped -> "Stopped"
-        else -> "Idle"
+        WhiteDnsScanStatus.Ready -> WhiteDnsL10n.scanStatusReady
+        WhiteDnsScanStatus.Starting -> WhiteDnsL10n.scanStatusStarting
+        WhiteDnsScanStatus.Running -> WhiteDnsL10n.scanStatusRunning
+        WhiteDnsScanStatus.Completed -> WhiteDnsL10n.scanStatusCompleted
+        WhiteDnsScanStatus.Failed -> WhiteDnsL10n.scanStatusFailed
+        WhiteDnsScanStatus.Stopped -> WhiteDnsL10n.scanStatusStopped
+        else -> WhiteDnsL10n.scanStatusIdle
     }
 }
 
@@ -1972,7 +2014,7 @@ private fun FooterLink() {
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Powered by WhiteDNS",
+            text = WhiteDnsL10n.footerPoweredBy,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 10.sp,
                 color = WhiteDnsPalette.Description,
@@ -2217,7 +2259,7 @@ private fun HomeSelectorCard(
             if (onEditClick != null) {
                 ProfileIconButton(
                     icon = Icons.Rounded.Edit,
-                    contentDescription = "Edit $label",
+                    contentDescription = "${WhiteDnsL10n.cdEditPrefix} $label",
                     emphasized = false,
                     enabled = editEnabled,
                     onClick = onEditClick,
@@ -2242,9 +2284,9 @@ private fun AdvancedProfileControls(
     onEditClick: () -> Unit,
 ) {
     HomeSelectorCard(
-        label = "Setting",
-        value = selectedProfile.name,
-        detail = if (dirty) "Unsaved changes" else advancedProfileSummary(selectedProfile),
+        label = WhiteDnsL10n.homeSelectorSettingLabel,
+        value = if (selectedProfile.id == AdvancedSettingsProfile.DefaultId) WhiteDnsL10n.setupDefaultAdvanced else selectedProfile.name,
+        detail = if (dirty) WhiteDnsL10n.homeSelectorUnsavedChanges else advancedProfileSummary(selectedProfile),
         selected = !dirty,
         enabled = enabled,
         onClick = onSelectClick,
@@ -2262,19 +2304,21 @@ private fun AdvancedSettingsImportDialog(
     var tomlText by rememberSaveable { mutableStateOf("") }
     var importError by rememberSaveable { mutableStateOf<String?>(null) }
     val canImport = name.trim().isNotEmpty() && tomlText.trim().isNotEmpty()
+    val errorImportSettingsFileLabel = WhiteDnsL10n.errorImportSettingsFile
+    val errorImportSettingsLabel = WhiteDnsL10n.errorImportSettings
     val importTomlFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) {
             return@rememberLauncherForActivityResult
         }
-        readTextFromUri(context, uri, "Unable to open settings file")
+        readTextFromUri(context, uri, errorImportSettingsFileLabel)
             .onSuccess { importedText ->
                 tomlText = importedText
                 importError = null
             }
             .onFailure { error ->
-                importError = error.message ?: "Unable to import settings file"
+                importError = error.message ?: errorImportSettingsFileLabel
             }
     }
 
@@ -2288,7 +2332,7 @@ private fun AdvancedSettingsImportDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "IMPORT SETTINGS PROFILE",
+                text = WhiteDnsL10n.profileDialogImportSettings,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -2298,13 +2342,13 @@ private fun AdvancedSettingsImportDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Name",
+                label = WhiteDnsL10n.profileFieldName,
                 value = name,
                 onValueChange = {
                     name = it
                     importError = null
                 },
-                placeholder = "Imported settings",
+                placeholder = WhiteDnsL10n.settingProfileImportedSettingsPlaceholder,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2312,7 +2356,7 @@ private fun AdvancedSettingsImportDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "IMPORT FILE",
+                    label = WhiteDnsL10n.profileBtnImportFile,
                     emphasized = false,
                     enabled = true,
                     onClick = {
@@ -2321,7 +2365,7 @@ private fun AdvancedSettingsImportDialog(
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CLEAR",
+                    label = WhiteDnsL10n.profileBtnClear,
                     emphasized = false,
                     enabled = tomlText.isNotBlank(),
                     onClick = {
@@ -2331,7 +2375,7 @@ private fun AdvancedSettingsImportDialog(
                 )
             }
             WhiteDnsTextField(
-                label = "TOML",
+                label = WhiteDnsL10n.profileFieldToml,
                 value = tomlText,
                 onValueChange = {
                     tomlText = it
@@ -2359,20 +2403,20 @@ private fun AdvancedSettingsImportDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "IMPORT",
+                    label = WhiteDnsL10n.btnImport,
                     emphasized = true,
                     enabled = canImport,
                     onClick = {
                         onImport(name, tomlText)
                             .onFailure { error ->
-                                importError = error.message ?: "Unable to import settings"
+                                importError = error.message ?: errorImportSettingsLabel
                             }
                     },
                 )
@@ -2387,14 +2431,14 @@ private fun AdvancedSettingsFields(
     showProxySettings: Boolean,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
-    GroupLabel("MTU")
+    GroupLabel(WhiteDnsL10n.groupMtu)
     MtuSettingsGroup(
         settings = settings,
         onSettingsChange = onSettingsChange,
     )
 
     SectionDivider()
-    GroupLabel("Runtime Workers, Queues, and Timers")
+    GroupLabel(WhiteDnsL10n.groupRuntimeWorkers)
     RuntimeWorkersSettingsGroup(
         settings = settings,
         onSettingsChange = onSettingsChange,
@@ -2402,18 +2446,18 @@ private fun AdvancedSettingsFields(
 
     SectionDivider()
     if (showProxySettings) {
-        GroupLabel("Local Proxy")
+        GroupLabel(WhiteDnsL10n.groupLocalProxy)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WhiteDnsTextField(
                 modifier = Modifier.weight(1f),
-                label = "Listen IP",
+                label = WhiteDnsL10n.settingListenIp,
                 value = settings.listenIp,
                 onValueChange = { onSettingsChange(settings.copy(listenIp = it)) },
                 placeholder = "127.0.0.1",
             )
             WhiteDnsTextField(
                 modifier = Modifier.weight(1f),
-                label = "Listen Port",
+                label = WhiteDnsL10n.settingListenPort,
                 value = settings.listenPort,
                 onValueChange = { onSettingsChange(settings.copy(listenPort = it.filter(Char::isDigit))) },
                 placeholder = "10886",
@@ -2425,7 +2469,7 @@ private fun AdvancedSettingsFields(
         }
 
         ToggleRow(
-            label = "HTTP Proxy",
+            label = WhiteDnsL10n.settingHttpProxy,
             enabled = settings.httpProxyEnabled,
             onToggle = {
                 onSettingsChange(settings.copy(httpProxyEnabled = !settings.httpProxyEnabled))
@@ -2437,7 +2481,7 @@ private fun AdvancedSettingsFields(
             exit = fadeOut(animationSpec = tween(160)) + shrinkVertically(animationSpec = tween(160)),
         ) {
             WhiteDnsTextField(
-                label = "HTTP Port",
+                label = WhiteDnsL10n.settingHttpPort,
                 value = settings.httpProxyPort,
                 onValueChange = { onSettingsChange(settings.copy(httpProxyPort = it.filter(Char::isDigit))) },
                 placeholder = "10887",
@@ -2449,7 +2493,7 @@ private fun AdvancedSettingsFields(
         }
 
         ToggleRow(
-            label = "SOCKS5 Authentication",
+            label = WhiteDnsL10n.settingSocks5Auth,
             enabled = settings.socks5Authentication,
             onToggle = {
                 onSettingsChange(settings.copy(socks5Authentication = !settings.socks5Authentication))
@@ -2465,14 +2509,14 @@ private fun AdvancedSettingsFields(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     WhiteDnsTextField(
                         modifier = Modifier.weight(1f),
-                        label = "Username",
+                        label = WhiteDnsL10n.settingUsername,
                         value = settings.socksUsername,
                         onValueChange = { onSettingsChange(settings.copy(socksUsername = it)) },
                         placeholder = "master_dns_vpn",
                     )
                     WhiteDnsTextField(
                         modifier = Modifier.weight(1f),
-                        label = "Password",
+                        label = WhiteDnsL10n.settingPassword,
                         value = settings.socksPassword,
                         onValueChange = { onSettingsChange(settings.copy(socksPassword = it)) },
                         placeholder = "master_dns_vpn",
@@ -2485,18 +2529,18 @@ private fun AdvancedSettingsFields(
         SectionDivider()
     }
 
-    GroupLabel("Network Tuning")
+    GroupLabel(WhiteDnsL10n.groupNetworkTuning)
 
     WhiteDnsDropdownField(
-        label = "Balancing Strategy",
+        label = WhiteDnsL10n.settingBalancingStrategy,
         value = settings.balancingStrategy,
-        options = WhiteDnsOptions.balancingStrategies,
+        options = localizedBalancingStrategies(),
         onValueChange = { onSettingsChange(settings.copy(balancingStrategy = it)) },
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Upload Dup",
+            label = WhiteDnsL10n.settingUploadDup,
             value = settings.uploadDuplication,
             onValueChange = {
                 onSettingsChange(settings.copy(uploadDuplication = it.filter(Char::isDigit)))
@@ -2509,7 +2553,7 @@ private fun AdvancedSettingsFields(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Download Dup",
+            label = WhiteDnsL10n.settingDownloadDup,
             value = settings.downloadDuplication,
             onValueChange = {
                 onSettingsChange(settings.copy(downloadDuplication = it.filter(Char::isDigit)))
@@ -2524,21 +2568,21 @@ private fun AdvancedSettingsFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsDropdownField(
             modifier = Modifier.weight(1f),
-            label = "Upload Compress",
+            label = WhiteDnsL10n.settingUploadCompress,
             value = settings.uploadCompression,
-            options = WhiteDnsOptions.compressionTypes,
+            options = localizedCompressionTypes(),
             onValueChange = { onSettingsChange(settings.copy(uploadCompression = it)) },
         )
         WhiteDnsDropdownField(
             modifier = Modifier.weight(1f),
-            label = "Download Compress",
+            label = WhiteDnsL10n.settingDownloadCompress,
             value = settings.downloadCompression,
-            options = WhiteDnsOptions.compressionTypes,
+            options = localizedCompressionTypes(),
             onValueChange = { onSettingsChange(settings.copy(downloadCompression = it)) },
         )
     }
     ToggleRow(
-        label = "Base Encode Data",
+        label = WhiteDnsL10n.settingBaseEncodeData,
         enabled = settings.baseEncodeData,
         onToggle = {
             onSettingsChange(settings.copy(baseEncodeData = !settings.baseEncodeData))
@@ -2546,10 +2590,10 @@ private fun AdvancedSettingsFields(
     )
 
     SectionDivider()
-    GroupLabel("Reliability")
+    GroupLabel(WhiteDnsL10n.groupReliability)
 
     WhiteDnsTextField(
-        label = "Ping Watchdog (s)",
+        label = WhiteDnsL10n.settingPingWatchdog,
         value = settings.pingWatchdogSeconds,
         onValueChange = {
             onSettingsChange(settings.copy(pingWatchdogSeconds = it.filter(Char::isDigit)))
@@ -2561,7 +2605,7 @@ private fun AdvancedSettingsFields(
         ),
     )
     ToggleRow(
-        label = "Traffic Warmup",
+        label = WhiteDnsL10n.settingTrafficWarmup,
         enabled = settings.trafficWarmupEnabled,
         onToggle = {
             onSettingsChange(settings.copy(trafficWarmupEnabled = !settings.trafficWarmupEnabled))
@@ -2575,7 +2619,7 @@ private fun AdvancedSettingsFields(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WhiteDnsTextField(
                 modifier = Modifier.weight(1f),
-                label = "Warmup Probes",
+                label = WhiteDnsL10n.settingWarmupProbes,
                 value = settings.trafficWarmupProbeCount,
                 onValueChange = {
                     onSettingsChange(settings.copy(trafficWarmupProbeCount = it.filter(Char::isDigit)))
@@ -2588,7 +2632,7 @@ private fun AdvancedSettingsFields(
             )
             WhiteDnsTextField(
                 modifier = Modifier.weight(1f),
-                label = "Keepalive (s)",
+                label = WhiteDnsL10n.settingKeepalive,
                 value = settings.trafficKeepaliveIntervalSeconds,
                 onValueChange = {
                     onSettingsChange(
@@ -2604,7 +2648,7 @@ private fun AdvancedSettingsFields(
         }
     }
     WhiteDnsDropdownField(
-        label = "Log Level",
+        label = WhiteDnsL10n.settingLogLevel,
         value = settings.logLevel,
         options = WhiteDnsOptions.logLevels,
         onValueChange = { onSettingsChange(settings.copy(logLevel = it)) },
@@ -2615,17 +2659,17 @@ private fun advancedProfileSummary(profile: AdvancedSettingsProfile): String {
     return "MTU ${profile.minUploadMtu}-${profile.maxUploadMtu}/${profile.minDownloadMtu}-${profile.maxDownloadMtu}, ${profile.logLevel}"
 }
 
-private fun advancedSaveAsInitialName(profile: AdvancedSettingsProfile): String {
+private fun advancedSaveAsInitialName(profile: AdvancedSettingsProfile, customAdvancedLabel: String, copySuffix: String): String {
     return if (profile.id == AdvancedSettingsProfile.DefaultId) {
-        "Custom Advanced"
+        customAdvancedLabel
     } else {
-        "${profile.name} Copy"
+        "${profile.name} $copySuffix"
     }
 }
 
-private fun AdvancedSettingsProfile.displayName(dirty: Boolean): String {
+private fun AdvancedSettingsProfile.displayName(dirty: Boolean, modifiedSuffix: String): String {
     return if (dirty) {
-        "$name (modified)"
+        "$name $modifiedSuffix"
     } else {
         name
     }
@@ -2687,7 +2731,7 @@ private fun HomeSelectorSheet(
                 ) {
                     ProfileIconButton(
                         icon = Icons.Rounded.Close,
-                        contentDescription = "Close selector",
+                        contentDescription = WhiteDnsL10n.cdCloseSelector,
                         emphasized = false,
                         enabled = true,
                         onClick = onDismiss,
@@ -2704,7 +2748,7 @@ private fun HomeSelectorSheet(
                 }
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.lg))
                 WhiteDnsTextField(
-                    label = "Search",
+                    label = WhiteDnsL10n.settingSearch,
                     value = query,
                     onValueChange = { query = it },
                     placeholder = searchPlaceholder,
@@ -2796,7 +2840,7 @@ private fun HomeSelectorSheetRow(
         if (selected) {
             Icon(
                 imageVector = Icons.Rounded.Check,
-                contentDescription = "Selected",
+                contentDescription = WhiteDnsL10n.cdSelected,
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(18.dp),
             )
@@ -2815,25 +2859,39 @@ private fun ConnectionSetupCard(
     onAddResolverProfileClick: () -> Unit,
 ) {
     val serverRouteMissing = WhiteDnsL10n.serverRouteMissing
+    val serverRouteAndKeyMissing = WhiteDnsL10n.setupServerRouteAndKey
+    val encryptionKeyMissing = WhiteDnsL10n.setupEncryptionKeyMissing
     val serverRoute = selectedConnectionProfile.customServerDomain.ifBlank { serverRouteMissing }
     val connectionIssue = when {
         selectedConnectionProfile.customServerDomain.isBlank() &&
-            selectedConnectionProfile.customServerEncryptionKey.isBlank() -> "Server route and key missing"
+            selectedConnectionProfile.customServerEncryptionKey.isBlank() -> serverRouteAndKeyMissing
         selectedConnectionProfile.customServerDomain.isBlank() -> serverRouteMissing
-        selectedConnectionProfile.customServerEncryptionKey.isBlank() -> "Encryption key missing"
+        selectedConnectionProfile.customServerEncryptionKey.isBlank() -> encryptionKeyMissing
         else -> null
     }
-    val resolverSource = selectedResolverProfile?.name ?: "Manual resolvers"
-    val resolverDetail = resolverIssue ?: resolverCountLabel(resolverCount)
+    val resolverSource = when {
+        selectedResolverProfile == null -> WhiteDnsL10n.setupManualResolvers
+        selectedResolverProfile.id == ResolverProfile.DefaultId -> WhiteDnsL10n.setupDefaultResolver
+        else -> selectedResolverProfile.name
+    }
+    val resolverDetail = resolverIssue ?: resolverCountLabel(
+        resolverCount,
+        WhiteDnsL10n.resolverCountOneTemplate,
+        WhiteDnsL10n.resolverCountTemplate,
+    )
 
-    InfoCard(title = "SETUP", compact = true) {
+    InfoCard(title = WhiteDnsL10n.setupSectionSetup, compact = true) {
         SetupInfoRow(
             icon = if (connectionIssue == null) Icons.Rounded.Link else Icons.Rounded.WarningAmber,
             iconContentDescription = stringResource(
                 if (connectionIssue == null) R.string.cd_icon_link else R.string.cd_icon_warning
             ),
             label = WhiteDnsL10n.sectionConnection,
-            value = selectedConnectionProfile.name.ifBlank { WhiteDnsL10n.sectionConnection },
+            value = when {
+                selectedConnectionProfile.name.isBlank() -> WhiteDnsL10n.sectionConnection
+                selectedConnectionProfile.id == ConnectionProfile.DefaultId -> WhiteDnsL10n.setupDefaultConnection
+                else -> selectedConnectionProfile.name
+            },
             detail = connectionIssue ?: serverRoute,
             color = if (connectionIssue == null) WhiteDnsPalette.AccentText else WhiteDnsPalette.WarningText,
         )
@@ -2848,15 +2906,15 @@ private fun ConnectionSetupCard(
             iconContentDescription = stringResource(
                 if (resolverIssue == null) R.string.cd_icon_check else R.string.cd_icon_warning
             ),
-            label = "Resolvers",
+            label = WhiteDnsL10n.setupResolversLabel,
             value = resolverSource,
             detail = resolverDetail,
             color = if (resolverIssue == null) WhiteDnsPalette.Success else WhiteDnsPalette.WarningText,
         )
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
         SetupActionButton(
-            label = "Add Connection",
-            supportingText = "Server domain and key",
+            label = WhiteDnsL10n.setupAddConnection,
+            supportingText = WhiteDnsL10n.setupAddConnectionSupportingText,
             icon = Icons.Rounded.Add,
             iconContentDescription = stringResource(R.string.cd_icon_add),
             emphasized = true,
@@ -2865,8 +2923,8 @@ private fun ConnectionSetupCard(
         )
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
         SetupActionButton(
-            label = "Add Resolver Profile",
-            supportingText = "DNS resolver list",
+            label = WhiteDnsL10n.setupAddResolver,
+            supportingText = WhiteDnsL10n.setupAddResolverSupportingText,
             icon = Icons.Rounded.Add,
             iconContentDescription = stringResource(R.string.cd_icon_add),
             emphasized = false,
@@ -3021,8 +3079,12 @@ private fun SetupActionButton(
     }
 }
 
-private fun resolverCountLabel(count: Int): String {
-    return "$count resolver${if (count == 1) "" else "s"} configured"
+private fun resolverCountLabel(
+    count: Int,
+    singular: String,
+    plural: String,
+): String {
+    return "$count ${if (count == 1) singular else plural}"
 }
 
 private data class ProfileTopAction(
@@ -3097,6 +3159,8 @@ private fun ConnectionProfilesSettings(
     var measuredItemHeightPx by remember { mutableStateOf(0) }
     val canManageProfiles = connectionStatus != ConnectionStatus.CONNECTING
     val duplicateProfileCount = settings.duplicateConnectionProfileCount()
+    val shareSubjectProfileLabel = WhiteDnsL10n.shareSubjectProfile
+    val shareChooserProfileLabel = WhiteDnsL10n.shareChooserProfile
     val draggedIndex = draggedProfileId?.let { profileId ->
         customProfiles.indexOfFirst { it.id == profileId }.takeIf { it >= 0 }
     }
@@ -3140,7 +3204,7 @@ private fun ConnectionProfilesSettings(
     ProfileTopActionGrid(
         actions = listOf(
             ProfileTopAction(
-                label = "CREATE",
+                label = WhiteDnsL10n.profileBtnCreate,
                 emphasized = true,
                 enabled = canManageProfiles,
                 onClick = {
@@ -3148,7 +3212,7 @@ private fun ConnectionProfilesSettings(
                 },
             ),
             ProfileTopAction(
-                label = "IMPORT",
+                label = WhiteDnsL10n.profileBtnImport,
                 emphasized = false,
                 enabled = canManageProfiles,
                 onClick = {
@@ -3156,7 +3220,7 @@ private fun ConnectionProfilesSettings(
                 },
             ),
             ProfileTopAction(
-                label = "DELETE DUPS",
+                label = WhiteDnsL10n.profileBtnDeleteDups,
                 emphasized = false,
                 enabled = canManageProfiles && duplicateProfileCount > 0,
                 onClick = {
@@ -3164,7 +3228,7 @@ private fun ConnectionProfilesSettings(
                 },
             ),
             ProfileTopAction(
-                label = "EXPORT ALL",
+                label = WhiteDnsL10n.profileBtnExportAll,
                 emphasized = false,
                 enabled = customProfiles.any {
                     it.customServerDomain.isNotBlank() && it.customServerEncryptionKey.isNotBlank()
@@ -3177,10 +3241,10 @@ private fun ConnectionProfilesSettings(
     )
 
     SectionDivider()
-    GroupLabel("Custom Connections")
+    GroupLabel(WhiteDnsL10n.groupCustomConnections)
     if (customProfiles.isEmpty()) {
         Text(
-            text = "No custom StormDNS connections yet.",
+            text = WhiteDnsL10n.customConnectionsEmpty,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 10.sp,
                 color = WhiteDnsPalette.Muted,
@@ -3293,42 +3357,41 @@ private fun ConnectionProfilesSettings(
 
     exportProfile?.let { profile ->
         ConnectionProfileExportDialog(
-            title = "EXPORT CONNECTION",
-            fieldLabel = "Profile Link",
+            title = WhiteDnsL10n.profileDialogExportConnection,
+            fieldLabel = WhiteDnsL10n.profileFieldProfileLinkSingle,
             linkResult = remember(settings, profile) {
                 runCatching { settings.exportStormDnsProfileLink(profile) }
             },
             onDismiss = { exportProfile = null },
             onShare = { link ->
-                shareProfileLink(context, link)
+                shareProfileLink(context, link, shareSubjectProfileLabel, shareChooserProfileLabel)
             },
         )
     }
 
     if (showExportAllDialog) {
         ConnectionProfileExportDialog(
-            title = "EXPORT ALL CONNECTIONS",
-            fieldLabel = "Profile Links",
+            title = WhiteDnsL10n.profileDialogExportAllConnections,
+            fieldLabel = WhiteDnsL10n.profileFieldProfileLinksLabel,
             linkResult = remember(settings, showExportAllDialog) {
                 runCatching { settings.exportAllStormDnsProfileLinks() }
             },
             onDismiss = { showExportAllDialog = false },
             onShare = { links ->
-                shareProfileLink(context, links)
+                shareProfileLink(context, links, shareSubjectProfileLabel, shareChooserProfileLabel)
             },
         )
     }
 
     if (showDeleteDuplicatesDialog) {
         DeleteProfileConfirmationDialog(
-            title = "DELETE DUPLICATE CONNECTIONS",
-            message = "Delete $duplicateProfileCount duplicate connection profile" +
-                if (duplicateProfileCount == 1) {
-                    "? Duplicates are matched by server domain and encryption key. The active or selected profile is kept when possible."
-                } else {
-                    "s? Duplicates are matched by server domain and encryption key. The active or selected profile is kept when possible."
-                },
-            confirmLabel = "DELETE",
+            title = WhiteDnsL10n.deleteDupsTitle,
+            message = if (duplicateProfileCount == 1) {
+                WhiteDnsL10n.deleteDupsMessageSingleConnection
+            } else {
+                WhiteDnsL10n.deleteDupsMessageManyConnection
+            },
+            confirmLabel = WhiteDnsL10n.dialogDeleteConfirm,
             onDismiss = { showDeleteDuplicatesDialog = false },
             onConfirm = {
                 if (canManageProfiles && duplicateProfileCount > 0) {
@@ -3359,9 +3422,9 @@ private fun ConnectionProfilesSettings(
         val profileIsActive = profile.id == activeConnectionProfileId &&
             connectionStatus != ConnectionStatus.DISCONNECTED
         DeleteProfileConfirmationDialog(
-            title = "DELETE CONNECTION PROFILE",
-            message = "Delete \"${profile.name}\"? This removes the saved connection profile and cannot be undone.",
-            confirmLabel = "DELETE",
+            title = WhiteDnsL10n.deleteConnectionTitle,
+            message = WhiteDnsL10n.deleteConnectionMessageTemplate,
+            confirmLabel = WhiteDnsL10n.dialogDeleteConfirm,
             onDismiss = { deleteProfile = null },
             onConfirm = {
                 if (canManageProfiles && !profileIsActive) {
@@ -3433,13 +3496,13 @@ private fun ResolverProfilesSettings(
     ProfileTopActionGrid(
         actions = listOf(
             ProfileTopAction(
-                label = "CREATE",
+                label = WhiteDnsL10n.profileBtnCreate,
                 emphasized = true,
                 enabled = canChangeProfiles,
                 onClick = { showCreateDialog = true },
             ),
             ProfileTopAction(
-                label = "SAVE CURRENT",
+                label = WhiteDnsL10n.profileBtnSaveCurrent,
                 emphasized = false,
                 enabled = canChangeProfiles && settings.resolverText.isNotBlank(),
                 onClick = {
@@ -3452,7 +3515,7 @@ private fun ResolverProfilesSettings(
     SectionDivider()
     if (profiles.isEmpty()) {
         Text(
-            text = "No saved resolver lists yet.",
+            text = WhiteDnsL10n.profileNoResolverLists,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 10.sp,
                 color = WhiteDnsPalette.Muted,
@@ -3557,9 +3620,9 @@ private fun ResolverProfilesSettings(
 
     deleteProfile?.let { profile ->
         DeleteProfileConfirmationDialog(
-            title = "DELETE RESOLVER PROFILE",
-            message = "Delete \"${profile.name}\"? This removes the saved resolver list and cannot be undone.",
-            confirmLabel = "DELETE",
+            title = WhiteDnsL10n.deleteResolverTitle,
+            message = WhiteDnsL10n.deleteResolverMessageTemplate,
+            confirmLabel = WhiteDnsL10n.dialogDeleteConfirm,
             onDismiss = { deleteProfile = null },
             onConfirm = {
                 if (canChangeProfiles) {
@@ -3582,6 +3645,7 @@ private fun SettingProfilesSettings(
     val customProfiles = profiles.filter { it.id != AdvancedSettingsProfile.DefaultId }
     val selectedProfile = settings.selectedAdvancedProfile()
     val context = LocalContext.current
+    val shareChooserAdvancedSettingsLabel = WhiteDnsL10n.shareChooserAdvancedSettings
     var showCreateDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
     var editProfile by remember { mutableStateOf<AdvancedSettingsProfile?>(null) }
@@ -3629,13 +3693,13 @@ private fun SettingProfilesSettings(
     ProfileTopActionGrid(
         actions = listOf(
             ProfileTopAction(
-                label = "CREATE",
+                label = WhiteDnsL10n.profileBtnCreate,
                 emphasized = true,
                 enabled = canManageProfiles,
                 onClick = { showCreateDialog = true },
             ),
             ProfileTopAction(
-                label = "IMPORT",
+                label = WhiteDnsL10n.profileBtnImport,
                 emphasized = false,
                 enabled = canManageProfiles,
                 onClick = { showImportDialog = true },
@@ -3644,7 +3708,7 @@ private fun SettingProfilesSettings(
     )
 
     SectionDivider()
-    GroupLabel("Default")
+    GroupLabel(WhiteDnsL10n.groupDefault)
     SettingProfileRow(
         profile = defaultProfile,
         selected = defaultProfile.id == selectedProfile.id,
@@ -3669,10 +3733,10 @@ private fun SettingProfilesSettings(
     )
     Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
 
-    GroupLabel("Custom Settings")
+    GroupLabel(WhiteDnsL10n.groupCustomSettings)
     if (customProfiles.isEmpty()) {
         Text(
-            text = "No saved setting profiles yet.",
+            text = WhiteDnsL10n.profileNoSettingProfiles,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 10.sp,
                 color = WhiteDnsPalette.Muted,
@@ -3753,7 +3817,7 @@ private fun SettingProfilesSettings(
     if (showCreateDialog) {
         AdvancedSettingsProfileDialog(
             profile = null,
-            initialName = advancedSaveAsInitialName(selectedProfile),
+            initialName = advancedSaveAsInitialName(selectedProfile, WhiteDnsL10n.homeSelectorCustomAdvanced, WhiteDnsL10n.profileNameCopySuffix),
             initialSettings = settings,
             onDismiss = { showCreateDialog = false },
             onSave = { profile ->
@@ -3792,7 +3856,7 @@ private fun SettingProfilesSettings(
 
     exportProfile?.let { profile ->
         ConnectionProfileExportDialog(
-            title = "EXPORT SETTINGS",
+            title = WhiteDnsL10n.profileDialogExportSettings,
             fieldLabel = "advanced_settings.toml",
             placeholder = "advanced_settings.toml",
             showQr = false,
@@ -3803,16 +3867,16 @@ private fun SettingProfilesSettings(
             },
             onDismiss = { exportProfile = null },
             onShare = { toml ->
-                shareAdvancedSettingsToml(context, toml)
+                shareAdvancedSettingsToml(context, toml, shareChooserAdvancedSettingsLabel)
             },
         )
     }
 
     deleteProfile?.let { profile ->
         DeleteProfileConfirmationDialog(
-            title = "DELETE SETTING PROFILE",
-            message = "Delete \"${profile.name}\"? This removes the saved setting profile and cannot be undone.",
-            confirmLabel = "DELETE",
+            title = WhiteDnsL10n.deleteSettingTitle,
+            message = WhiteDnsL10n.deleteSettingMessageTemplate,
+            confirmLabel = WhiteDnsL10n.dialogDeleteConfirm,
             onDismiss = { deleteProfile = null },
             onConfirm = {
                 if (canManageProfiles) {
@@ -3846,7 +3910,7 @@ private fun AdvancedSettingsProfileDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = if (profile == null) "CREATE SETTING PROFILE" else "EDIT SETTING PROFILE",
+                text = if (profile == null) WhiteDnsL10n.profileDialogCreateSetting else WhiteDnsL10n.profileDialogEditSetting,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -3856,10 +3920,10 @@ private fun AdvancedSettingsProfileDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Name",
+                label = WhiteDnsL10n.profileFieldName,
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Fast tunnel",
+                placeholder = WhiteDnsL10n.settingProfileFastTunnelPlaceholder,
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
             Column(
@@ -3881,14 +3945,14 @@ private fun AdvancedSettingsProfileDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SAVE",
+                    label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = canSave,
                     onClick = {
@@ -3926,10 +3990,11 @@ private fun SettingProfileRow(
     onDelete: () -> Unit,
 ) {
     val summarySuffix = when {
-        dirty -> " - MODIFIED"
-        selected -> " - SELECTED"
+        dirty -> " - ${WhiteDnsL10n.profileStatusModified}"
+        selected -> " - ${WhiteDnsL10n.profileStatusSelected}"
         else -> ""
     }
+    val displayName = if (profile.id == AdvancedSettingsProfile.DefaultId) WhiteDnsL10n.setupDefaultAdvanced else profile.name
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3957,7 +4022,7 @@ private fun SettingProfileRow(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = profile.name,
+                    text = displayName,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 13.sp,
                         color = WhiteDnsPalette.Ink,
@@ -3982,33 +4047,33 @@ private fun SettingProfileRow(
                 )
             }
             ProfileActionsMenu(
-                contentDescription = "Setting profile actions",
+                contentDescription = WhiteDnsL10n.settingProfileMenuActions,
                 actions = listOf(
                     ProfileMenuAction(
-                        label = if (selected) "Use profile (selected)" else "Use profile",
+                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuUse,
                         icon = Icons.Rounded.Check,
-                        contentDescription = "Use setting profile",
+                        contentDescription = WhiteDnsL10n.useSettingProfile,
                         enabled = canUse,
                         onClick = onUse,
                     ),
                     ProfileMenuAction(
-                        label = "Export profile",
+                        label = WhiteDnsL10n.profileMenuExport,
                         icon = Icons.Rounded.Link,
-                        contentDescription = "Export setting profile",
+                        contentDescription = WhiteDnsL10n.exportSettingProfileAction,
                         enabled = true,
                         onClick = onExport,
                     ),
                     ProfileMenuAction(
-                        label = "Edit profile",
+                        label = WhiteDnsL10n.profileMenuEdit,
                         icon = Icons.Rounded.Edit,
-                        contentDescription = "Edit setting profile",
+                        contentDescription = WhiteDnsL10n.editSettingProfileAction,
                         enabled = canEdit,
                         onClick = onEdit,
                     ),
                     ProfileMenuAction(
-                        label = "Delete profile",
+                        label = WhiteDnsL10n.profileMenuDelete,
                         icon = Icons.Rounded.Delete,
-                        contentDescription = "Delete setting profile",
+                        contentDescription = WhiteDnsL10n.deleteSettingProfileAction,
                         enabled = canDelete,
                         onClick = onDelete,
                     ),
@@ -4030,26 +4095,45 @@ private fun ResolverProfileDialog(
     var resolverText by remember(profile?.id) { mutableStateOf(profile?.resolverText ?: initialResolverText) }
     var importError by remember(profile?.id) { mutableStateOf<String?>(null) }
     val resolverValidation = remember(resolverText) { validateResolverText(resolverText) }
+    val invalidResolverIpTemplate = WhiteDnsL10n.errorInvalidResolverIpTemplate
+    val enterValidResolverIpLabel = WhiteDnsL10n.errorEnterValidResolverIp
+    val enterProfileNameToSaveLabel = WhiteDnsL10n.errorEnterProfileNameToSave
+    val resolverValidSingularTemplate = WhiteDnsL10n.resolverValidSingularTemplate
+    val resolverValidPluralTemplate = WhiteDnsL10n.resolverValidPluralTemplate
+    val unableToOpenResolverLabel = WhiteDnsL10n.errorUnableToOpenResolverFile
+    val noResolverEntriesLabel = WhiteDnsL10n.errorNoResolverEntries
     val validationMessage = resolverValidationMessage(
         name = name,
         resolverText = resolverText,
         invalidEntries = resolverValidation.invalidEntries,
         validResolverCount = resolverValidation.normalizedResolvers.size,
+        invalidResolverIpTemplate = invalidResolverIpTemplate,
+        enterValidResolverIpLabel = enterValidResolverIpLabel,
+        enterProfileNameToSaveLabel = enterProfileNameToSaveLabel,
+        validResolverSingularTemplate = resolverValidSingularTemplate,
+        validResolverPluralTemplate = resolverValidPluralTemplate,
     )
     val validationMessageIsError = validationMessage != null && (!resolverValidation.isValid || name.isBlank())
+    val errorImportResolverLabel = WhiteDnsL10n.errorImportResolver
     val importResolverFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) {
             return@rememberLauncherForActivityResult
         }
-        readResolverTextFromUri(context, uri)
+        readResolverTextFromUri(
+            context = context,
+            uri = uri,
+            unableToOpenLabel = unableToOpenResolverLabel,
+            invalidResolverIpTemplate = invalidResolverIpTemplate,
+            noResolverEntriesLabel = noResolverEntriesLabel,
+        )
             .onSuccess { importedResolverText ->
                 resolverText = importedResolverText
                 importError = null
             }
             .onFailure { error ->
-                importError = error.message ?: "Unable to import resolver file"
+                importError = error.message ?: errorImportResolverLabel
             }
     }
     val canSave = name.trim().isNotEmpty() && resolverValidation.isValid
@@ -4064,7 +4148,7 @@ private fun ResolverProfileDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = if (profile == null) "CREATE RESOLVER PROFILE" else "EDIT RESOLVER PROFILE",
+                text = if (profile == null) WhiteDnsL10n.profileDialogCreateResolver else WhiteDnsL10n.profileDialogEditResolver,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -4074,10 +4158,10 @@ private fun ResolverProfileDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Name",
+                label = WhiteDnsL10n.profileFieldName,
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Home resolvers",
+                placeholder = WhiteDnsL10n.resolverProfileHomeResolversPlaceholder,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -4085,7 +4169,7 @@ private fun ResolverProfileDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "IMPORT FILE",
+                    label = WhiteDnsL10n.profileBtnImportFile,
                     emphasized = false,
                     enabled = true,
                     onClick = {
@@ -4094,7 +4178,7 @@ private fun ResolverProfileDialog(
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CLEAR",
+                    label = WhiteDnsL10n.profileBtnClear,
                     emphasized = false,
                     enabled = resolverText.isNotBlank(),
                     onClick = {
@@ -4114,13 +4198,13 @@ private fun ResolverProfileDialog(
                 )
             }
             WhiteDnsTextField(
-                label = "Resolvers",
+                label = WhiteDnsL10n.profileFieldResolvers,
                 value = resolverText,
                 onValueChange = {
                     resolverText = it
                     importError = null
                 },
-                placeholder = "1.1.1.1, 8.8.8.8 or one per line",
+                placeholder = WhiteDnsL10n.resolverFieldPlaceholder,
                 singleLine = false,
                 minLines = 6,
                 maxLines = 10,
@@ -4142,14 +4226,14 @@ private fun ResolverProfileDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SAVE",
+                    label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = canSave,
                     onClick = {
@@ -4186,8 +4270,9 @@ private fun ResolverProfileRow(
 ) {
     val resolverCount = profile.resolverText
         .let { validateResolverText(it).normalizedResolvers.size }
-    val resolverSummary = "$resolverCount resolver${if (resolverCount == 1) "" else "s"}" +
-        if (selected) " - SELECTED" else ""
+    val resolverSummary = WhiteDnsL10n.resolverProfileSummary(resolverCount) +
+        if (selected) " - ${WhiteDnsL10n.profileStatusSelected}" else ""
+    val displayName = if (profile.id == ResolverProfile.DefaultId) WhiteDnsL10n.setupDefaultResolver else profile.name
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -4215,7 +4300,7 @@ private fun ResolverProfileRow(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = profile.name,
+                    text = displayName,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 13.sp,
                         color = WhiteDnsPalette.Ink,
@@ -4236,26 +4321,26 @@ private fun ResolverProfileRow(
                 )
             }
             ProfileActionsMenu(
-                contentDescription = "Resolver profile actions",
+                contentDescription = WhiteDnsL10n.resolverProfileMenuActions,
                 actions = listOf(
                     ProfileMenuAction(
-                        label = if (selected) "Use profile (selected)" else "Use profile",
+                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuUse,
                         icon = Icons.Rounded.Check,
-                        contentDescription = "Use resolver profile",
+                        contentDescription = WhiteDnsL10n.useResolverProfile,
                         enabled = canUse,
                         onClick = onUse,
                     ),
                     ProfileMenuAction(
-                        label = "Edit profile",
+                        label = WhiteDnsL10n.profileMenuEdit,
                         icon = Icons.Rounded.Edit,
-                        contentDescription = "Edit resolver profile",
+                        contentDescription = WhiteDnsL10n.editResolverProfileAction,
                         enabled = canEdit,
                         onClick = onEdit,
                     ),
                     ProfileMenuAction(
-                        label = "Delete profile",
+                        label = WhiteDnsL10n.profileMenuDelete,
                         icon = Icons.Rounded.Delete,
-                        contentDescription = "Delete resolver profile",
+                        contentDescription = WhiteDnsL10n.deleteResolverProfileAction,
                         enabled = canDelete,
                         onClick = onDelete,
                     ),
@@ -4273,6 +4358,7 @@ private fun ConnectionProfileImportDialog(
     var profileLinks by remember { mutableStateOf("") }
     var importError by remember { mutableStateOf<String?>(null) }
     val canImport = profileLinks.trim().isNotEmpty()
+    val errorImportProfileLabel = WhiteDnsL10n.errorImportProfile
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -4284,7 +4370,7 @@ private fun ConnectionProfileImportDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "IMPORT CONNECTION",
+                text = WhiteDnsL10n.profileDialogImportConnection,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -4294,7 +4380,7 @@ private fun ConnectionProfileImportDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Profile Links",
+                label = WhiteDnsL10n.profileFieldProfileLinks,
                 value = profileLinks,
                 onValueChange = {
                     profileLinks = it
@@ -4322,20 +4408,20 @@ private fun ConnectionProfileImportDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "IMPORT",
+                    label = WhiteDnsL10n.btnImport,
                     emphasized = true,
                     enabled = canImport,
                     onClick = {
                         onImport(profileLinks)
                             .onFailure { error ->
-                                importError = error.message ?: "Unable to import profile"
+                                importError = error.message ?: errorImportProfileLabel
                             }
                     },
                 )
@@ -4397,14 +4483,14 @@ private fun ConnectionProfileExportDialog(
                 ) {
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
-                        label = "CLOSE",
+                        label = WhiteDnsL10n.btnClose,
                         emphasized = false,
                         enabled = true,
                         onClick = onDismiss,
                     )
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
-                        label = "COPY",
+                        label = WhiteDnsL10n.btnCopy,
                         emphasized = false,
                         enabled = true,
                         onClick = {
@@ -4418,7 +4504,7 @@ private fun ConnectionProfileExportDialog(
                     )
                     CompactActionButton(
                         modifier = Modifier.weight(1f),
-                        label = "SHARE",
+                        label = WhiteDnsL10n.btnShare,
                         emphasized = true,
                         enabled = true,
                         onClick = {
@@ -4428,7 +4514,7 @@ private fun ConnectionProfileExportDialog(
                 }
             } else {
                 Text(
-                    text = linkResult.exceptionOrNull()?.message ?: "Unable to export profile",
+                    text = linkResult.exceptionOrNull()?.message ?: WhiteDnsL10n.errorExportProfile,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 11.sp,
                         color = WhiteDnsPalette.Error,
@@ -4437,7 +4523,7 @@ private fun ConnectionProfileExportDialog(
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
                 CompactActionButton(
                     modifier = Modifier.fillMaxWidth(),
-                    label = "CLOSE",
+                    label = WhiteDnsL10n.btnClose,
                     emphasized = true,
                     enabled = true,
                     onClick = onDismiss,
@@ -4460,7 +4546,7 @@ private fun ProfileQrPreview(link: String) {
         if (qrBitmap != null) {
             Image(
                 bitmap = qrBitmap.asImageBitmap(),
-                contentDescription = "Profile QR code",
+                contentDescription = WhiteDnsL10n.cdProfileQrCode,
                 modifier = Modifier
                     .size(210.dp)
                     .clip(RoundedCornerShape(12.dp))
@@ -4470,7 +4556,7 @@ private fun ProfileQrPreview(link: String) {
             )
         } else {
             Text(
-                text = "QR code unavailable for this profile link.",
+                text = WhiteDnsL10n.profileQrUnavailable,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 10.sp,
                     color = WhiteDnsPalette.Error,
@@ -4530,7 +4616,7 @@ private fun ConnectionProfileDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = if (profile == null) "CREATE NEW CONNECTION" else "EDIT CONNECTION",
+                text = if (profile == null) WhiteDnsL10n.profileDialogCreateConnection else WhiteDnsL10n.profileDialogEditConnection,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -4540,27 +4626,27 @@ private fun ConnectionProfileDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Name",
+                label = WhiteDnsL10n.profileFieldName,
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "My StormDNS",
+                placeholder = WhiteDnsL10n.profileMyStormDnsPlaceholder,
             )
             WhiteDnsTextField(
-                label = "Domain",
+                label = WhiteDnsL10n.profileFieldDomain,
                 value = domain,
                 onValueChange = { domain = it.trim() },
-                placeholder = "v.example.com",
+                placeholder = WhiteDnsL10n.profileDomainPlaceholder,
             )
             WhiteDnsTextField(
-                label = "Encryption Key",
+                label = WhiteDnsL10n.profileFieldEncryptionKey,
                 value = encryptionKey,
                 onValueChange = { encryptionKey = it.trim() },
-                placeholder = "32-character key",
+                placeholder = WhiteDnsL10n.profileEncryptionKeyPlaceholder,
             )
             WhiteDnsDropdownField(
-                label = "Encryption Method",
+                label = WhiteDnsL10n.profileFieldEncryptionMethod,
                 value = encryptionMethod,
-                options = WhiteDnsOptions.encryptionMethods,
+                options = localizedEncryptionMethods(),
                 onValueChange = { encryptionMethod = it },
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
@@ -4570,14 +4656,14 @@ private fun ConnectionProfileDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SAVE",
+                    label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = canSave,
                     onClick = {
@@ -4647,12 +4733,15 @@ private fun ConnectionProfileRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val domain = profile.customServerDomain.ifBlank { "Custom StormDNS" }
+    val domain = profile.customServerDomain.ifBlank { WhiteDnsL10n.profileDomainFallback }
+    val activeStatus = WhiteDnsL10n.profileStatusActive
+    val selectedStatus = WhiteDnsL10n.profileStatusSelected
     val connectionSummary = when {
-        active -> "$domain - ACTIVE"
-        selected -> "$domain - SELECTED"
+        active -> "$domain - $activeStatus"
+        selected -> "$domain - $selectedStatus"
         else -> domain
     }
+    val displayName = if (profile.id == ConnectionProfile.DefaultId) WhiteDnsL10n.setupDefaultConnection else profile.name
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -4686,7 +4775,7 @@ private fun ConnectionProfileRow(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = profile.name,
+                    text = displayName,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 13.sp,
                         color = WhiteDnsPalette.Ink,
@@ -4711,26 +4800,26 @@ private fun ConnectionProfileRow(
                 )
             }
             ProfileActionsMenu(
-                contentDescription = "Connection profile actions",
+                contentDescription = WhiteDnsL10n.connectionProfileMenuActions,
                 actions = listOf(
                     ProfileMenuAction(
-                        label = "Export profile",
+                        label = WhiteDnsL10n.profileMenuExport,
                         icon = Icons.Rounded.Link,
-                        contentDescription = "Export connection profile",
+                        contentDescription = WhiteDnsL10n.exportConnectionProfileAction,
                         enabled = profile.customServerDomain.isNotBlank() && profile.customServerEncryptionKey.isNotBlank(),
                         onClick = onExport,
                     ),
                     ProfileMenuAction(
-                        label = if (selected) "Edit profile (selected)" else "Edit profile",
+                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuEdit,
                         icon = Icons.Rounded.Edit,
-                        contentDescription = "Edit connection profile",
+                        contentDescription = WhiteDnsL10n.editConnectionProfileAction,
                         enabled = canEdit,
                         onClick = onEdit,
                     ),
                     ProfileMenuAction(
-                        label = if (active) "Delete profile (active)" else "Delete profile",
+                        label = if (active) WhiteDnsL10n.profileMenuDelete else WhiteDnsL10n.profileMenuDelete,
                         icon = Icons.Rounded.Delete,
-                        contentDescription = if (active) "Connected profile cannot be deleted" else "Delete connection profile",
+                        contentDescription = if (active) WhiteDnsL10n.deleteConnectionProfileBlockedAction else WhiteDnsL10n.deleteConnectionProfileAction,
                         enabled = canDelete,
                         onClick = onDelete,
                     ),
@@ -4878,7 +4967,7 @@ private fun DeleteProfileConfirmationDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
@@ -4954,7 +5043,7 @@ private fun ProfileDragHandle(
     ) {
         Icon(
             imageVector = Icons.Rounded.DragHandle,
-            contentDescription = "Drag to reorder profile",
+            contentDescription = WhiteDnsL10n.cdDragToReorder,
             tint = iconColor,
             modifier = Modifier.size(18.dp),
         )
@@ -5070,7 +5159,7 @@ private fun MtuSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Min Upload",
+            label = WhiteDnsL10n.settingMinUpload,
             value = settings.minUploadMtu,
             onValueChange = {
                 onSettingsChange(settings.copy(minUploadMtu = it.filter(Char::isDigit)))
@@ -5083,7 +5172,7 @@ private fun MtuSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Min Download",
+            label = WhiteDnsL10n.settingMinDownload,
             value = settings.minDownloadMtu,
             onValueChange = {
                 onSettingsChange(settings.copy(minDownloadMtu = it.filter(Char::isDigit)))
@@ -5098,7 +5187,7 @@ private fun MtuSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Max Upload",
+            label = WhiteDnsL10n.settingMaxUpload,
             value = settings.maxUploadMtu,
             onValueChange = {
                 onSettingsChange(settings.copy(maxUploadMtu = it.filter(Char::isDigit)))
@@ -5111,7 +5200,7 @@ private fun MtuSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Max Download",
+            label = WhiteDnsL10n.settingMaxDownload,
             value = settings.maxDownloadMtu,
             onValueChange = {
                 onSettingsChange(settings.copy(maxDownloadMtu = it.filter(Char::isDigit)))
@@ -5126,7 +5215,7 @@ private fun MtuSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Resolver Retries",
+            label = WhiteDnsL10n.settingResolverRetries,
             value = settings.mtuTestRetriesResolvers,
             onValueChange = {
                 onSettingsChange(settings.copy(mtuTestRetriesResolvers = it.filter(Char::isDigit)))
@@ -5139,7 +5228,7 @@ private fun MtuSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Resolver Timeout",
+            label = WhiteDnsL10n.settingResolverTimeout,
             value = settings.mtuTestTimeoutResolvers,
             onValueChange = {
                 onSettingsChange(settings.copy(mtuTestTimeoutResolvers = filterDecimalInput(it)))
@@ -5152,7 +5241,7 @@ private fun MtuSettingsGroup(
         )
     }
     WhiteDnsTextField(
-        label = "Resolver Parallel",
+        label = WhiteDnsL10n.settingResolverParallel,
         value = settings.mtuTestParallelismResolvers,
         onValueChange = {
             onSettingsChange(settings.copy(mtuTestParallelismResolvers = it.filter(Char::isDigit)))
@@ -5166,7 +5255,7 @@ private fun MtuSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Logs Retries",
+            label = WhiteDnsL10n.settingLogsRetries,
             value = settings.mtuTestRetriesLogs,
             onValueChange = {
                 onSettingsChange(settings.copy(mtuTestRetriesLogs = it.filter(Char::isDigit)))
@@ -5179,7 +5268,7 @@ private fun MtuSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Logs Timeout",
+            label = WhiteDnsL10n.settingLogsTimeout,
             value = settings.mtuTestTimeoutLogs,
             onValueChange = {
                 onSettingsChange(settings.copy(mtuTestTimeoutLogs = filterDecimalInput(it)))
@@ -5192,7 +5281,7 @@ private fun MtuSettingsGroup(
         )
     }
     WhiteDnsTextField(
-        label = "Logs Parallel",
+        label = WhiteDnsL10n.settingLogsParallel,
         value = settings.mtuTestParallelismLogs,
         onValueChange = {
             onSettingsChange(settings.copy(mtuTestParallelismLogs = it.filter(Char::isDigit)))
@@ -5213,7 +5302,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "RX/TX Workers",
+            label = WhiteDnsL10n.settingRxTxWorkers,
             value = settings.rxTxWorkers,
             onValueChange = {
                 onSettingsChange(settings.copy(rxTxWorkers = it.filter(Char::isDigit)))
@@ -5226,7 +5315,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Process Workers",
+            label = WhiteDnsL10n.settingProcessWorkers,
             value = settings.tunnelProcessWorkers,
             onValueChange = {
                 onSettingsChange(settings.copy(tunnelProcessWorkers = it.filter(Char::isDigit)))
@@ -5241,7 +5330,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Tunnel Packet Timeout",
+            label = WhiteDnsL10n.settingTunnelPacketTimeout,
             value = settings.tunnelPacketTimeoutSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(tunnelPacketTimeoutSeconds = filterDecimalInput(it)))
@@ -5254,7 +5343,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Idle Poll",
+            label = WhiteDnsL10n.settingIdlePoll,
             value = settings.dispatcherIdlePollIntervalSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(dispatcherIdlePollIntervalSeconds = filterDecimalInput(it)))
@@ -5269,7 +5358,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "TX Channel",
+            label = WhiteDnsL10n.settingTxChannel,
             value = settings.txChannelSize,
             onValueChange = {
                 onSettingsChange(settings.copy(txChannelSize = it.filter(Char::isDigit)))
@@ -5282,7 +5371,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "RX Channel",
+            label = WhiteDnsL10n.settingRxChannel,
             value = settings.rxChannelSize,
             onValueChange = {
                 onSettingsChange(settings.copy(rxChannelSize = it.filter(Char::isDigit)))
@@ -5297,7 +5386,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "UDP Pool",
+            label = WhiteDnsL10n.settingUdpPool,
             value = settings.resolverUdpConnectionPoolSize,
             onValueChange = {
                 onSettingsChange(settings.copy(resolverUdpConnectionPoolSize = it.filter(Char::isDigit)))
@@ -5310,7 +5399,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Stream Queue",
+            label = WhiteDnsL10n.settingStreamQueue,
             value = settings.streamQueueInitialCapacity,
             onValueChange = {
                 onSettingsChange(settings.copy(streamQueueInitialCapacity = it.filter(Char::isDigit)))
@@ -5325,7 +5414,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Orphan Queue",
+            label = WhiteDnsL10n.settingOrphanQueue,
             value = settings.orphanQueueInitialCapacity,
             onValueChange = {
                 onSettingsChange(settings.copy(orphanQueueInitialCapacity = it.filter(Char::isDigit)))
@@ -5338,7 +5427,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "DNS Fragments",
+            label = WhiteDnsL10n.settingDnsFragments,
             value = settings.dnsResponseFragmentStoreCapacity,
             onValueChange = {
                 onSettingsChange(settings.copy(dnsResponseFragmentStoreCapacity = it.filter(Char::isDigit)))
@@ -5353,7 +5442,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "SOCKS UDP Timeout",
+            label = WhiteDnsL10n.settingSocksUdpTimeout,
             value = settings.socksUdpAssociateReadTimeoutSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(socksUdpAssociateReadTimeoutSeconds = filterDecimalInput(it)))
@@ -5366,7 +5455,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Terminal Retain",
+            label = WhiteDnsL10n.settingTerminalRetain,
             value = settings.clientTerminalStreamRetentionSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(clientTerminalStreamRetentionSeconds = filterDecimalInput(it)))
@@ -5381,7 +5470,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Cancelled Retain",
+            label = WhiteDnsL10n.settingCancelledRetain,
             value = settings.clientCancelledSetupRetentionSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(clientCancelledSetupRetentionSeconds = filterDecimalInput(it)))
@@ -5394,7 +5483,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Retry Base",
+            label = WhiteDnsL10n.settingRetryBase,
             value = settings.sessionInitRetryBaseSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(sessionInitRetryBaseSeconds = filterDecimalInput(it)))
@@ -5409,7 +5498,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Retry Step",
+            label = WhiteDnsL10n.settingRetryStep,
             value = settings.sessionInitRetryStepSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(sessionInitRetryStepSeconds = filterDecimalInput(it)))
@@ -5422,7 +5511,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Retry Linear",
+            label = WhiteDnsL10n.settingRetryLinear,
             value = settings.sessionInitRetryLinearAfter,
             onValueChange = {
                 onSettingsChange(settings.copy(sessionInitRetryLinearAfter = it.filter(Char::isDigit)))
@@ -5437,7 +5526,7 @@ private fun RuntimeWorkersSettingsGroup(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Retry Max",
+            label = WhiteDnsL10n.settingRetryMax,
             value = settings.sessionInitRetryMaxSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(sessionInitRetryMaxSeconds = filterDecimalInput(it)))
@@ -5450,7 +5539,7 @@ private fun RuntimeWorkersSettingsGroup(
         )
         WhiteDnsTextField(
             modifier = Modifier.weight(1f),
-            label = "Busy Retry",
+            label = WhiteDnsL10n.settingBusyRetry,
             value = settings.sessionInitBusyRetryIntervalSeconds,
             onValueChange = {
                 onSettingsChange(settings.copy(sessionInitBusyRetryIntervalSeconds = filterDecimalInput(it)))
@@ -5542,7 +5631,7 @@ private fun HeaderCard(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "App menu",
+                    contentDescription = WhiteDnsL10n.cdAppMenu,
                     tint = if (overflowExpanded) WhiteDnsPalette.AccentText else WhiteDnsPalette.Muted,
                     modifier = Modifier.size(22.dp),
                 )
@@ -5564,7 +5653,7 @@ private fun HeaderCard(
                     text = {
                         Column {
                             Text(
-                                text = "Version",
+                                text = WhiteDnsL10n.menuVersion,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontSize = 10.sp,
                                     color = WhiteDnsPalette.Muted,
@@ -5599,14 +5688,14 @@ private fun HeaderCard(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
-                            contentDescription = "App settings",
+                            contentDescription = WhiteDnsL10n.cdAppSettings,
                             tint = WhiteDnsPalette.Ink,
                             modifier = Modifier.size(18.dp),
                         )
                     },
                     text = {
                         Text(
-                            text = "App Settings",
+                            text = WhiteDnsL10n.menuAppSettings,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 13.sp,
                                 color = WhiteDnsPalette.Ink,
@@ -5627,14 +5716,14 @@ private fun HeaderCard(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Favorite,
-                            contentDescription = "Donate",
+                            contentDescription = WhiteDnsL10n.cdDonate,
                             tint = WhiteDnsPalette.Ink,
                             modifier = Modifier.size(18.dp),
                         )
                     },
                     text = {
                         Text(
-                            text = "Donate",
+                            text = WhiteDnsL10n.menuDonate,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 13.sp,
                                 color = WhiteDnsPalette.Ink,
@@ -5813,7 +5902,7 @@ private fun DonationDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "SUPPORT WHITEDNS",
+                text = WhiteDnsL10n.supportTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -5823,7 +5912,7 @@ private fun DonationDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
             Text(
-                text = "Donations will be used for new servers and app development.",
+                text = WhiteDnsL10n.supportBody,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
@@ -5851,7 +5940,7 @@ private fun DonationDialog(
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.lg))
             CompactActionButton(
                 modifier = Modifier.fillMaxWidth(),
-                label = "CLOSE",
+                label = WhiteDnsL10n.btnClose,
                 emphasized = true,
                 enabled = true,
                 onClick = onDismiss,
@@ -5892,7 +5981,7 @@ private fun DonationWalletField(
                 ),
             )
             Text(
-                text = "COPY",
+                text = WhiteDnsL10n.btnCopy,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = WhiteDnsPalette.AccentText,
                     fontSize = 9.sp,
@@ -5918,7 +6007,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
             .padding(14.dp),
     ) {
         Text(
-            text = "VPN NOTIFICATION BLOCKED",
+            text = WhiteDnsL10n.bannerNotificationBlockedTitle,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 10.sp,
                 color = WhiteDnsPalette.WarningText,
@@ -5928,7 +6017,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.iconSpacing))
         Text(
-            text = "Enable WhiteDNS notifications so Android can keep the full VPN service visible and running in the background.",
+            text = WhiteDnsL10n.bannerNotificationBlockedBody,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
@@ -5951,7 +6040,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "ENABLE VPN NOTIFICATION",
+                text = WhiteDnsL10n.bannerEnableNotification,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 9.sp,
                     color = WhiteDnsPalette.WarningText,
@@ -6006,7 +6095,7 @@ private fun BatteryOptimizationBanner(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
-                    contentDescription = "Dismiss battery optimization warning",
+                    contentDescription = WhiteDnsL10n.cdDismissBatteryWarning,
                     tint = WhiteDnsPalette.WarningText,
                     modifier = Modifier.size(16.dp),
                 )
@@ -6071,7 +6160,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "FULL VPN PERFORMANCE WARNING",
+                text = WhiteDnsL10n.bannerFullVpnWarningTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 9.sp,
                     color = WhiteDnsPalette.WarningText,
@@ -6081,7 +6170,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
             Text(
-                text = "Full VPN routes all device traffic through the DNS tunnel and may be slower or less stable. Proxy Mode is recommended for best performance.",
+                text = WhiteDnsL10n.bannerFullVpnWarningBody,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 10.sp,
                     lineHeight = 14.sp,
@@ -6102,7 +6191,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Rounded.Close,
-                contentDescription = "Dismiss full VPN warning",
+                contentDescription = WhiteDnsL10n.cdDismissVpnWarning,
                 tint = WhiteDnsPalette.WarningText,
                 modifier = Modifier.size(16.dp),
             )
@@ -6119,19 +6208,23 @@ private fun SplitTunnelSettingsPanel(
     var showAppDialog by rememberSaveable { mutableStateOf(false) }
     val selectedPackages = settings.splitTunnelPackages
     val selectedLabels = selectedSplitTunnelLabels(selectedPackages, apps)
+    val splitAllAppsLabel = WhiteDnsL10n.splitTunnelAllApps
+    val splitNoAppsLabel = WhiteDnsL10n.splitTunnelNoApps
     val appSummary = splitTunnelAppsSummary(
         mode = settings.splitTunnelMode,
         appLabels = selectedLabels,
+        allAppsLabel = splitAllAppsLabel,
+        noAppsLabel = splitNoAppsLabel,
     )
 
     InfoCard(
-        title = "SPLIT TUNNEL",
+        title = WhiteDnsL10n.splitTunnelTitle,
         compact = true,
     ) {
         WhiteDnsDropdownField(
-            label = "App Routing",
+            label = WhiteDnsL10n.splitTunnelAppRouting,
             value = settings.splitTunnelMode,
-            options = WhiteDnsOptions.splitTunnelModes,
+            options = localizedSplitTunnelModes(),
             compact = true,
             onValueChange = { mode ->
                 onSettingsChange(settings.copy(splitTunnelMode = mode))
@@ -6150,7 +6243,7 @@ private fun SplitTunnelSettingsPanel(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Selected",
+                        text = WhiteDnsL10n.splitTunnelSelected,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 11.sp,
                             color = WhiteDnsPalette.Muted,
@@ -6169,7 +6262,7 @@ private fun SplitTunnelSettingsPanel(
                     )
                     CompactActionButton(
                         modifier = Modifier.widthIn(min = 104.dp),
-                        label = "SELECT APPS",
+                        label = WhiteDnsL10n.splitTunnelSelectApps,
                         emphasized = true,
                         enabled = apps.isNotEmpty(),
                         onClick = { showAppDialog = true },
@@ -6226,7 +6319,7 @@ private fun SplitTunnelAppDialog(
                 .padding(18.dp),
         ) {
             Text(
-                text = "SELECT APPS",
+                text = WhiteDnsL10n.splitTunnelDialogTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
                     color = WhiteDnsPalette.Ink,
@@ -6236,10 +6329,10 @@ private fun SplitTunnelAppDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Search",
+                label = WhiteDnsL10n.splitTunnelSearchLabel,
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "App name or package",
+                placeholder = WhiteDnsL10n.appsSearchPlaceholder,
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
             Column(
@@ -6250,7 +6343,7 @@ private fun SplitTunnelAppDialog(
             ) {
                 if (visibleApps.isEmpty()) {
                     Text(
-                        text = "No apps found.",
+                        text = WhiteDnsL10n.splitTunnelNoAppsFound,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 11.sp,
                             color = WhiteDnsPalette.Muted,
@@ -6280,21 +6373,21 @@ private fun SplitTunnelAppDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CLEAR",
+                    label = WhiteDnsL10n.profileBtnClear,
                     emphasized = false,
                     enabled = selected.isNotEmpty(),
                     onClick = { selected = emptySet() },
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CANCEL",
+                    label = WhiteDnsL10n.btnCancel,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "SAVE",
+                    label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = true,
                     onClick = {
@@ -6622,7 +6715,7 @@ private fun ResolverRuntimeSummary(
     modifier: Modifier = Modifier,
 ) {
     var selectedDialog by remember { mutableStateOf<ResolverRuntimeDialogType?>(null) }
-    val activeResolverCount = resolverState.activeResolvers.size.takeIf { it > 0 }?.toString() ?: "Pending"
+    val activeResolverCount = resolverState.activeResolvers.size.takeIf { it > 0 }?.toString() ?: WhiteDnsL10n.resolverPending
     val backgroundMtuScanInProgress = connectionStatus == ConnectionStatus.CONNECTED &&
         progressState.phase.lowercase() == "mtu" &&
         progressState.total > 0 &&
@@ -6639,13 +6732,13 @@ private fun ResolverRuntimeSummary(
         ) {
             ResolverRuntimeValue(
                 modifier = Modifier.weight(1f),
-                label = "Active Resolvers",
+                label = WhiteDnsL10n.resolverActiveResolvers,
                 value = activeResolverCount,
                 onClick = { selectedDialog = ResolverRuntimeDialogType.ACTIVE },
             )
             ResolverRuntimeValue(
                 modifier = Modifier.weight(1f),
-                label = "Valid Resolvers",
+                label = WhiteDnsL10n.resolverValidResolvers,
                 value = resolverState.validResolvers.size.toString(),
                 onClick = { selectedDialog = ResolverRuntimeDialogType.VALID },
             )
@@ -6698,9 +6791,9 @@ private fun ResolverRuntimeSummary(
                 }
                 Text(
                     text = if (progressState.completed > 0) {
-                        "Background scanning ${progressState.completed}/${progressState.total}"
+                        "${WhiteDnsL10n.backgroundScanningInProgress} ${progressState.completed}/${progressState.total}"
                     } else {
-                        "Background scanning in progress"
+                        WhiteDnsL10n.backgroundScanningInProgress
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -6716,8 +6809,8 @@ private fun ResolverRuntimeSummary(
 
     selectedDialog?.let { dialog ->
         val title = when (dialog) {
-            ResolverRuntimeDialogType.ACTIVE -> "ACTIVE RESOLVERS"
-            ResolverRuntimeDialogType.VALID -> "VALID RESOLVERS"
+            ResolverRuntimeDialogType.ACTIVE -> WhiteDnsL10n.resolverActiveResolvers
+            ResolverRuntimeDialogType.VALID -> WhiteDnsL10n.resolverValidResolvers
         }
         val resolvers = when (dialog) {
             ResolverRuntimeDialogType.ACTIVE -> resolverState.activeResolvers
@@ -6781,16 +6874,16 @@ private fun ConnectionVerificationSummary(
     modifier: Modifier = Modifier,
 ) {
     val statusText = when (verification.status) {
-        ConnectionVerificationStatus.Checking -> "Verifying"
-        ConnectionVerificationStatus.Verified -> "Verified"
-        ConnectionVerificationStatus.Failed -> "Needs Attention"
-        else -> "Pending"
+        ConnectionVerificationStatus.Checking -> WhiteDnsL10n.verificationVerifying
+        ConnectionVerificationStatus.Verified -> WhiteDnsL10n.verificationVerified
+        ConnectionVerificationStatus.Failed -> WhiteDnsL10n.verificationNeedsAttention
+        else -> WhiteDnsL10n.verificationPending
     }
     val message = verification.message.ifBlank {
         if (verification.status == ConnectionVerificationStatus.Idle) {
-            "Connection verification has not run yet"
+            WhiteDnsL10n.verificationNotRunYet
         } else {
-            "Checking tunnel route"
+            WhiteDnsL10n.verificationCheckingRoute
         }
     }
     val color = when (verification.status) {
@@ -6871,6 +6964,7 @@ private fun ResolverRuntimeDialog(
 ) {
     val context = LocalContext.current
     val resolverText = resolvers.joinToString("\n")
+    val whiteDnsResolversLabel = WhiteDnsL10n.whiteDnsResolversLabel
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -6892,10 +6986,10 @@ private fun ResolverRuntimeDialog(
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
             WhiteDnsTextField(
-                label = "Resolvers",
+                label = WhiteDnsL10n.profileFieldResolvers,
                 value = resolverText,
                 onValueChange = {},
-                placeholder = "No resolvers",
+                placeholder = WhiteDnsL10n.noResolversPlaceholder,
                 singleLine = false,
                 minLines = 6,
                 maxLines = 12,
@@ -6907,20 +7001,20 @@ private fun ResolverRuntimeDialog(
             ) {
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "CLOSE",
+                    label = WhiteDnsL10n.btnClose,
                     emphasized = false,
                     enabled = true,
                     onClick = onDismiss,
                 )
                 CompactActionButton(
                     modifier = Modifier.weight(1f),
-                    label = "COPY",
+                    label = WhiteDnsL10n.btnCopy,
                     emphasized = true,
                     enabled = resolverText.isNotBlank(),
                     onClick = {
                         copyTextToClipboard(
                             context = context,
-                            label = "WhiteDNS resolvers",
+                            label = whiteDnsResolversLabel,
                             text = resolverText,
                             sensitive = false,
                         )
@@ -6947,21 +7041,21 @@ private fun LiveSpeedStrip(
         SpeedIndicator(
             icon = Icons.Filled.Download,
             iconContentDescription = stringResource(R.string.cd_icon_download),
-            label = "Down",
+            label = WhiteDnsL10n.speedDown,
             value = formatDataSpeed(stats.downloadSpeedBytesPerSecond),
             modifier = Modifier.weight(1f),
         )
         SpeedIndicator(
             icon = Icons.Filled.Upload,
             iconContentDescription = stringResource(R.string.cd_icon_upload),
-            label = "Up",
+            label = WhiteDnsL10n.speedUp,
             value = formatDataSpeed(stats.uploadSpeedBytesPerSecond),
             modifier = Modifier.weight(1f),
         )
         SpeedIndicator(
             icon = Icons.Filled.DataUsage,
             iconContentDescription = stringResource(R.string.cd_icon_data_usage),
-            label = "Total Usage",
+            label = WhiteDnsL10n.speedTotalUsage,
             value = formatDataSize(stats.totalDataUsageBytes),
             modifier = Modifier.weight(1f),
         )
@@ -7040,27 +7134,31 @@ private fun ConnectionInfoCard(
     canDownloadToml: Boolean,
     onDownloadToml: () -> Unit,
 ) {
-    InfoCard(title = "CONNECTION INFO") {
-        InfoRow(label = "Mode", value = connectionMode)
+    InfoCard(title = WhiteDnsL10n.infoCardConnection) {
+        InfoRow(label = WhiteDnsL10n.infoLabelMode, value = connectionMode)
         if (showProxyDetails) {
-            InfoRow(label = "SOCKS5 Proxy", value = listenAddress)
+            InfoRow(label = WhiteDnsL10n.infoLabelSocks5Proxy, value = listenAddress)
             if (httpProxyEnabled) {
-                InfoRow(label = "HTTP Proxy", value = httpProxyAddress)
+                InfoRow(label = WhiteDnsL10n.infoLabelHttpProxy, value = httpProxyAddress)
             }
             ProtocolRow(protocol = protocol, showDivider = true)
-            InfoRow(label = "Auth", value = if (socksAuthEnabled) "On" else "Off")
+            InfoRow(label = WhiteDnsL10n.infoLabelAuth, value = if (socksAuthEnabled) WhiteDnsL10n.infoLabelAuthOn else WhiteDnsL10n.infoLabelAuthOff)
             if (socksAuthEnabled) {
-                InfoRow(label = "User", value = username)
-                InfoRow(label = "Pass", value = password)
+                InfoRow(label = WhiteDnsL10n.infoLabelUser, value = username)
+                InfoRow(label = WhiteDnsL10n.infoLabelPass, value = password)
             }
         } else {
             ProtocolRow(protocol = protocol, showDivider = true)
             InfoRow(
-                label = "Split Tunnel",
+                label = WhiteDnsL10n.infoLabelSplitTunnel,
                 value = splitTunnelConnectionSummary(
                     mode = splitTunnelMode,
                     packageNames = splitTunnelPackages,
                     labelsByPackage = splitTunnelAppLabels,
+                    allAppsLabel = WhiteDnsL10n.splitTunnelAllApps,
+                    noAppsLabel = WhiteDnsL10n.splitTunnelNoApps,
+                    onlyPrefix = WhiteDnsL10n.splitTunnelOnlyPrefix,
+                    bypassPrefix = WhiteDnsL10n.splitTunnelBypassPrefix,
                 ),
             )
         }
@@ -7076,19 +7174,19 @@ private fun ConnectionInfoCard(
                 CompactMetric(
                     icon = Icons.Filled.Apps,
                     iconContentDescription = stringResource(R.string.cd_icon_apps),
-                    label = "Apps",
+                    label = WhiteDnsL10n.infoLabelApps,
                     value = stats.connectedApps.toString(),
                 ),
             ),
         )
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
-        InfoRow(label = "Connection Profile", value = connectionProfileName)
-        InfoRow(label = "Resolver Profile", value = resolverProfileName)
-        InfoRow(label = "Setting Profile", value = settingProfileName)
+        InfoRow(label = WhiteDnsL10n.infoLabelConnectionProfile, value = connectionProfileName)
+        InfoRow(label = WhiteDnsL10n.infoLabelResolverProfile, value = resolverProfileName)
+        InfoRow(label = WhiteDnsL10n.infoLabelSettingProfile, value = settingProfileName)
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
         ResolverActionButton(
             modifier = Modifier.fillMaxWidth(),
-            label = "DOWNLOAD TOML",
+            label = WhiteDnsL10n.downloadTomlBtn,
             emphasized = false,
             enabled = canDownloadToml,
             onClick = onDownloadToml,
@@ -7102,7 +7200,7 @@ private fun AutoTuneResultsSection(
     onSaveResult: (AutoTuneTrialResult) -> Unit,
 ) {
     Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
-    GroupLabel("Parallel Test Results")
+    GroupLabel(WhiteDnsL10n.groupParallelTestResults)
     results.forEachIndexed { index, result ->
         AutoTuneResultRow(
             result = result,
@@ -7173,8 +7271,8 @@ private fun AutoTuneResultRow(
             AutoTuneMetricPill(
                 metric = AutoTuneDisplayMetric(
                     icon = Icons.Rounded.Speed,
-                    iconContentDescription = "Parallel Test speed",
-                    label = "Speed",
+                    iconContentDescription = WhiteDnsL10n.cdParallelTestSpeed,
+                    label = WhiteDnsL10n.autoTuneSpeedLabel,
                     value = autoTuneSpeedValue(result),
                     color = WhiteDnsPalette.Success,
                     surface = WhiteDnsPalette.SuccessSurface,
@@ -7185,8 +7283,8 @@ private fun AutoTuneResultRow(
             AutoTuneMetricPill(
                 metric = AutoTuneDisplayMetric(
                     icon = Icons.Rounded.NetworkPing,
-                    iconContentDescription = "Parallel Test ping",
-                    label = "Ping",
+                    iconContentDescription = WhiteDnsL10n.cdParallelTestPing,
+                    label = WhiteDnsL10n.autoTunePingLabel,
                     value = result.pingMillis?.let { "${it}ms" } ?: "-",
                     color = WhiteDnsPalette.AccentText,
                     surface = WhiteDnsPalette.AccentSurface,
@@ -7195,7 +7293,13 @@ private fun AutoTuneResultRow(
                 modifier = Modifier.weight(1f),
             )
         }
-        autoTuneStatusMessage(result)?.let { message ->
+        autoTuneStatusMessage(
+            result = result,
+            startingLabel = WhiteDnsL10n.autoTuneStartingTest,
+            measuringLabel = WhiteDnsL10n.autoTuneMeasuringSpeed,
+            failedFallback = WhiteDnsL10n.autoTuneFailedFallback,
+            measuredKeyword = WhiteDnsL10n.autoTuneMeasuredKeyword,
+        )?.let { message ->
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
             Text(
                 text = message,
@@ -7210,7 +7314,7 @@ private fun AutoTuneResultRow(
         Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
         CompactActionButton(
             modifier = Modifier.fillMaxWidth(),
-            label = "SAVE SETTING AS",
+            label = WhiteDnsL10n.saveSettingAs,
             emphasized = result.selected,
             enabled = true,
             onClick = { onSaveResult(result) },
@@ -7286,25 +7390,25 @@ private fun autoTuneMtuMetric(result: AutoTuneTrialResult): AutoTuneDisplayMetri
     return when (result.status) {
         "failed" -> AutoTuneDisplayMetric(
             icon = Icons.Rounded.Close,
-            iconContentDescription = "MTU failed",
-            label = "MTU",
-            value = "Fail",
+            iconContentDescription = WhiteDnsL10n.cdAutoTuneMtuFailed,
+            label = WhiteDnsL10n.groupMtu,
+            value = WhiteDnsL10n.autoTuneMtuFail,
             color = WhiteDnsPalette.Error,
             surface = WhiteDnsPalette.ErrorSurface,
         )
         "listening", "measuring", "ready" -> AutoTuneDisplayMetric(
             icon = Icons.Rounded.Check,
-            iconContentDescription = "MTU passed",
-            label = "MTU",
-            value = "Pass",
+            iconContentDescription = WhiteDnsL10n.cdAutoTuneMtuPassed,
+            label = WhiteDnsL10n.groupMtu,
+            value = WhiteDnsL10n.autoTuneMtuPass,
             color = WhiteDnsPalette.Success,
             surface = WhiteDnsPalette.SuccessSurface,
         )
         else -> AutoTuneDisplayMetric(
             icon = Icons.Rounded.Tune,
-            iconContentDescription = "MTU testing",
-            label = "MTU",
-            value = "Test",
+            iconContentDescription = WhiteDnsL10n.cdAutoTuneMtuTesting,
+            label = WhiteDnsL10n.groupMtu,
+            value = WhiteDnsL10n.autoTuneMtuTest,
             color = WhiteDnsPalette.AccentText,
             surface = WhiteDnsPalette.AccentSurface,
             loading = true,
@@ -7328,13 +7432,19 @@ private fun autoTuneSpeedValue(result: AutoTuneTrialResult): String {
     }
 }
 
-private fun autoTuneStatusMessage(result: AutoTuneTrialResult): String? {
+private fun autoTuneStatusMessage(
+    result: AutoTuneTrialResult,
+    startingLabel: String,
+    measuringLabel: String,
+    failedFallback: String,
+    measuredKeyword: String,
+): String? {
     return when (result.status) {
-        "starting" -> "Starting test"
-        "listening" -> "Measuring speed"
-        "measuring" -> "Measuring speed"
-        "failed" -> result.message.ifBlank { "Failed" }
-        else -> result.message.takeIf { it.isNotBlank() && it != "Measured" }
+        "starting" -> startingLabel
+        "listening" -> measuringLabel
+        "measuring" -> measuringLabel
+        "failed" -> result.message.ifBlank { failedFallback }
+        else -> result.message.takeIf { it.isNotBlank() && it != measuredKeyword }
     }
 }
 
@@ -7431,7 +7541,7 @@ private fun ProtocolRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Protocol",
+            text = WhiteDnsL10n.infoLabelProtocol,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 12.sp,
                 color = WhiteDnsPalette.Muted,
@@ -7549,6 +7659,8 @@ private fun ConnectionLogsBlock(
     val logs = uiState.connectionLogs
     val visibleLogs = if (expanded) logs else logs.take(10)
     val context = LocalContext.current
+    val logsClipboardLabel = WhiteDnsL10n.whiteDnsLogsLabel
+    val diagnosticsClipboardLabel = WhiteDnsL10n.whiteDnsDiagnosticsLabel
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -7560,7 +7672,7 @@ private fun ConnectionLogsBlock(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "CONNECTION LOGS",
+                text = WhiteDnsL10n.logsInlineTitle,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 10.sp,
                     color = WhiteDnsPalette.SectionTitle,
@@ -7570,22 +7682,22 @@ private fun ConnectionLogsBlock(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LogActionButton(
-                    label = "COPY",
+                    label = WhiteDnsL10n.btnCopy,
                     onClick = {
                         copyTextToClipboard(
                             context = context,
-                            label = "WhiteDNS logs",
+                            label = logsClipboardLabel,
                             text = logs.joinToString(separator = "\n"),
                             sensitive = false,
                         )
                     },
                 )
                 LogActionButton(
-                    label = "DIAGNOSTICS",
+                    label = WhiteDnsL10n.logsDiagnostics,
                     onClick = {
                         copyTextToClipboard(
                             context = context,
-                            label = "WhiteDNS diagnostics",
+                            label = diagnosticsClipboardLabel,
                             text = buildDiagnosticsText(context, uiState),
                             sensitive = false,
                         )
@@ -7658,32 +7770,45 @@ private fun LogActionButton(
     }
 }
 
-private fun shareProfileLink(context: Context, link: String) {
+private fun shareProfileLink(
+    context: Context,
+    link: String,
+    subject: String,
+    chooserTitle: String,
+) {
     shareTextExport(
         context = context,
         fileName = "whitedns-profile.txt",
-        subject = "WhiteDNS profile",
-        chooserTitle = "Export WhiteDNS profile",
+        subject = subject,
+        chooserTitle = chooserTitle,
         text = link,
     )
 }
 
-private fun shareClientConfigToml(context: Context, toml: String) {
+private fun shareClientConfigToml(
+    context: Context,
+    toml: String,
+    chooserTitle: String,
+) {
     shareTextExport(
         context = context,
         fileName = "client_config.toml",
         subject = "client_config.toml",
-        chooserTitle = "Export client_config.toml",
+        chooserTitle = chooserTitle,
         text = toml,
     )
 }
 
-private fun shareAdvancedSettingsToml(context: Context, toml: String) {
+private fun shareAdvancedSettingsToml(
+    context: Context,
+    toml: String,
+    chooserTitle: String,
+) {
     shareTextExport(
         context = context,
         fileName = "advanced_settings.toml",
         subject = "advanced_settings.toml",
-        chooserTitle = "Export advanced_settings.toml",
+        chooserTitle = chooserTitle,
         text = toml,
     )
 }
@@ -7804,10 +7929,16 @@ private fun buildDiagnosticsText(
     }.trimEnd()
 }
 
-private fun readResolverTextFromUri(context: Context, uri: Uri): Result<String> {
+private fun readResolverTextFromUri(
+    context: Context,
+    uri: Uri,
+    unableToOpenLabel: String,
+    invalidResolverIpTemplate: String,
+    noResolverEntriesLabel: String,
+): Result<String> {
     return runCatching {
-        val rawText = readTextFromUri(context, uri, "Unable to open resolver file").getOrThrow()
-        normalizeImportedResolverText(rawText)
+        val rawText = readTextFromUri(context, uri, unableToOpenLabel).getOrThrow()
+        normalizeImportedResolverText(rawText, invalidResolverIpTemplate, noResolverEntriesLabel)
     }
 }
 
@@ -7824,13 +7955,17 @@ private fun readTextFromUri(
     }
 }
 
-private fun normalizeImportedResolverText(rawText: String): String {
+private fun normalizeImportedResolverText(
+    rawText: String,
+    invalidResolverIpTemplate: String,
+    noResolverEntriesLabel: String,
+): String {
     val validation = validateResolverText(rawText)
     if (validation.invalidEntries.isNotEmpty()) {
-        throw IllegalArgumentException("Invalid resolver IP: ${validation.invalidEntries.first()}")
+        throw IllegalArgumentException(invalidResolverIpTemplate.format(validation.invalidEntries.first()))
     }
     if (validation.normalizedText.isBlank()) {
-        throw IllegalArgumentException("No resolver entries found in file")
+        throw IllegalArgumentException(noResolverEntriesLabel)
     }
     return validation.normalizedText
 }
@@ -7840,13 +7975,21 @@ private fun resolverValidationMessage(
     resolverText: String,
     invalidEntries: List<String>,
     validResolverCount: Int,
+    invalidResolverIpTemplate: String,
+    enterValidResolverIpLabel: String,
+    enterProfileNameToSaveLabel: String,
+    validResolverSingularTemplate: String,
+    validResolverPluralTemplate: String,
 ): String? {
     return when {
         resolverText.isBlank() -> null
-        invalidEntries.isNotEmpty() -> "Invalid resolver IP: ${invalidEntries.first()}"
-        validResolverCount == 0 -> "Enter at least one valid resolver IP."
-        name.isBlank() -> "Enter a profile name to save."
-        else -> "$validResolverCount valid resolver${if (validResolverCount == 1) "" else "s"}."
+        invalidEntries.isNotEmpty() -> invalidResolverIpTemplate.format(invalidEntries.first())
+        validResolverCount == 0 -> enterValidResolverIpLabel
+        name.isBlank() -> enterProfileNameToSaveLabel
+        else -> {
+            val template = if (validResolverCount == 1) validResolverSingularTemplate else validResolverPluralTemplate
+            template.format(validResolverCount)
+        }
     }
 }
 
@@ -8040,7 +8183,7 @@ private fun SectionCard(
                     )
                     if (collapsible) {
                         Text(
-                            text = if (expanded) "TAP TO COLLAPSE" else "TAP TO CONFIGURE",
+                            text = if (expanded) WhiteDnsL10n.tapToCollapse else WhiteDnsL10n.tapToConfigure,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 9.sp,
                                 color = WhiteDnsPalette.Description,
@@ -8067,7 +8210,7 @@ private fun SectionCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = if (expanded) "OPEN" else "CLOSED",
+                        text = if (expanded) WhiteDnsL10n.parallelTestOpen else WhiteDnsL10n.parallelTestClosed,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 9.sp,
                             color = if (expanded) WhiteDnsPalette.OnAccent else WhiteDnsPalette.Muted,
@@ -8261,6 +8404,39 @@ private fun FieldLabel(text: String) {
 }
 
 @Composable
+private fun localizedBalancingStrategies(): List<Choice<Int>> = listOf(
+    Choice(1, WhiteDnsL10n.balancingStrategyRandom),
+    Choice(2, WhiteDnsL10n.balancingStrategyRoundRobin),
+    Choice(3, WhiteDnsL10n.balancingStrategyLeastLoss),
+    Choice(4, WhiteDnsL10n.balancingStrategyLowestLatency),
+)
+
+@Composable
+private fun localizedCompressionTypes(): List<Choice<Int>> = listOf(
+    Choice(0, WhiteDnsL10n.compressionOff),
+    Choice(1, WhiteDnsL10n.compressionZstd),
+    Choice(2, WhiteDnsL10n.compressionLz4),
+    Choice(3, WhiteDnsL10n.compressionZlib),
+)
+
+@Composable
+private fun localizedSplitTunnelModes(): List<Choice<String>> = listOf(
+    Choice(WhiteDnsOptions.SplitTunnelModeOff, WhiteDnsL10n.splitTunnelAllAppsChoice),
+    Choice(WhiteDnsOptions.SplitTunnelModeInclude, WhiteDnsL10n.splitTunnelOnlySelectedChoice),
+    Choice(WhiteDnsOptions.SplitTunnelModeExclude, WhiteDnsL10n.splitTunnelBypassSelectedChoice),
+)
+
+@Composable
+private fun localizedEncryptionMethods(): List<Choice<Int>> = listOf(
+    Choice(0, WhiteDnsL10n.encryptionMethodNone),
+    Choice(1, WhiteDnsL10n.encryptionMethodXor),
+    Choice(2, WhiteDnsL10n.encryptionMethodChacha20),
+    Choice(3, WhiteDnsL10n.encryptionMethodAes128),
+    Choice(4, WhiteDnsL10n.encryptionMethodAes192),
+    Choice(5, WhiteDnsL10n.encryptionMethodAes256),
+)
+
+@Composable
 private fun <T> WhiteDnsDropdownField(
     label: String,
     value: T,
@@ -8320,7 +8496,7 @@ private fun <T> WhiteDnsDropdownField(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = selectedLabel.ifEmpty { "Select" },
+                    text = selectedLabel.ifEmpty { WhiteDnsL10n.dropdownPlaceholderSelect },
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 13.sp,
                         color = if (enabled) WhiteDnsPalette.Ink else WhiteDnsPalette.Disabled,
@@ -8482,32 +8658,38 @@ private fun selectedSplitTunnelLabels(
 private fun splitTunnelAppsSummary(
     mode: String,
     appLabels: List<String>,
+    allAppsLabel: String,
+    noAppsLabel: String,
 ): String {
     if (mode == WhiteDnsOptions.SplitTunnelModeOff) {
-        return "All apps"
+        return allAppsLabel
     }
     if (appLabels.isEmpty()) {
-        return "No apps"
+        return noAppsLabel
     }
-    return compactAppLabelSummary(appLabels)
+    return compactAppLabelSummary(appLabels, noAppsLabel)
 }
 
 private fun splitTunnelConnectionSummary(
     mode: String,
     packageNames: List<String>,
     labelsByPackage: Map<String, String>,
+    allAppsLabel: String,
+    noAppsLabel: String,
+    onlyPrefix: String,
+    bypassPrefix: String,
 ): String {
     val labels = packageNames.map { packageName ->
         labelsByPackage[packageName] ?: packageName
     }
     return when (mode) {
         WhiteDnsOptions.SplitTunnelModeInclude -> {
-            if (labels.isEmpty()) "All apps" else "Only ${compactAppLabelSummary(labels)}"
+            if (labels.isEmpty()) allAppsLabel else "$onlyPrefix ${compactAppLabelSummary(labels, noAppsLabel)}"
         }
         WhiteDnsOptions.SplitTunnelModeExclude -> {
-            if (labels.isEmpty()) "All apps" else "Bypass ${compactAppLabelSummary(labels)}"
+            if (labels.isEmpty()) allAppsLabel else "$bypassPrefix ${compactAppLabelSummary(labels, noAppsLabel)}"
         }
-        else -> "All apps"
+        else -> allAppsLabel
     }
 }
 
@@ -8555,9 +8737,9 @@ private fun HapticFeedback.performHeavy() {
     performHapticFeedback(HapticFeedbackType.LongPress)
 }
 
-private fun compactAppLabelSummary(appLabels: List<String>): String {
+private fun compactAppLabelSummary(appLabels: List<String>, noAppsLabel: String): String {
     return when (appLabels.size) {
-        0 -> "No apps"
+        0 -> noAppsLabel
         1 -> appLabels.first()
         2 -> appLabels.joinToString(", ")
         else -> "${appLabels.take(2).joinToString(", ")} +${appLabels.size - 2}"

@@ -248,6 +248,407 @@ object WhiteDnsL10n {
     val selectorSettingProfiles: String @Composable get() = LocalWhiteDnsStrings.current.selectorSettingProfiles
     val languageEn: String @Composable get() = LocalWhiteDnsStrings.current.languageEn
     val languageFa: String @Composable get() = LocalWhiteDnsStrings.current.languageFa
+
+    // Scan tab additional
+    val scanDefaultList: String @Composable get() = LocalWhiteDnsStrings.current.scanDefaultList
+    val scanSelectFile: String @Composable get() = LocalWhiteDnsStrings.current.scanSelectFile
+    val scanProfileLabel: String @Composable get() = LocalWhiteDnsStrings.current.scanProfileLabel
+    val scanAutoSaveTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanAutoSaveTitle
+    val scanSaveAsTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanSaveAsTitle
+    val scanSaveAsName: String @Composable get() = LocalWhiteDnsStrings.current.scanSaveAsName
+    val scanSaveAsPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.scanSaveAsPlaceholder
+    val scanNoFileSelected: String @Composable get() = LocalWhiteDnsStrings.current.scanNoFileSelected
+    val scanMessageLabel: String @Composable get() = LocalWhiteDnsStrings.current.scanMessageLabel
+
+    // Setup card
+    val setupResolversLabel: String @Composable get() = LocalWhiteDnsStrings.current.setupResolversLabel
+    val setupAddConnectionSupportingText: String @Composable get() = LocalWhiteDnsStrings.current.setupAddConnectionSupportingText
+    val setupAddResolverSupportingText: String @Composable get() = LocalWhiteDnsStrings.current.setupAddResolverSupportingText
+    val setupManualResolvers: String @Composable get() = LocalWhiteDnsStrings.current.setupManualResolvers
+    val setupSectionSetup: String @Composable get() = LocalWhiteDnsStrings.current.setupSectionSetup
+
+    // Connection info card
+    val infoCardConnection: String @Composable get() = LocalWhiteDnsStrings.current.infoCardConnection
+    val infoLabelMode: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelMode
+    val infoLabelSocks5Proxy: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelSocks5Proxy
+    val infoLabelHttpProxy: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelHttpProxy
+    val infoLabelAuth: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelAuth
+    val infoLabelUser: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelUser
+    val infoLabelPass: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelPass
+    val infoLabelSplitTunnel: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelSplitTunnel
+    val infoLabelApps: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelApps
+    val infoLabelConnectionProfile: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelConnectionProfile
+    val infoLabelResolverProfile: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelResolverProfile
+    val infoLabelSettingProfile: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelSettingProfile
+    val infoLabelProtocol: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelProtocol
+    val infoLabelAuthOn: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelAuthOn
+    val infoLabelAuthOff: String @Composable get() = LocalWhiteDnsStrings.current.infoLabelAuthOff
+
+    // Speed indicators
+    val speedDown: String @Composable get() = LocalWhiteDnsStrings.current.speedDown
+    val speedUp: String @Composable get() = LocalWhiteDnsStrings.current.speedUp
+    val speedTotalUsage: String @Composable get() = LocalWhiteDnsStrings.current.speedTotalUsage
+
+    // Resolver runtime
+    val resolverActiveResolvers: String @Composable get() = LocalWhiteDnsStrings.current.resolverActiveResolvers
+    val resolverValidResolvers: String @Composable get() = LocalWhiteDnsStrings.current.resolverValidResolvers
+    val resolverPending: String @Composable get() = LocalWhiteDnsStrings.current.resolverPending
+    val resolverNoResolvers: String @Composable get() = LocalWhiteDnsStrings.current.resolverNoResolvers
+    val backgroundScanningInProgress: String @Composable get() = LocalWhiteDnsStrings.current.backgroundScanningInProgress
+
+    // Profile dialogs
+    val profileDialogCreateSetting: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogCreateSetting
+    val profileDialogEditSetting: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogEditSetting
+    val profileDialogCreateResolver: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogCreateResolver
+    val profileDialogEditResolver: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogEditResolver
+    val profileDialogCreateConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogCreateConnection
+    val profileDialogEditConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogEditConnection
+    val profileDialogImportSettings: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogImportSettings
+    val profileDialogImportConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogImportConnection
+    val profileDialogExportConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportConnection
+    val profileDialogExportAllConnections: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportAllConnections
+    val profileDialogExportSettings: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportSettings
+    val profileFieldName: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldName
+    val profileFieldResolvers: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldResolvers
+    val profileFieldProfileLinks: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldProfileLinks
+    val profileFieldToml: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldToml
+    val profileNamePlaceholderFastTunnel: String @Composable get() = LocalWhiteDnsStrings.current.profileNamePlaceholderFastTunnel
+    val profileNamePlaceholderHomeResolvers: String @Composable get() = LocalWhiteDnsStrings.current.profileNamePlaceholderHomeResolvers
+    val profileNamePlaceholderImportedSettings: String @Composable get() = LocalWhiteDnsStrings.current.profileNamePlaceholderImportedSettings
+    val profileNamePlaceholderConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileNamePlaceholderConnection
+    val profileResolverPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileResolverPlaceholder
+
+    // Profile menu actions
+    val profileMenuExport: String @Composable get() = LocalWhiteDnsStrings.current.profileMenuExport
+    val profileMenuEdit: String @Composable get() = LocalWhiteDnsStrings.current.profileMenuEdit
+    val profileMenuDelete: String @Composable get() = LocalWhiteDnsStrings.current.profileMenuDelete
+    val profileMenuUse: String @Composable get() = LocalWhiteDnsStrings.current.profileMenuUse
+    val profileMenuUseSelected: String @Composable get() = LocalWhiteDnsStrings.current.profileMenuUseSelected
+
+    // Profile list empty states
+    val profileNoResolverLists: String @Composable get() = LocalWhiteDnsStrings.current.profileNoResolverLists
+    val profileNoSettingProfiles: String @Composable get() = LocalWhiteDnsStrings.current.profileNoSettingProfiles
+    val profileQrUnavailable: String @Composable get() = LocalWhiteDnsStrings.current.profileQrUnavailable
+
+    // Profile action buttons
+    val profileBtnCreate: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnCreate
+    val profileBtnImport: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnImport
+    val profileBtnDeleteDups: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnDeleteDups
+    val profileBtnExportAll: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnExportAll
+    val profileBtnSaveCurrent: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnSaveCurrent
+    val profileBtnImportFile: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnImportFile
+    val profileBtnClear: String @Composable get() = LocalWhiteDnsStrings.current.profileBtnClear
+
+    // Delete confirmation dialogs
+    val deleteConnectionTitle: String @Composable get() = LocalWhiteDnsStrings.current.deleteConnectionTitle
+    val deleteResolverTitle: String @Composable get() = LocalWhiteDnsStrings.current.deleteResolverTitle
+    val deleteSettingTitle: String @Composable get() = LocalWhiteDnsStrings.current.deleteSettingTitle
+    val deleteDupsTitle: String @Composable get() = LocalWhiteDnsStrings.current.deleteDupsTitle
+
+    // GroupLabels
+    val groupMtu: String @Composable get() = LocalWhiteDnsStrings.current.groupMtu
+    val groupRuntimeWorkers: String @Composable get() = LocalWhiteDnsStrings.current.groupRuntimeWorkers
+    val groupLocalProxy: String @Composable get() = LocalWhiteDnsStrings.current.groupLocalProxy
+    val groupNetworkTuning: String @Composable get() = LocalWhiteDnsStrings.current.groupNetworkTuning
+    val groupReliability: String @Composable get() = LocalWhiteDnsStrings.current.groupReliability
+    val groupDefault: String @Composable get() = LocalWhiteDnsStrings.current.groupDefault
+    val groupCustomSettings: String @Composable get() = LocalWhiteDnsStrings.current.groupCustomSettings
+    val groupParallelTestResults: String @Composable get() = LocalWhiteDnsStrings.current.groupParallelTestResults
+
+    // Advanced settings field labels
+    val settingListenIp: String @Composable get() = LocalWhiteDnsStrings.current.settingListenIp
+    val settingListenPort: String @Composable get() = LocalWhiteDnsStrings.current.settingListenPort
+    val settingHttpProxy: String @Composable get() = LocalWhiteDnsStrings.current.settingHttpProxy
+    val settingHttpPort: String @Composable get() = LocalWhiteDnsStrings.current.settingHttpPort
+    val settingSocks5Auth: String @Composable get() = LocalWhiteDnsStrings.current.settingSocks5Auth
+    val settingUsername: String @Composable get() = LocalWhiteDnsStrings.current.settingUsername
+    val settingPassword: String @Composable get() = LocalWhiteDnsStrings.current.settingPassword
+    val settingBalancingStrategy: String @Composable get() = LocalWhiteDnsStrings.current.settingBalancingStrategy
+    val settingUploadDup: String @Composable get() = LocalWhiteDnsStrings.current.settingUploadDup
+    val settingDownloadDup: String @Composable get() = LocalWhiteDnsStrings.current.settingDownloadDup
+    val settingUploadCompress: String @Composable get() = LocalWhiteDnsStrings.current.settingUploadCompress
+    val settingDownloadCompress: String @Composable get() = LocalWhiteDnsStrings.current.settingDownloadCompress
+    val settingBaseEncodeData: String @Composable get() = LocalWhiteDnsStrings.current.settingBaseEncodeData
+    val settingPingWatchdog: String @Composable get() = LocalWhiteDnsStrings.current.settingPingWatchdog
+    val settingTrafficWarmup: String @Composable get() = LocalWhiteDnsStrings.current.settingTrafficWarmup
+    val settingWarmupProbes: String @Composable get() = LocalWhiteDnsStrings.current.settingWarmupProbes
+    val settingKeepalive: String @Composable get() = LocalWhiteDnsStrings.current.settingKeepalive
+    val settingLogLevel: String @Composable get() = LocalWhiteDnsStrings.current.settingLogLevel
+    val settingSearch: String @Composable get() = LocalWhiteDnsStrings.current.settingSearch
+    val settingMinUpload: String @Composable get() = LocalWhiteDnsStrings.current.settingMinUpload
+    val settingMinDownload: String @Composable get() = LocalWhiteDnsStrings.current.settingMinDownload
+    val settingMaxUpload: String @Composable get() = LocalWhiteDnsStrings.current.settingMaxUpload
+    val settingMaxDownload: String @Composable get() = LocalWhiteDnsStrings.current.settingMaxDownload
+    val settingResolverRetries: String @Composable get() = LocalWhiteDnsStrings.current.settingResolverRetries
+    val settingResolverTimeout: String @Composable get() = LocalWhiteDnsStrings.current.settingResolverTimeout
+    val settingResolverParallel: String @Composable get() = LocalWhiteDnsStrings.current.settingResolverParallel
+    val settingLogsRetries: String @Composable get() = LocalWhiteDnsStrings.current.settingLogsRetries
+    val settingLogsTimeout: String @Composable get() = LocalWhiteDnsStrings.current.settingLogsTimeout
+    val settingLogsParallel: String @Composable get() = LocalWhiteDnsStrings.current.settingLogsParallel
+    val settingRxTxWorkers: String @Composable get() = LocalWhiteDnsStrings.current.settingRxTxWorkers
+    val settingProcessWorkers: String @Composable get() = LocalWhiteDnsStrings.current.settingProcessWorkers
+    val settingTunnelPacketTimeout: String @Composable get() = LocalWhiteDnsStrings.current.settingTunnelPacketTimeout
+    val settingIdlePoll: String @Composable get() = LocalWhiteDnsStrings.current.settingIdlePoll
+    val settingTxChannel: String @Composable get() = LocalWhiteDnsStrings.current.settingTxChannel
+    val settingRxChannel: String @Composable get() = LocalWhiteDnsStrings.current.settingRxChannel
+    val settingUdpPool: String @Composable get() = LocalWhiteDnsStrings.current.settingUdpPool
+    val settingStreamQueue: String @Composable get() = LocalWhiteDnsStrings.current.settingStreamQueue
+    val settingOrphanQueue: String @Composable get() = LocalWhiteDnsStrings.current.settingOrphanQueue
+    val settingDnsFragments: String @Composable get() = LocalWhiteDnsStrings.current.settingDnsFragments
+    val settingSocksUdpTimeout: String @Composable get() = LocalWhiteDnsStrings.current.settingSocksUdpTimeout
+    val settingTerminalRetain: String @Composable get() = LocalWhiteDnsStrings.current.settingTerminalRetain
+    val settingCancelledRetain: String @Composable get() = LocalWhiteDnsStrings.current.settingCancelledRetain
+    val settingRetryBase: String @Composable get() = LocalWhiteDnsStrings.current.settingRetryBase
+    val settingRetryStep: String @Composable get() = LocalWhiteDnsStrings.current.settingRetryStep
+    val settingRetryLinear: String @Composable get() = LocalWhiteDnsStrings.current.settingRetryLinear
+    val settingRetryMax: String @Composable get() = LocalWhiteDnsStrings.current.settingRetryMax
+    val settingBusyRetry: String @Composable get() = LocalWhiteDnsStrings.current.settingBusyRetry
+    val settingSettingLabel: String @Composable get() = LocalWhiteDnsStrings.current.settingSettingLabel
+
+    // Split Tunnel
+    val splitTunnelTitle: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelTitle
+    val splitTunnelAppRouting: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelAppRouting
+    val splitTunnelSelected: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSelected
+    val splitTunnelSelectApps: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSelectApps
+    val splitTunnelNoAppsFound: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelNoAppsFound
+    val splitTunnelSearchPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSearchPlaceholder
+    val splitTunnelDialogTitle: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelDialogTitle
+    val splitTunnelSearchLabel: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSearchLabel
+
+    // Connection logs (inline panel)
+    val logsInlineTitle: String @Composable get() = LocalWhiteDnsStrings.current.logsInlineTitle
+    val logsDiagnostics: String @Composable get() = LocalWhiteDnsStrings.current.logsDiagnostics
+
+    // Notification / VPN banners
+    val bannerNotificationBlockedTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerNotificationBlockedTitle
+    val bannerNotificationBlockedBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerNotificationBlockedBody
+    val bannerFullVpnWarningTitle: String @Composable get() = LocalWhiteDnsStrings.current.bannerFullVpnWarningTitle
+    val bannerFullVpnWarningBody: String @Composable get() = LocalWhiteDnsStrings.current.bannerFullVpnWarningBody
+
+    // Parallel test UI
+    val parallelTestOpenLabel: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestOpenLabel
+    val parallelTestClosedLabel: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestClosedLabel
+    val parallelTestDescription: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestDescription
+    val parallelTestYourConfigs: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestYourConfigs
+
+    // Connect tab messages
+    val connectNeedResolvers: String @Composable get() = LocalWhiteDnsStrings.current.connectNeedResolvers
+    val connectSelectedCount: String @Composable get() = LocalWhiteDnsStrings.current.connectSelectedCount
+
+    // Auto-tune / parallel test results
+    val autoTuneSaveSettingAs: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneSaveSettingAs
+    val autoTuneMtuFail: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMtuFail
+    val autoTuneMtuPass: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMtuPass
+    val autoTuneMtuTest: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMtuTest
+    val autoTuneSpeedLabel: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneSpeedLabel
+    val autoTunePingLabel: String @Composable get() = LocalWhiteDnsStrings.current.autoTunePingLabel
+    val autoTuneStatusStarting: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneStatusStarting
+    val autoTuneMeasuringSpeed: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMeasuringSpeed
+    val cdParallelTestSpeed: String @Composable get() = LocalWhiteDnsStrings.current.cdParallelTestSpeed
+    val cdParallelTestPing: String @Composable get() = LocalWhiteDnsStrings.current.cdParallelTestPing
+    val cdAutoTuneMtuFailed: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuFailed
+    val cdAutoTuneMtuPassed: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuPassed
+    val cdAutoTuneMtuTesting: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuTesting
+
+    val shareSubjectProfile: String @Composable get() = LocalWhiteDnsStrings.current.shareSubjectProfile
+    val shareChooserProfile: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserProfile
+    val shareChooserClientConfig: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserClientConfig
+    val shareChooserAdvancedSettings: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserAdvancedSettings
+
+    val errorUnableToOpenResolverFile: String @Composable get() = LocalWhiteDnsStrings.current.errorUnableToOpenResolverFile
+    val errorInvalidResolverIpTemplate: String @Composable get() = LocalWhiteDnsStrings.current.errorInvalidResolverIpTemplate
+    val errorNoResolverEntries: String @Composable get() = LocalWhiteDnsStrings.current.errorNoResolverEntries
+    val errorEnterValidResolverIp: String @Composable get() = LocalWhiteDnsStrings.current.errorEnterValidResolverIp
+    val errorEnterProfileNameToSave: String @Composable get() = LocalWhiteDnsStrings.current.errorEnterProfileNameToSave
+    val resolverValidSingularTemplate: String @Composable get() = LocalWhiteDnsStrings.current.resolverValidSingularTemplate
+    val resolverValidPluralTemplate: String @Composable get() = LocalWhiteDnsStrings.current.resolverValidPluralTemplate
+    val advancedProfileModifiedSuffix: String @Composable get() = LocalWhiteDnsStrings.current.advancedProfileModifiedSuffix
+    val cdEditPrefix: String @Composable get() = LocalWhiteDnsStrings.current.cdEditPrefix
+    val resolverFieldPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.resolverFieldPlaceholder
+    val dropdownPlaceholderSelect: String @Composable get() = LocalWhiteDnsStrings.current.dropdownPlaceholderSelect
+    val setupDefaultResolver: String @Composable get() = LocalWhiteDnsStrings.current.setupDefaultResolver
+    val setupDefaultConnection: String @Composable get() = LocalWhiteDnsStrings.current.setupDefaultConnection
+    val setupDefaultAdvanced: String @Composable get() = LocalWhiteDnsStrings.current.setupDefaultAdvanced
+
+    val balancingStrategyRandom: String @Composable get() = LocalWhiteDnsStrings.current.balancingStrategyRandom
+    val balancingStrategyRoundRobin: String @Composable get() = LocalWhiteDnsStrings.current.balancingStrategyRoundRobin
+    val balancingStrategyLeastLoss: String @Composable get() = LocalWhiteDnsStrings.current.balancingStrategyLeastLoss
+    val balancingStrategyLowestLatency: String @Composable get() = LocalWhiteDnsStrings.current.balancingStrategyLowestLatency
+    val compressionOff: String @Composable get() = LocalWhiteDnsStrings.current.compressionOff
+    val compressionZstd: String @Composable get() = LocalWhiteDnsStrings.current.compressionZstd
+    val compressionLz4: String @Composable get() = LocalWhiteDnsStrings.current.compressionLz4
+    val compressionZlib: String @Composable get() = LocalWhiteDnsStrings.current.compressionZlib
+    val splitTunnelAllAppsChoice: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelAllAppsChoice
+    val splitTunnelOnlySelectedChoice: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelOnlySelectedChoice
+    val splitTunnelBypassSelectedChoice: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelBypassSelectedChoice
+    val encryptionMethodNone: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodNone
+    val encryptionMethodXor: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodXor
+    val encryptionMethodChacha20: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodChacha20
+    val encryptionMethodAes128: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodAes128
+    val encryptionMethodAes192: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodAes192
+    val encryptionMethodAes256: String @Composable get() = LocalWhiteDnsStrings.current.encryptionMethodAes256
+
+    // Download TOML dialog
+    val downloadTomlTitle: String @Composable get() = LocalWhiteDnsStrings.current.downloadTomlTitle
+    val downloadTomlBtn: String @Composable get() = LocalWhiteDnsStrings.current.downloadTomlBtn
+
+    // Save setting as button
+    val saveSettingAs: String @Composable get() = LocalWhiteDnsStrings.current.saveSettingAs
+
+    // Validation messages
+    val validationEnterResolverIp: String @Composable get() = LocalWhiteDnsStrings.current.validationEnterResolverIp
+    val validationEnterProfileName: String @Composable get() = LocalWhiteDnsStrings.current.validationEnterProfileName
+
+    // HomeSelectorCard
+    val homeSelectorSettingLabel: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorSettingLabel
+    val homeSelectorUnsavedChanges: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorUnsavedChanges
+
+    // Existing (menu items kept for completeness)
+    val menuVersion: String @Composable get() = LocalWhiteDnsStrings.current.menuVersion
+    val setupTitle: String @Composable get() = LocalWhiteDnsStrings.current.setupTitle
+    val setupAddConnection: String @Composable get() = LocalWhiteDnsStrings.current.setupAddConnection
+    val setupAddResolver: String @Composable get() = LocalWhiteDnsStrings.current.setupAddResolver
+    val resolverNotSelected: String @Composable get() = LocalWhiteDnsStrings.current.resolverNotSelected
+    val connectProgressConnected: String @Composable get() = LocalWhiteDnsStrings.current.connectProgressConnected
+    val scanWorkerWarning: String @Composable get() = LocalWhiteDnsStrings.current.scanWorkerWarning
+
+    // Newly added getters for remaining English strings translation
+    val homeSelectorNoSavedLists: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorNoSavedLists
+    val homeSelectorNotSelected: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorNotSelected
+    val homeSelectorResolverProfileFallback: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorResolverProfileFallback
+    val homeSelectorSearchConnections: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorSearchConnections
+    val homeSelectorSearchResolvers: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorSearchResolvers
+    val homeSelectorSearchSettings: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorSearchSettings
+    val homeSelectorCustomAdvanced: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorCustomAdvanced
+    val profileNameCopySuffix: String @Composable get() = LocalWhiteDnsStrings.current.profileNameCopySuffix
+    val settingProfileFastTunnelPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.settingProfileFastTunnelPlaceholder
+    val resolverProfileHomeResolversPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.resolverProfileHomeResolversPlaceholder
+    val settingProfileImportedSettingsPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.settingProfileImportedSettingsPlaceholder
+    val homeSelectorNoConnectionProfiles: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorNoConnectionProfiles
+    val homeSelectorNoResolverProfiles: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorNoResolverProfiles
+    val homeSelectorNoSettingProfiles: String @Composable get() = LocalWhiteDnsStrings.current.homeSelectorNoSettingProfiles
+
+    val setupNoResolversConfigured: String @Composable get() = LocalWhiteDnsStrings.current.setupNoResolversConfigured
+    val setupInvalidResolverIp: String @Composable get() = LocalWhiteDnsStrings.current.setupInvalidResolverIp
+    val setupServerRouteAndKey: String @Composable get() = LocalWhiteDnsStrings.current.setupServerRouteAndKey
+    val setupEncryptionKeyMissing: String @Composable get() = LocalWhiteDnsStrings.current.setupEncryptionKeyMissing
+
+    val scanProfileNeedsServer: String @Composable get() = LocalWhiteDnsStrings.current.scanProfileNeedsServer
+    val scanProfileFallback: String @Composable get() = LocalWhiteDnsStrings.current.scanProfileFallback
+    val scanResultsTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanResultsTitle
+    val scanCurrentScan: String @Composable get() = LocalWhiteDnsStrings.current.scanCurrentScan
+    val scanFieldWorkers: String @Composable get() = LocalWhiteDnsStrings.current.scanFieldWorkers
+    val scanSaveBodyTemplate: String @Composable get() = LocalWhiteDnsStrings.current.scanSaveBodyTemplate
+    val scanStatusReady: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusReady
+    val scanStatusStarting: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusStarting
+    val scanStatusRunning: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusRunning
+    val scanStatusCompleted: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusCompleted
+    val scanStatusFailed: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusFailed
+    val scanStatusStopped: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusStopped
+    val scanStatusIdle: String @Composable get() = LocalWhiteDnsStrings.current.scanStatusIdle
+
+    val groupCustomConnections: String @Composable get() = LocalWhiteDnsStrings.current.groupCustomConnections
+    val customConnectionsEmpty: String @Composable get() = LocalWhiteDnsStrings.current.customConnectionsEmpty
+    val profileFieldDomain: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldDomain
+    val profileFieldEncryptionKey: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldEncryptionKey
+    val profileFieldEncryptionMethod: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldEncryptionMethod
+    val profileDomainPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileDomainPlaceholder
+    val profileEncryptionKeyPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileEncryptionKeyPlaceholder
+    val profileMyStormDnsPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.profileMyStormDnsPlaceholder
+    val profileDomainFallback: String @Composable get() = LocalWhiteDnsStrings.current.profileDomainFallback
+    val profileStatusActive: String @Composable get() = LocalWhiteDnsStrings.current.profileStatusActive
+    val profileStatusSelected: String @Composable get() = LocalWhiteDnsStrings.current.profileStatusSelected
+    val profileStatusModified: String @Composable get() = LocalWhiteDnsStrings.current.profileStatusModified
+    @Composable fun resolverProfileSummary(count: Int): String = LocalWhiteDnsStrings.current.resolverProfileSummary(count)
+    val profileFieldProfileLinkSingle: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldProfileLinkSingle
+    val dialogDeleteConfirm: String @Composable get() = LocalWhiteDnsStrings.current.dialogDeleteConfirm
+    val deleteConnectionMessageTemplate: String @Composable get() = LocalWhiteDnsStrings.current.deleteConnectionMessageTemplate
+    val deleteResolverMessageTemplate: String @Composable get() = LocalWhiteDnsStrings.current.deleteResolverMessageTemplate
+    val deleteSettingMessageTemplate: String @Composable get() = LocalWhiteDnsStrings.current.deleteSettingMessageTemplate
+    val deleteDupsMessageSingleConnection: String @Composable get() = LocalWhiteDnsStrings.current.deleteDupsMessageSingleConnection
+    val deleteDupsMessageManyConnection: String @Composable get() = LocalWhiteDnsStrings.current.deleteDupsMessageManyConnection
+
+    val footerPoweredBy: String @Composable get() = LocalWhiteDnsStrings.current.footerPoweredBy
+
+    val verificationVerifying: String @Composable get() = LocalWhiteDnsStrings.current.verificationVerifying
+    val verificationVerified: String @Composable get() = LocalWhiteDnsStrings.current.verificationVerified
+    val verificationNeedsAttention: String @Composable get() = LocalWhiteDnsStrings.current.verificationNeedsAttention
+    val verificationPending: String @Composable get() = LocalWhiteDnsStrings.current.verificationPending
+    val verificationNotRunYet: String @Composable get() = LocalWhiteDnsStrings.current.verificationNotRunYet
+    val verificationCheckingRoute: String @Composable get() = LocalWhiteDnsStrings.current.verificationCheckingRoute
+
+    val noResolversPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.noResolversPlaceholder
+    val whiteDnsResolversLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsResolversLabel
+    val whiteDnsConfigsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsConfigsLabel
+    val whiteDnsLogsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsLogsLabel
+    val whiteDnsDiagnosticsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsDiagnosticsLabel
+    val parallelTestCollapseDescription: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestCollapseDescription
+    val parallelTestExpandDescription: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestExpandDescription
+
+    val autoTuneStartingTest: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneStartingTest
+    val autoTuneFailedFallback: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneFailedFallback
+    val autoTuneMeasuredKeyword: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMeasuredKeyword
+
+    val dropdownSelectFallback: String @Composable get() = LocalWhiteDnsStrings.current.dropdownSelectFallback
+
+    val splitTunnelAllApps: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelAllApps
+    val splitTunnelNoApps: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelNoApps
+    val splitTunnelOnlyPrefix: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelOnlyPrefix
+    val splitTunnelBypassPrefix: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelBypassPrefix
+
+    val tapToCollapse: String @Composable get() = LocalWhiteDnsStrings.current.tapToCollapse
+    val tapToConfigure: String @Composable get() = LocalWhiteDnsStrings.current.tapToConfigure
+    val parallelTestOpen: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestOpen
+    val parallelTestClosed: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestClosed
+
+    val appsSearchPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.appsSearchPlaceholder
+
+    val profileFieldProfileLinksLabel: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldProfileLinksLabel
+
+    val cdCloseSelector: String @Composable get() = LocalWhiteDnsStrings.current.cdCloseSelector
+    val cdSelected: String @Composable get() = LocalWhiteDnsStrings.current.cdSelected
+    val cdDismissScannerInfo: String @Composable get() = LocalWhiteDnsStrings.current.cdDismissScannerInfo
+    val cdEditField: String @Composable get() = LocalWhiteDnsStrings.current.cdEditField
+    val cdDragToReorder: String @Composable get() = LocalWhiteDnsStrings.current.cdDragToReorder
+    val cdProfileQrCode: String @Composable get() = LocalWhiteDnsStrings.current.cdProfileQrCode
+    val cdAppMenu: String @Composable get() = LocalWhiteDnsStrings.current.cdAppMenu
+    val cdAppSettings: String @Composable get() = LocalWhiteDnsStrings.current.cdAppSettings
+    val cdDonate: String @Composable get() = LocalWhiteDnsStrings.current.cdDonate
+    val cdDismissBatteryWarning: String @Composable get() = LocalWhiteDnsStrings.current.cdDismissBatteryWarning
+    val cdDismissVpnWarning: String @Composable get() = LocalWhiteDnsStrings.current.cdDismissVpnWarning
+
+    val resolverCountTemplate: String @Composable get() = LocalWhiteDnsStrings.current.resolverCountTemplate
+    val resolverCountOneTemplate: String @Composable get() = LocalWhiteDnsStrings.current.resolverCountOneTemplate
+
+    val genericConnectionFallback: String @Composable get() = LocalWhiteDnsStrings.current.genericConnectionFallback
+    val genericResolverFallback: String @Composable get() = LocalWhiteDnsStrings.current.genericResolverFallback
+    val genericSettingFallback: String @Composable get() = LocalWhiteDnsStrings.current.genericSettingFallback
+    val scanProfileMenuActions: String @Composable get() = LocalWhiteDnsStrings.current.scanProfileMenuActions
+    val settingProfileMenuActions: String @Composable get() = LocalWhiteDnsStrings.current.settingProfileMenuActions
+    val connectionProfileMenuActions: String @Composable get() = LocalWhiteDnsStrings.current.connectionProfileMenuActions
+    val resolverProfileMenuActions: String @Composable get() = LocalWhiteDnsStrings.current.resolverProfileMenuActions
+    val useSettingProfile: String @Composable get() = LocalWhiteDnsStrings.current.useSettingProfile
+    val useResolverProfile: String @Composable get() = LocalWhiteDnsStrings.current.useResolverProfile
+    val exportConnectionProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.exportConnectionProfileAction
+    val editConnectionProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.editConnectionProfileAction
+    val deleteConnectionProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.deleteConnectionProfileAction
+    val deleteConnectionProfileBlockedAction: String @Composable get() = LocalWhiteDnsStrings.current.deleteConnectionProfileBlockedAction
+    val exportSettingProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.exportSettingProfileAction
+    val editSettingProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.editSettingProfileAction
+    val deleteSettingProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.deleteSettingProfileAction
+    val editResolverProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.editResolverProfileAction
+    val deleteResolverProfileAction: String @Composable get() = LocalWhiteDnsStrings.current.deleteResolverProfileAction
+    val brandWhiteDns: String @Composable get() = LocalWhiteDnsStrings.current.brandWhiteDns
+
+    val errorImportSettingsFile: String @Composable get() = LocalWhiteDnsStrings.current.errorImportSettingsFile
+    val errorImportSettings: String @Composable get() = LocalWhiteDnsStrings.current.errorImportSettings
+    val errorImportResolver: String @Composable get() = LocalWhiteDnsStrings.current.errorImportResolver
+    val errorImportProfile: String @Composable get() = LocalWhiteDnsStrings.current.errorImportProfile
+    val errorExportProfile: String @Composable get() = LocalWhiteDnsStrings.current.errorExportProfile
+
+    val resolverScanResults: String @Composable get() = LocalWhiteDnsStrings.current.resolverScanResults
+    val scanResultsSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanResultsSuffix
+    val noResolverEntriesError: String @Composable get() = LocalWhiteDnsStrings.current.noResolverEntriesError
 }
 
 object WhiteDnsPalette {
