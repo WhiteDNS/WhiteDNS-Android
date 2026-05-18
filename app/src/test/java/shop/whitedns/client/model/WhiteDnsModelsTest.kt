@@ -720,7 +720,7 @@ class WhiteDnsModelsTest {
                 name = "Profile $index",
             )
         }
-        val requestedIds = WhiteDnsParallelTest.defaultConfigIds +
+        val requestedIds = WhiteDnsParallelTest.allConfigIds +
             profiles.map { WhiteDnsParallelTest.settingConfigId(it.id) }
 
         val defaultIds = WhiteDnsParallelTest.normalizeConfigIds(
@@ -730,12 +730,18 @@ class WhiteDnsModelsTest {
         val cappedIds = WhiteDnsParallelTest.normalizeConfigIds(
             configIds = requestedIds,
             advancedProfiles = profiles,
+            includeAggressive = true,
+        )
+        val stableOnlyIds = WhiteDnsParallelTest.normalizeConfigIds(
+            configIds = WhiteDnsParallelTest.allConfigIds,
+            advancedProfiles = profiles,
         )
 
         assertEquals(WhiteDnsParallelTest.defaultConfigIds, defaultIds)
+        assertEquals(WhiteDnsParallelTest.stableConfigIds, stableOnlyIds)
         assertEquals(WhiteDnsParallelTest.MaxSelectedConfigs, cappedIds.size)
         assertEquals(
-            WhiteDnsParallelTest.defaultConfigIds +
+            WhiteDnsParallelTest.allConfigIds +
                 profiles.take(3).map { WhiteDnsParallelTest.settingConfigId(it.id) },
             cappedIds,
         )
@@ -1011,6 +1017,35 @@ class WhiteDnsModelsTest {
         assertEquals(listOf("first.example.com", "second.example.com"), importedProfiles.map { it.customServerDomain })
         assertEquals(listOf("profile-imported-500", "profile-imported-501"), importedProfiles.map { it.id })
         assertEquals("second.example.com", importedSettings.selectedConnectionProfile().customServerDomain)
+    }
+
+    @Test
+    fun exportAllResolverProfilesTextWritesOneDeduplicatedResolverFile() {
+        val first = ResolverProfile(
+            id = "resolver-first",
+            name = "First",
+            resolverText = "1.1.1.1\n8.8.8.8:53",
+        )
+        val second = ResolverProfile(
+            id = "resolver-second",
+            name = "Second",
+            resolverText = "8.8.8.8\n9.9.9.9:5353",
+        )
+        val settings = WhiteDnsSettings(resolverProfiles = listOf(first, second))
+
+        assertEquals(
+            "1.1.1.1\n8.8.8.8\n9.9.9.9:5353",
+            settings.exportAllResolverProfilesText(),
+        )
+    }
+
+    @Test
+    fun exportAllResolverProfilesTextRejectsEmptyResolverProfiles() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            WhiteDnsSettings().exportAllResolverProfilesText()
+        }
+
+        assertEquals("No resolver profiles are available to export", error.message)
     }
 
     @Test

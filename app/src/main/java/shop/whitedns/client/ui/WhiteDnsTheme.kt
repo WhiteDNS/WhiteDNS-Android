@@ -17,11 +17,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import shop.whitedns.client.R
 import shop.whitedns.client.model.WhiteDnsLanguage
 import shop.whitedns.client.model.WhiteDnsThemeMode
 
@@ -248,6 +251,31 @@ object WhiteDnsL10n {
     val selectorSettingProfiles: String @Composable get() = LocalWhiteDnsStrings.current.selectorSettingProfiles
     val languageEn: String @Composable get() = LocalWhiteDnsStrings.current.languageEn
     val languageFa: String @Composable get() = LocalWhiteDnsStrings.current.languageFa
+    val serverTestTitle: String @Composable get() = LocalWhiteDnsStrings.current.serverTestTitle
+    val serverTestButton: String @Composable get() = LocalWhiteDnsStrings.current.serverTestButton
+    val serverTestSingleButton: String @Composable get() = LocalWhiteDnsStrings.current.serverTestSingleButton
+    val serverTestRunning: String @Composable get() = LocalWhiteDnsStrings.current.serverTestRunning
+    val serverTestIdle: String @Composable get() = LocalWhiteDnsStrings.current.serverTestIdle
+    val serverTestReady: String @Composable get() = LocalWhiteDnsStrings.current.serverTestReady
+    val serverTestFailed: String @Composable get() = LocalWhiteDnsStrings.current.serverTestFailed
+    val serverTestMeasuring: String @Composable get() = LocalWhiteDnsStrings.current.serverTestMeasuring
+    val serverTestStarting: String @Composable get() = LocalWhiteDnsStrings.current.serverTestStarting
+    val serverTestPending: String @Composable get() = LocalWhiteDnsStrings.current.serverTestPending
+    val serverTestProgressTemplate: String @Composable get() = LocalWhiteDnsStrings.current.serverTestProgressTemplate
+    val serverTestSummaryTemplate: String @Composable get() = LocalWhiteDnsStrings.current.serverTestSummaryTemplate
+    val serverTestNoSavedServers: String @Composable get() = LocalWhiteDnsStrings.current.serverTestNoSavedServers
+    val serverTestNoConnectedResolvers: String @Composable get() = LocalWhiteDnsStrings.current.serverTestNoConnectedResolvers
+    val serverTestFailedTemplate: String @Composable get() = LocalWhiteDnsStrings.current.serverTestFailedTemplate
+    val serverTestConnectionRequired: String @Composable get() = LocalWhiteDnsStrings.current.serverTestConnectionRequired
+    val serverTestServiceConnected: String @Composable get() = LocalWhiteDnsStrings.current.serverTestServiceConnected
+    val serverTestServiceTesting: String @Composable get() = LocalWhiteDnsStrings.current.serverTestServiceTesting
+    val serverTestServiceGood: String @Composable get() = LocalWhiteDnsStrings.current.serverTestServiceGood
+    val serverTestServiceFair: String @Composable get() = LocalWhiteDnsStrings.current.serverTestServiceFair
+    val serverTestServicePoor: String @Composable get() = LocalWhiteDnsStrings.current.serverTestServicePoor
+    val serverTestScoreGood: String @Composable get() = LocalWhiteDnsStrings.current.serverTestScoreGood
+    val serverTestScoreFair: String @Composable get() = LocalWhiteDnsStrings.current.serverTestScoreFair
+    val serverTestScorePoor: String @Composable get() = LocalWhiteDnsStrings.current.serverTestScorePoor
+    val serverTestScoreUnavailable: String @Composable get() = LocalWhiteDnsStrings.current.serverTestScoreUnavailable
 
     // Scan tab additional
     val scanDefaultList: String @Composable get() = LocalWhiteDnsStrings.current.scanDefaultList
@@ -307,7 +335,11 @@ object WhiteDnsL10n {
     val profileDialogImportConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogImportConnection
     val profileDialogExportConnection: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportConnection
     val profileDialogExportAllConnections: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportAllConnections
+    val profileDialogExportAllResolvers: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportAllResolvers
     val profileDialogExportSettings: String @Composable get() = LocalWhiteDnsStrings.current.profileDialogExportSettings
+    val profileExportResolverTotalTemplate: String @Composable get() = LocalWhiteDnsStrings.current.profileExportResolverTotalTemplate
+    val profileExportSavingFile: String @Composable get() = LocalWhiteDnsStrings.current.profileExportSavingFile
+    val profileExportSavedToTemplate: String @Composable get() = LocalWhiteDnsStrings.current.profileExportSavedToTemplate
     val profileFieldName: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldName
     val profileFieldResolvers: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldResolvers
     val profileFieldProfileLinks: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldProfileLinks
@@ -454,6 +486,7 @@ object WhiteDnsL10n {
     val shareChooserProfile: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserProfile
     val shareChooserClientConfig: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserClientConfig
     val shareChooserAdvancedSettings: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserAdvancedSettings
+    val shareChooserResolvers: String @Composable get() = LocalWhiteDnsStrings.current.shareChooserResolvers
 
     val errorUnableToOpenResolverFile: String @Composable get() = LocalWhiteDnsStrings.current.errorUnableToOpenResolverFile
     val errorInvalidResolverIpTemplate: String @Composable get() = LocalWhiteDnsStrings.current.errorInvalidResolverIpTemplate
@@ -576,10 +609,18 @@ object WhiteDnsL10n {
     val verificationPending: String @Composable get() = LocalWhiteDnsStrings.current.verificationPending
     val verificationNotRunYet: String @Composable get() = LocalWhiteDnsStrings.current.verificationNotRunYet
     val verificationCheckingRoute: String @Composable get() = LocalWhiteDnsStrings.current.verificationCheckingRoute
+    val verificationProxyReachable: String @Composable get() = LocalWhiteDnsStrings.current.verificationProxyReachable
+    val verificationVpnReachable: String @Composable get() = LocalWhiteDnsStrings.current.verificationVpnReachable
+    val verificationProxyWarming: String @Composable get() = LocalWhiteDnsStrings.current.verificationProxyWarming
+    val verificationVpnWarming: String @Composable get() = LocalWhiteDnsStrings.current.verificationVpnWarming
+    val verificationModeChanged: String @Composable get() = LocalWhiteDnsStrings.current.verificationModeChanged
+    val verificationSocksNotReachable: String @Composable get() = LocalWhiteDnsStrings.current.verificationSocksNotReachable
+    val verificationVpnInterfaceInactive: String @Composable get() = LocalWhiteDnsStrings.current.verificationVpnInterfaceInactive
 
     val noResolversPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.noResolversPlaceholder
     val whiteDnsResolversLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsResolversLabel
     val whiteDnsConfigsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsConfigsLabel
+    val whiteDnsAggressiveConfigsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsAggressiveConfigsLabel
     val whiteDnsLogsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsLogsLabel
     val whiteDnsDiagnosticsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsDiagnosticsLabel
     val parallelTestCollapseDescription: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestCollapseDescription
@@ -884,6 +925,33 @@ private val WhiteDnsTypography = Typography(
     ),
 )
 
+private val WhiteDnsPersianFontFamily = FontFamily(
+    Font(R.font.vazirmatn_ui_fd_regular, FontWeight.Normal),
+    Font(R.font.vazirmatn_ui_fd_medium, FontWeight.Medium),
+    Font(R.font.vazirmatn_ui_fd_semibold, FontWeight.SemiBold),
+    Font(R.font.vazirmatn_ui_fd_bold, FontWeight.Bold),
+)
+
+private fun Typography.withFontFamily(fontFamily: FontFamily): Typography {
+    return copy(
+        displayLarge = displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = labelSmall.copy(fontFamily = fontFamily),
+    )
+}
+
 @Suppress("DEPRECATION")
 @Composable
 fun WhiteDnsTheme(
@@ -894,7 +962,13 @@ fun WhiteDnsTheme(
     val darkTheme = shouldUseDarkTheme(themeMode)
     val palette = if (darkTheme) WhiteDnsPaletteDark else WhiteDnsPaletteLight
     val colorScheme = if (darkTheme) WhiteDnsColorSchemeDark else WhiteDnsColorSchemeLight
-    val layoutDirection = if (languageCode == WhiteDnsLanguage.Fa) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val isPersian = languageCode == WhiteDnsLanguage.Fa
+    val layoutDirection = if (isPersian) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val typography = if (isPersian) {
+        WhiteDnsTypography.withFontFamily(WhiteDnsPersianFontFamily)
+    } else {
+        WhiteDnsTypography
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -909,7 +983,7 @@ fun WhiteDnsTheme(
         }
     }
 
-    val strings = if (languageCode == WhiteDnsLanguage.Fa) PersianStrings else EnglishStrings
+    val strings = if (isPersian) PersianStrings else EnglishStrings
     CompositionLocalProvider(
         LocalWhiteDnsPalette provides palette,
         LocalWhiteDnsStrings provides strings,
@@ -917,7 +991,7 @@ fun WhiteDnsTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = WhiteDnsTypography,
+            typography = typography,
             content = content,
         )
     }

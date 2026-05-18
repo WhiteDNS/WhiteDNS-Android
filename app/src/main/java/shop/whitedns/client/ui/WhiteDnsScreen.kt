@@ -3,11 +3,14 @@ package shop.whitedns.client.ui
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.HapticFeedbackConstants
 
 import androidx.activity.compose.BackHandler
@@ -148,6 +151,9 @@ import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
+import shop.whitedns.client.model.ServerTestResult
+import shop.whitedns.client.model.ServerTestState
+import shop.whitedns.client.model.ServerTestStatus
 import shop.whitedns.client.model.WhiteDnsOptions
 import shop.whitedns.client.model.WhiteDnsScanDefaults
 import shop.whitedns.client.model.WhiteDnsScanState
@@ -162,6 +168,7 @@ import shop.whitedns.client.model.deleteDuplicateConnectionProfiles
 import shop.whitedns.client.model.deleteAdvancedProfile
 import shop.whitedns.client.model.deleteResolverProfile
 import shop.whitedns.client.model.duplicateConnectionProfileCount
+import shop.whitedns.client.model.exportAllResolverProfilesText
 import shop.whitedns.client.model.exportAllStormDnsProfileLinks
 import shop.whitedns.client.model.exportStormDnsProfileLink
 import shop.whitedns.client.model.importStormDnsProfileLinks
@@ -197,6 +204,8 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.core.content.FileProvider
 
 @Composable
@@ -212,6 +221,7 @@ fun WhiteDnsScreen(
     onScanWorkerCountChange: (String) -> Unit,
     onScanStopClick: () -> Unit,
     onScanResumeClick: () -> Unit,
+    onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(WhiteDnsTab.CONNECT) }
@@ -230,6 +240,7 @@ fun WhiteDnsScreen(
                     onCreateRequestConsumed = {
                         profileCreateRequest = null
                     },
+                    onServerTestClick = onServerTestClick,
                     onSettingsChange = onSettingsChange,
                 )
                 WhiteDnsTab.CONNECT -> ConnectTabContent(
@@ -358,8 +369,20 @@ private fun ConnectTabContent(
     val selectedResolverProfile = remember(settings) { settings.selectedResolverProfile() }
     val resolverValidation = remember(settings.resolverText) { validateResolverText(settings.resolverText) }
     val context = LocalContext.current
-    val splitTunnelApps = remember(context.packageName) {
-        loadSplitTunnelAppOptions(context)
+    val appContext = remember(context) { context.applicationContext }
+    val shouldLoadSplitTunnelApps = resolvedSettings.connectionMode == "vpn" ||
+        resolvedSettings.splitTunnelPackages.isNotEmpty()
+    var splitTunnelApps by remember(context.packageName) {
+        mutableStateOf(emptyList<SplitTunnelAppInfo>())
+    }
+    LaunchedEffect(context.packageName, shouldLoadSplitTunnelApps) {
+        splitTunnelApps = if (shouldLoadSplitTunnelApps) {
+            withContext(Dispatchers.IO) {
+                loadSplitTunnelAppOptions(appContext)
+            }
+        } else {
+            emptyList()
+        }
     }
     val splitTunnelAppLabels = remember(splitTunnelApps) {
         splitTunnelApps.associate { it.packageName to it.label }
@@ -584,13 +607,16 @@ private fun ConnectTabContent(
                         .fillMaxWidth()
                         .padding(top = WhiteDnsSpacing.md),
                 ) {
+                    val parallelTestControlsEnabled = uiState.connectionStatus == ConnectionStatus.DISCONNECTED
                     ToggleRow(
                         label = WhiteDnsL10n.parallelTest,
                         enabled = settings.autoTuneEnabled,
+                        interactiveEnabled = parallelTestControlsEnabled,
                         onToggle = {
                             val selectedIds = WhiteDnsParallelTest.normalizeConfigIds(
                                 configIds = settings.parallelTestSelectedConfigIds,
                                 advancedProfiles = advancedProfiles,
+                                includeAggressive = settings.parallelTestAggressivePresetsEnabled,
                             )
                             onSettingsChange(
                                 settings.copy(
@@ -608,6 +634,7 @@ private fun ConnectTabContent(
                         ParallelTestSelectionPanel(
                             settings = settings,
                             advancedProfiles = advancedProfiles,
+                            controlsEnabled = parallelTestControlsEnabled,
                             expanded = parallelTestSelectionExpanded,
                             onExpandedChange = { parallelTestSelectionExpanded = it },
                             onSettingsChange = onSettingsChange,
@@ -969,6 +996,7 @@ private fun parallelTestInitialSettingsForResult(
 private fun ParallelTestSelectionPanel(
     settings: WhiteDnsSettings,
     advancedProfiles: List<AdvancedSettingsProfile>,
+    controlsEnabled: Boolean,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
@@ -984,21 +1012,40 @@ private fun ParallelTestSelectionPanel(
     val selectedIds = WhiteDnsParallelTest.normalizeConfigIds(
         configIds = settings.parallelTestSelectedConfigIds,
         advancedProfiles = advancedProfiles,
+        includeAggressive = settings.parallelTestAggressivePresetsEnabled,
     )
     val selectedSet = selectedIds.toSet()
-    val whiteDnsConfigIds = WhiteDnsParallelTest.defaultConfigIds
-    val selectedWhiteDnsCount = whiteDnsConfigIds.count { it in selectedSet }
-    val allWhiteDnsSelected = selectedWhiteDnsCount == whiteDnsConfigIds.size
-    val canAddWhiteDnsConfigs = allWhiteDnsSelected ||
-        selectedIds.size - selectedWhiteDnsCount + whiteDnsConfigIds.size <= WhiteDnsParallelTest.MaxSelectedConfigs
+    val stableWhiteDnsConfigIds = WhiteDnsParallelTest.stableConfigIds
+    val aggressiveWhiteDnsConfigIds = WhiteDnsParallelTest.aggressiveConfigIds
+    val selectedStableWhiteDnsCount = stableWhiteDnsConfigIds.count { it in selectedSet }
+    val allStableWhiteDnsSelected = selectedStableWhiteDnsCount == stableWhiteDnsConfigIds.size
+    val canAddStableWhiteDnsConfigs = allStableWhiteDnsSelected ||
+        selectedIds.size - selectedStableWhiteDnsCount + stableWhiteDnsConfigIds.size <=
+        WhiteDnsParallelTest.MaxSelectedConfigs
+    val selectedAggressiveWhiteDnsCount = aggressiveWhiteDnsConfigIds.count { it in selectedSet }
+    val allAggressiveWhiteDnsSelected = settings.parallelTestAggressivePresetsEnabled &&
+        selectedAggressiveWhiteDnsCount == aggressiveWhiteDnsConfigIds.size
+    val canAddAggressiveWhiteDnsConfigs = allAggressiveWhiteDnsSelected ||
+        selectedIds.size - selectedAggressiveWhiteDnsCount + aggressiveWhiteDnsConfigIds.size <=
+        WhiteDnsParallelTest.MaxSelectedConfigs
 
-    fun updateSelectedConfigIds(nextIds: List<String>) {
+    fun updateSelectedConfigIds(
+        nextIds: List<String>,
+        includeAggressive: Boolean = settings.parallelTestAggressivePresetsEnabled,
+    ) {
         val normalizedIds = WhiteDnsParallelTest.normalizeConfigIds(
             configIds = nextIds,
             advancedProfiles = advancedProfiles,
             defaultIfEmpty = false,
+            includeAggressive = includeAggressive,
         )
-        onSettingsChange(settings.copy(parallelTestSelectedConfigIds = normalizedIds))
+        val keepsAggressive = includeAggressive && aggressiveWhiteDnsConfigIds.any { it in normalizedIds }
+        onSettingsChange(
+            settings.copy(
+                parallelTestSelectedConfigIds = normalizedIds,
+                parallelTestAggressivePresetsEnabled = keepsAggressive,
+            ),
+        )
     }
 
     Column(
@@ -1084,18 +1131,41 @@ private fun ParallelTestSelectionPanel(
                 )
                 ParallelTestConfigRow(
                     label = WhiteDnsL10n.whiteDnsConfigsLabel,
-                    detail = "+7",
-                    checked = allWhiteDnsSelected,
-                    enabled = canAddWhiteDnsConfigs,
+                    detail = "+${stableWhiteDnsConfigIds.size}",
+                    checked = allStableWhiteDnsSelected,
+                    enabled = controlsEnabled && canAddStableWhiteDnsConfigs,
                     onToggle = {
                         haptic.performLight()
-                        val withoutWhiteDnsConfigs = selectedIds.filterNot { it in whiteDnsConfigIds }
-                        if (allWhiteDnsSelected) {
-                            if (withoutWhiteDnsConfigs.isNotEmpty()) {
-                                updateSelectedConfigIds(withoutWhiteDnsConfigs)
+                        val withoutStableWhiteDnsConfigs = selectedIds.filterNot { it in stableWhiteDnsConfigIds }
+                        if (allStableWhiteDnsSelected) {
+                            if (withoutStableWhiteDnsConfigs.isNotEmpty()) {
+                                updateSelectedConfigIds(withoutStableWhiteDnsConfigs)
                             }
-                        } else if (canAddWhiteDnsConfigs) {
-                            updateSelectedConfigIds(whiteDnsConfigIds + withoutWhiteDnsConfigs)
+                        } else if (canAddStableWhiteDnsConfigs) {
+                            updateSelectedConfigIds(stableWhiteDnsConfigIds + withoutStableWhiteDnsConfigs)
+                        }
+                    },
+                )
+                ParallelTestConfigRow(
+                    label = WhiteDnsL10n.whiteDnsAggressiveConfigsLabel,
+                    detail = "+${aggressiveWhiteDnsConfigIds.size}",
+                    checked = allAggressiveWhiteDnsSelected,
+                    enabled = controlsEnabled && canAddAggressiveWhiteDnsConfigs,
+                    onToggle = {
+                        haptic.performLight()
+                        val withoutAggressiveWhiteDnsConfigs = selectedIds.filterNot {
+                            it in aggressiveWhiteDnsConfigIds
+                        }
+                        if (allAggressiveWhiteDnsSelected) {
+                            updateSelectedConfigIds(
+                                withoutAggressiveWhiteDnsConfigs,
+                                includeAggressive = false,
+                            )
+                        } else if (canAddAggressiveWhiteDnsConfigs) {
+                            updateSelectedConfigIds(
+                                withoutAggressiveWhiteDnsConfigs + aggressiveWhiteDnsConfigIds,
+                                includeAggressive = true,
+                            )
                         }
                     },
                 )
@@ -1117,7 +1187,7 @@ private fun ParallelTestSelectionPanel(
                             label = profile.name.ifBlank { WhiteDnsL10n.genericSettingFallback },
                             detail = advancedProfileSummary(profile),
                             checked = checked,
-                            enabled = enabled,
+                            enabled = controlsEnabled && enabled,
                             onToggle = {
                                 haptic.performLight()
                                 val nextIds = if (checked) {
@@ -1198,6 +1268,7 @@ private fun ProfilesTabContent(
     uiState: WhiteDnsUiState,
     createRequest: ProfileCreateRequest?,
     onCreateRequestConsumed: () -> Unit,
+    onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
     var selectedProfileTab by rememberSaveable { mutableStateOf(ProfileTab.CONNECTION) }
@@ -1257,7 +1328,9 @@ private fun ProfilesTabContent(
                         settings = uiState.settings,
                         activeConnectionProfileId = uiState.activeConnectionProfileId,
                         connectionStatus = uiState.connectionStatus,
+                        serverTestState = uiState.serverTestState,
                         openCreateRequestId = connectionCreateRequestId,
+                        onServerTestClick = onServerTestClick,
                         onSettingsChange = onSettingsChange,
                     )
                     ProfileTab.RESOLVER -> ResolverProfilesSettings(
@@ -3139,12 +3212,18 @@ private fun ConnectionProfilesSettings(
     settings: WhiteDnsSettings,
     activeConnectionProfileId: String?,
     connectionStatus: ConnectionStatus,
+    serverTestState: ServerTestState,
     openCreateRequestId: Int,
+    onServerTestClick: (String?) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
     val profiles = settings.normalizedConnectionProfiles()
     val selectedProfile = settings.selectedConnectionProfile()
     val customProfiles = profiles.filter { it.serverMode == "custom" }
+    val serverTestScores = remember(serverTestState.results) { buildServerTestScores(serverTestState.results) }
+    val serverTestResultsById = remember(serverTestState.results) {
+        serverTestState.results.associateBy { it.serverId }
+    }
     val context = LocalContext.current
     var dialogProfile by remember { mutableStateOf<ConnectionProfile?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -3220,6 +3299,16 @@ private fun ConnectionProfilesSettings(
                 },
             ),
             ProfileTopAction(
+                label = if (serverTestState.isRunning) {
+                    WhiteDnsL10n.serverTestRunning
+                } else {
+                    WhiteDnsL10n.serverTestButton
+                },
+                emphasized = connectionStatus == ConnectionStatus.CONNECTED && !serverTestState.isRunning,
+                enabled = connectionStatus == ConnectionStatus.CONNECTED && !serverTestState.isRunning,
+                onClick = { onServerTestClick(null) },
+            ),
+            ProfileTopAction(
                 label = WhiteDnsL10n.profileBtnDeleteDups,
                 emphasized = false,
                 enabled = canManageProfiles && duplicateProfileCount > 0,
@@ -3242,6 +3331,17 @@ private fun ConnectionProfilesSettings(
 
     SectionDivider()
     GroupLabel(WhiteDnsL10n.groupCustomConnections)
+    if (serverTestState.results.isEmpty() && serverTestState.message.isNotBlank()) {
+        Text(
+            text = serverTestDisplayMessage(serverTestState),
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 10.sp,
+                color = WhiteDnsPalette.Muted,
+                fontWeight = FontWeight.Medium,
+            ),
+        )
+        Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
+    }
     if (customProfiles.isEmpty()) {
         Text(
             text = WhiteDnsL10n.customConnectionsEmpty,
@@ -3257,7 +3357,12 @@ private fun ConnectionProfilesSettings(
             connectionStatus != ConnectionStatus.DISCONNECTED
         val canEdit = canManageProfiles
         val canDelete = canManageProfiles && !isActive
+        val canTest = connectionStatus == ConnectionStatus.CONNECTED &&
+            !serverTestState.isRunning &&
+            profile.customServerDomain.isNotBlank() &&
+            profile.customServerEncryptionKey.isNotBlank()
         val isDragging = profile.id == draggedProfileId
+        val serverTestResult = serverTestResultsById[profile.id]
         val targetTranslationY = profileDragTranslationY(
             itemIndex = index,
             draggedIndex = draggedIndex,
@@ -3288,8 +3393,11 @@ private fun ConnectionProfilesSettings(
                 active = isActive,
                 canEdit = canEdit,
                 canDelete = canDelete,
+                canTest = canTest,
                 canDrag = canManageProfiles && customProfiles.size > 1,
                 dragging = isDragging,
+                serverTestResult = serverTestResult,
+                serverTestScore = serverTestResult?.let { serverTestScores[it.serverId] },
                 onDragStart = {
                     if (canManageProfiles && customProfiles.size > 1) {
                         draggedProfileId = profile.id
@@ -3310,6 +3418,9 @@ private fun ConnectionProfilesSettings(
                 },
                 onExport = {
                     exportProfile = profile
+                },
+                onTest = {
+                    onServerTestClick(profile.id)
                 },
                 onEdit = {
                     dialogProfile = profile
@@ -3445,10 +3556,13 @@ private fun ResolverProfilesSettings(
 ) {
     val profiles = settings.normalizedResolverProfiles()
     val selectedProfile = settings.selectedResolverProfile()
+    val context = LocalContext.current
     var dialogProfile by remember { mutableStateOf<ResolverProfile?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showExportAllDialog by remember { mutableStateOf(false) }
     var deleteProfile by remember { mutableStateOf<ResolverProfile?>(null) }
     val canChangeProfiles = connectionStatus != ConnectionStatus.CONNECTING
+    val shareChooserResolversLabel = WhiteDnsL10n.shareChooserResolvers
     var draggedProfileId by remember { mutableStateOf<String?>(null) }
     var dragStartIndex by remember { mutableStateOf(0) }
     var dragOffsetY by remember { mutableStateOf(0f) }
@@ -3507,6 +3621,14 @@ private fun ResolverProfilesSettings(
                 enabled = canChangeProfiles && settings.resolverText.isNotBlank(),
                 onClick = {
                     showCreateDialog = true
+                },
+            ),
+            ProfileTopAction(
+                label = WhiteDnsL10n.profileBtnExportAll,
+                emphasized = false,
+                enabled = profiles.isNotEmpty(),
+                onClick = {
+                    showExportAllDialog = true
                 },
             ),
         )
@@ -3602,6 +3724,21 @@ private fun ResolverProfilesSettings(
             onSave = { profile ->
                 onSettingsChange(settings.upsertResolverProfile(profile))
                 showCreateDialog = false
+            },
+        )
+    }
+
+    if (showExportAllDialog) {
+        ResolverProfilesExportDialog(
+            settings = settings,
+            onDismiss = { showExportAllDialog = false },
+            onShare = { exportFile ->
+                shareCachedExportFile(
+                    context = context,
+                    exportFile = exportFile,
+                    subject = ResolverProfilesExportFileName,
+                    chooserTitle = shareChooserResolversLabel,
+                )
             },
         )
     }
@@ -4534,6 +4671,156 @@ private fun ConnectionProfileExportDialog(
 }
 
 @Composable
+private fun ResolverProfilesExportDialog(
+    settings: WhiteDnsSettings,
+    onDismiss: () -> Unit,
+    onShare: (File) -> Unit,
+) {
+    val context = LocalContext.current
+    val errorExportProfileLabel = WhiteDnsL10n.errorExportProfile
+    var exportState by remember(settings) { mutableStateOf(ResolverProfilesExportDialogState()) }
+
+    LaunchedEffect(settings) {
+        exportState = ResolverProfilesExportDialogState()
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                writeResolverProfilesExport(
+                    context = context.applicationContext,
+                    settings = settings,
+                )
+            }
+        }
+        exportState = result.fold(
+            onSuccess = { exportResult ->
+                ResolverProfilesExportDialogState(
+                    saving = false,
+                    resolverCount = exportResult.resolverCount,
+                    savedLocation = exportResult.savedLocation,
+                    shareFile = exportResult.shareFile,
+                )
+            },
+            onFailure = { error ->
+                ResolverProfilesExportDialogState(
+                    saving = false,
+                    errorMessage = error.message ?: errorExportProfileLabel,
+                )
+            },
+        )
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(WhiteDnsPalette.Surface)
+                .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(22.dp))
+                .padding(18.dp),
+        ) {
+            Text(
+                text = WhiteDnsL10n.profileDialogExportAllResolvers,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.sp,
+                    color = WhiteDnsPalette.Ink,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.1.sp,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            when {
+                exportState.saving -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = WhiteDnsPalette.Accent,
+                            strokeWidth = 2.dp,
+                        )
+                        Text(
+                            text = WhiteDnsL10n.profileExportSavingFile,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 11.sp,
+                                color = WhiteDnsPalette.Muted,
+                            ),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+                    CompactActionButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        label = WhiteDnsL10n.btnClose,
+                        emphasized = false,
+                        enabled = true,
+                        onClick = onDismiss,
+                    )
+                }
+                exportState.errorMessage != null -> {
+                    Text(
+                        text = exportState.errorMessage ?: WhiteDnsL10n.errorExportProfile,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 11.sp,
+                            color = WhiteDnsPalette.Error,
+                        ),
+                    )
+                    Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+                    CompactActionButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        label = WhiteDnsL10n.btnClose,
+                        emphasized = true,
+                        enabled = true,
+                        onClick = onDismiss,
+                    )
+                }
+                else -> {
+                    Text(
+                        text = WhiteDnsL10n.profileExportResolverTotalTemplate.format(
+                            WhiteDnsL10n.resolverProfileSummary(exportState.resolverCount),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 12.sp,
+                            color = WhiteDnsPalette.Ink,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    )
+                    Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
+                    Text(
+                        text = WhiteDnsL10n.profileExportSavedToTemplate.format(exportState.savedLocation),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 10.sp,
+                            color = WhiteDnsPalette.Muted,
+                        ),
+                    )
+                    Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CompactActionButton(
+                            modifier = Modifier.weight(1f),
+                            label = WhiteDnsL10n.btnClose,
+                            emphasized = false,
+                            enabled = true,
+                            onClick = onDismiss,
+                        )
+                        CompactActionButton(
+                            modifier = Modifier.weight(1f),
+                            label = WhiteDnsL10n.btnShare,
+                            emphasized = true,
+                            enabled = exportState.shareFile != null,
+                            onClick = {
+                                exportState.shareFile?.let(onShare)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProfileQrPreview(link: String) {
     val qrBitmap = remember(link) {
         runCatching { buildQrBitmap(link, QrBitmapSizePx) }.getOrNull()
@@ -4723,13 +5010,17 @@ private fun ConnectionProfileRow(
     active: Boolean,
     canEdit: Boolean,
     canDelete: Boolean,
+    canTest: Boolean,
     canDrag: Boolean,
     dragging: Boolean,
+    serverTestResult: ServerTestResult?,
+    serverTestScore: ServerTestScore?,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
     onExport: () -> Unit,
+    onTest: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -4742,20 +5033,30 @@ private fun ConnectionProfileRow(
         else -> domain
     }
     val displayName = if (profile.id == ConnectionProfile.DefaultId) WhiteDnsL10n.setupDefaultConnection else profile.name
+    val testRating = serverTestResult?.let { result ->
+        serverTestRatingDisplay(
+            result = result,
+            score = serverTestScore ?: ServerTestScore(ServerTestScoreBucket.Pending, 0f),
+        )
+    }
+    val rowSurface = when {
+        testRating != null -> testRating.surface
+        selected -> WhiteDnsPalette.AccentSurface
+        else -> WhiteDnsPalette.SurfaceAlt
+    }
+    val rowBorder = when {
+        testRating != null -> testRating.color.copy(alpha = 0.24f)
+        selected -> WhiteDnsPalette.Accent.copy(alpha = 0.18f)
+        else -> WhiteDnsPalette.Border
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
-            .background(
-                if (selected) {
-                    WhiteDnsPalette.AccentSurface
-                } else {
-                    WhiteDnsPalette.SurfaceAlt
-                },
-            )
+            .background(rowSurface)
             .border(
                 1.5.dp,
-                if (selected) WhiteDnsPalette.Accent.copy(alpha = 0.18f) else WhiteDnsPalette.Border,
+                rowBorder,
                 RoundedCornerShape(11.dp),
             )
             .padding(horizontal = 10.dp, vertical = 8.dp),
@@ -4803,6 +5104,13 @@ private fun ConnectionProfileRow(
                 contentDescription = WhiteDnsL10n.connectionProfileMenuActions,
                 actions = listOf(
                     ProfileMenuAction(
+                        label = WhiteDnsL10n.serverTestSingleButton,
+                        icon = Icons.Rounded.Speed,
+                        contentDescription = WhiteDnsL10n.serverTestSingleButton,
+                        enabled = canTest,
+                        onClick = onTest,
+                    ),
+                    ProfileMenuAction(
                         label = WhiteDnsL10n.profileMenuExport,
                         icon = Icons.Rounded.Link,
                         contentDescription = WhiteDnsL10n.exportConnectionProfileAction,
@@ -4823,6 +5131,77 @@ private fun ConnectionProfileRow(
                         enabled = canDelete,
                         onClick = onDelete,
                     ),
+                ),
+            )
+        }
+        if (serverTestResult != null && testRating != null) {
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
+            ServerTestInlineResult(rating = testRating)
+        }
+    }
+}
+
+@Composable
+private fun ServerTestInlineResult(rating: ServerTestRatingDisplay) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(9.dp))
+            .background(rating.color.copy(alpha = 0.12f))
+            .border(1.5.dp, rating.color.copy(alpha = 0.2f), RoundedCornerShape(9.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        if (rating.loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(15.dp),
+                color = rating.color,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = rating.icon,
+                contentDescription = rating.label,
+                tint = rating.color,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+        Text(
+            modifier = Modifier.weight(1f),
+            text = WhiteDnsL10n.serverTestTitle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 9.sp,
+                color = WhiteDnsPalette.Ink,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp,
+            ),
+        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(rating.color.copy(alpha = 0.13f))
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                imageVector = rating.icon,
+                contentDescription = rating.label,
+                tint = rating.color,
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                text = rating.label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 8.sp,
+                    color = rating.color,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.7.sp,
                 ),
             )
         }
@@ -6879,13 +7258,7 @@ private fun ConnectionVerificationSummary(
         ConnectionVerificationStatus.Failed -> WhiteDnsL10n.verificationNeedsAttention
         else -> WhiteDnsL10n.verificationPending
     }
-    val message = verification.message.ifBlank {
-        if (verification.status == ConnectionVerificationStatus.Idle) {
-            WhiteDnsL10n.verificationNotRunYet
-        } else {
-            WhiteDnsL10n.verificationCheckingRoute
-        }
-    }
+    val message = verificationDisplayMessage(verification)
     val color = when (verification.status) {
         ConnectionVerificationStatus.Verified -> WhiteDnsPalette.Success
         ConnectionVerificationStatus.Failed -> WhiteDnsPalette.WarningText
@@ -6953,6 +7326,34 @@ private fun ConnectionVerificationSummary(
                 ),
             )
         }
+    }
+}
+
+@Composable
+private fun verificationDisplayMessage(verification: ConnectionVerificationState): String {
+    val rawMessage = verification.message
+    if (rawMessage.isBlank()) {
+        return if (verification.status == ConnectionVerificationStatus.Idle) {
+            WhiteDnsL10n.verificationNotRunYet
+        } else {
+            WhiteDnsL10n.verificationCheckingRoute
+        }
+    }
+    return when (rawMessage) {
+        "Connection verified: proxy tunnel can reach the internet" -> WhiteDnsL10n.verificationProxyReachable
+        "Connection verified: VPN tunnel can reach the internet" -> WhiteDnsL10n.verificationVpnReachable
+        "Connection ready: proxy tunnel is active; outbound probe is still warming up" -> {
+            WhiteDnsL10n.verificationProxyWarming
+        }
+        "Connection ready: VPN tunnel is active; outbound probe is still warming up" -> {
+            WhiteDnsL10n.verificationVpnWarming
+        }
+        "Connection mode changed before verification finished" -> WhiteDnsL10n.verificationModeChanged
+        "Connection verification failed: local SOCKS listener is not reachable" -> {
+            WhiteDnsL10n.verificationSocksNotReachable
+        }
+        "Connection verification failed: VPN interface is not active" -> WhiteDnsL10n.verificationVpnInterfaceInactive
+        else -> rawMessage
     }
 }
 
@@ -7060,6 +7461,155 @@ private fun LiveSpeedStrip(
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+@Composable
+private fun serverTestDisplayMessage(state: ServerTestState): String {
+    val completed = state.results.count {
+        it.status == ServerTestStatus.Ready || it.status == ServerTestStatus.Failed
+    }
+    val ready = state.results.count { it.status == ServerTestStatus.Ready }
+    val failed = state.results.count { it.status == ServerTestStatus.Failed }
+    val total = state.results.size
+
+    return when {
+        state.isRunning && total > 0 -> WhiteDnsL10n.serverTestProgressTemplate.format(completed, total)
+        total > 0 && completed == total -> WhiteDnsL10n.serverTestSummaryTemplate.format(ready, failed)
+        state.message == "Server Test: no saved server profiles are configured" ->
+            WhiteDnsL10n.serverTestNoSavedServers
+        state.message == "Server Test: no connected resolvers are available" ->
+            WhiteDnsL10n.serverTestNoConnectedResolvers
+        state.message.startsWith("Server Test failed:") ->
+            WhiteDnsL10n.serverTestFailedTemplate.format(state.message.substringAfter(':').trim())
+        else -> state.message.ifBlank { WhiteDnsL10n.serverTestIdle }
+    }
+}
+
+@Composable
+private fun serverTestRatingDisplay(
+    result: ServerTestResult,
+    score: ServerTestScore,
+): ServerTestRatingDisplay {
+    return when {
+        result.status == ServerTestStatus.Failed ->
+            ServerTestRatingDisplay(
+                label = WhiteDnsL10n.serverTestScoreUnavailable,
+                icon = Icons.Rounded.Close,
+                color = WhiteDnsPalette.Error,
+                surface = WhiteDnsPalette.ErrorSurface,
+            )
+        score.bucket == ServerTestScoreBucket.Poor ->
+            ServerTestRatingDisplay(
+                label = WhiteDnsL10n.serverTestScorePoor,
+                icon = Icons.Rounded.Close,
+                color = WhiteDnsPalette.Error,
+                surface = WhiteDnsPalette.ErrorSurface,
+            )
+        score.bucket == ServerTestScoreBucket.Good -> ServerTestRatingDisplay(
+            label = WhiteDnsL10n.serverTestScoreGood,
+            icon = Icons.Rounded.Check,
+            color = WhiteDnsPalette.Success,
+            surface = WhiteDnsPalette.SuccessSurface,
+        )
+        score.bucket == ServerTestScoreBucket.Fair -> ServerTestRatingDisplay(
+            label = WhiteDnsL10n.serverTestScoreFair,
+            icon = Icons.Rounded.WarningAmber,
+            color = WhiteDnsPalette.Warning,
+            surface = WhiteDnsPalette.WarningSurface,
+        )
+        else -> ServerTestRatingDisplay(
+            label = when (result.status) {
+                ServerTestStatus.Starting -> WhiteDnsL10n.serverTestStarting
+                ServerTestStatus.Measuring -> WhiteDnsL10n.serverTestMeasuring
+                else -> WhiteDnsL10n.serverTestPending
+            },
+            icon = Icons.Rounded.Tune,
+            color = WhiteDnsPalette.Warning,
+            surface = WhiteDnsPalette.WarningSurface,
+            loading = result.status == ServerTestStatus.Starting || result.status == ServerTestStatus.Measuring,
+        )
+    }
+}
+
+private fun buildServerTestScores(results: List<ServerTestResult>): Map<String, ServerTestScore> {
+    val measuredResults = results.filter { it.status == ServerTestStatus.Ready }
+    val speeds = measuredResults
+        .map { it.speedBytesPerSecond }
+        .filter { it > 0L }
+    val pings = measuredResults
+        .mapNotNull { it.pingMillis }
+        .filter { it > 0L }
+
+    return results.associate { result ->
+        val score = when (result.status) {
+            ServerTestStatus.Failed -> ServerTestScore(ServerTestScoreBucket.Poor, 0f)
+            ServerTestStatus.Ready -> {
+                val metricScores = listOfNotNull(
+                    result.speedBytesPerSecond
+                        .takeIf { it > 0L }
+                        ?.let { percentileScore(value = it, values = speeds, higherIsBetter = true) },
+                    result.pingMillis
+                        ?.takeIf { it > 0L }
+                        ?.let { percentileScore(value = it, values = pings, higherIsBetter = false) },
+                )
+                val percentile = if (metricScores.isEmpty()) {
+                    0f
+                } else {
+                    metricScores.average().toFloat().coerceIn(0f, 1f)
+                }
+                ServerTestScore(
+                    bucket = serverTestScoreBucket(percentile),
+                    percentile = percentile,
+                )
+            }
+            else -> ServerTestScore(ServerTestScoreBucket.Pending, 0f)
+        }
+        result.serverId to score
+    }
+}
+
+private fun percentileScore(
+    value: Long,
+    values: List<Long>,
+    higherIsBetter: Boolean,
+): Float {
+    if (values.isEmpty()) {
+        return 0f
+    }
+    val favorableCount = if (higherIsBetter) {
+        values.count { value >= it }
+    } else {
+        values.count { value <= it }
+    }
+    return (favorableCount.toFloat() / values.size.toFloat()).coerceIn(0f, 1f)
+}
+
+private fun serverTestScoreBucket(percentile: Float): ServerTestScoreBucket {
+    return when {
+        percentile >= 0.67f -> ServerTestScoreBucket.Good
+        percentile >= 0.34f -> ServerTestScoreBucket.Fair
+        else -> ServerTestScoreBucket.Poor
+    }
+}
+
+private data class ServerTestRatingDisplay(
+    val label: String,
+    val icon: ImageVector,
+    val color: Color,
+    val surface: Color,
+    val loading: Boolean = false,
+)
+
+private data class ServerTestScore(
+    val bucket: ServerTestScoreBucket,
+    val percentile: Float,
+)
+
+private enum class ServerTestScoreBucket {
+    Good,
+    Fair,
+    Poor,
+    Pending,
 }
 
 @Composable
@@ -7825,6 +8375,20 @@ private fun shareTextExport(
         fileName = fileName,
         text = text,
     )
+    shareCachedExportFile(
+        context = context,
+        exportFile = exportFile,
+        subject = subject,
+        chooserTitle = chooserTitle,
+    )
+}
+
+private fun shareCachedExportFile(
+    context: Context,
+    exportFile: File,
+    subject: String,
+    chooserTitle: String,
+) {
     val uri = FileProvider.getUriForFile(
         context,
         "${context.packageName}.fileprovider",
@@ -7839,6 +8403,50 @@ private fun shareTextExport(
     context.startActivity(Intent.createChooser(intent, chooserTitle))
 }
 
+private data class ResolverProfilesExportDialogState(
+    val saving: Boolean = true,
+    val resolverCount: Int = 0,
+    val savedLocation: String = "",
+    val shareFile: File? = null,
+    val errorMessage: String? = null,
+)
+
+private data class ResolverProfilesExportResult(
+    val resolverCount: Int,
+    val savedLocation: String,
+    val shareFile: File,
+)
+
+private data class DeviceExportFile(
+    val fileName: String,
+    val savedLocation: String,
+)
+
+private fun writeResolverProfilesExport(
+    context: Context,
+    settings: WhiteDnsSettings,
+): ResolverProfilesExportResult {
+    val resolverText = settings.exportAllResolverProfilesText()
+    val resolverCount = resolverText
+        .lineSequence()
+        .count { it.isNotBlank() }
+    val savedFile = writeDeviceDownloadsExportFile(
+        context = context,
+        fileName = ResolverProfilesExportFileName,
+        text = resolverText,
+    )
+    val shareFile = writeCacheExportFile(
+        context = context,
+        fileName = savedFile.fileName,
+        text = resolverText,
+    )
+    return ResolverProfilesExportResult(
+        resolverCount = resolverCount,
+        savedLocation = savedFile.savedLocation,
+        shareFile = shareFile,
+    )
+}
+
 private fun writeCacheExportFile(
     context: Context,
     fileName: String,
@@ -7848,12 +8456,61 @@ private fun writeCacheExportFile(
         mkdirs()
     }
     cleanOldCacheExports(exportDir)
-    val safeName = fileName
-        .replace(Regex("""[^A-Za-z0-9._-]"""), "_")
-        .ifBlank { "whitedns-export.txt" }
+    val safeName = safeExportFileName(fileName)
     val exportFile = File(exportDir, safeName)
     exportFile.writeText(text, Charsets.UTF_8)
     return exportFile
+}
+
+private fun writeDeviceDownloadsExportFile(
+    context: Context,
+    fileName: String,
+    text: String,
+): DeviceExportFile {
+    val safeName = safeExportFileName(fileName)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Unable to create export file")
+        runCatching {
+            resolver.openOutputStream(uri)
+                ?.bufferedWriter(Charsets.UTF_8)
+                ?.use { writer -> writer.write(text) }
+                ?: throw IllegalStateException("Unable to write export file")
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }.getOrElse { error ->
+            runCatching { resolver.delete(uri, null, null) }
+            throw error
+        }
+        return DeviceExportFile(
+            fileName = safeName,
+            savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/$safeName",
+        )
+    }
+
+    val exportDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        ?: File(context.filesDir, Environment.DIRECTORY_DOWNLOADS)
+    exportDir.mkdirs()
+    val exportFile = File(exportDir, safeName)
+    exportFile.writeText(text, Charsets.UTF_8)
+    return DeviceExportFile(
+        fileName = safeName,
+        savedLocation = exportFile.absolutePath,
+    )
+}
+
+private fun safeExportFileName(fileName: String): String {
+    return fileName
+        .replace(Regex("""[^A-Za-z0-9._-]"""), "_")
+        .ifBlank { "whitedns-export.txt" }
 }
 
 private fun cleanOldCacheExports(exportDir: File) {
@@ -8279,10 +8936,12 @@ private fun SectionDivider() {
 private fun ToggleRow(
     label: String,
     enabled: Boolean,
+    interactiveEnabled: Boolean = true,
     onToggle: () -> Unit,
 ) {
     val context = LocalContext.current
     val haptic = rememberHapticFeedback()
+    val contentAlpha = if (interactiveEnabled) 1f else 0.46f
 
     Row(
         modifier = Modifier
@@ -8294,7 +8953,7 @@ private fun ToggleRow(
                     context.getString(R.string.cd_toggle_row_off, label)
                 }
             }
-            .clickable {
+            .clickable(enabled = interactiveEnabled) {
                 haptic.performLight()
                 onToggle()
             }
@@ -8306,12 +8965,13 @@ private fun ToggleRow(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 13.sp,
-                    color = WhiteDnsPalette.FieldLabel,
+                    color = WhiteDnsPalette.FieldLabel.copy(alpha = contentAlpha),
                     fontWeight = FontWeight.Medium,
                 ),
             )
         Switch(
             checked = enabled,
+            enabled = interactiveEnabled,
             onCheckedChange = {
                 haptic.performLight()
                 onToggle()
@@ -8763,3 +9423,4 @@ private fun filterDecimalInput(value: String): String {
 
 private const val CacheExportDirectory = "exports"
 private const val CacheExportMaxAgeMillis = 60L * 60L * 1_000L
+private const val ResolverProfilesExportFileName = "client_resolvers.txt"

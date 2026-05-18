@@ -19,6 +19,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -45,6 +46,9 @@ import shop.whitedns.client.model.ConnectionVerificationState
 import shop.whitedns.client.model.ConnectionVerificationStatus
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
+import shop.whitedns.client.model.ServerTestResult
+import shop.whitedns.client.model.ServerTestState
+import shop.whitedns.client.model.ServerTestStatus
 import shop.whitedns.client.model.StormDnsServerProfile
 import shop.whitedns.client.model.WhiteDnsScanDefaults
 import shop.whitedns.client.model.WhiteDnsScanState
@@ -127,6 +131,7 @@ class WhiteDnsViewModel(
     private var batteryOptimizationRefreshJob: Job? = null
     private var verificationJob: Job? = null
     private var scanLaunchJob: Job? = null
+    private var scanStateRefreshJob: Job? = null
     private var lastScannerResultProfileText = ""
     private var activeServerProfile: StormDnsServerProfile? = null
     private var activeRuntimeSessionId: String = ""
@@ -137,6 +142,9 @@ class WhiteDnsViewModel(
     private val stormDnsTrafficAccounting = StormDnsTrafficAccounting()
     private val autoTuneTrialManagersLock = Any()
     private var autoTuneTrialManagers: List<StormDnsProcessManager> = emptyList()
+    private var serverTestJob: Job? = null
+    private val serverTestManagersLock = Any()
+    private var serverTestManagers: List<StormDnsProcessManager> = emptyList()
     private var lastProgressUiUpdateMillis = 0L
     private var lastResolverUiUpdateMillis = 0L
     private val socksStreamTrackerLock = Any()
@@ -315,6 +323,8 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        serverTestJob?.cancel()
+        stopServerTestManagers()
         val sessionId = UUID.randomUUID().toString()
         activeRuntimeSessionId = sessionId
         uiState = uiState.copy(
@@ -324,6 +334,7 @@ class WhiteDnsViewModel(
             connectionProgress = ConnectionProgressState(phase = "preparing", percent = 3),
             connectionVerification = ConnectionVerificationState(),
             autoTuneTrialResults = emptyList(),
+            serverTestState = ServerTestState(),
             connectionLogs = listOf("Starting StormDNS"),
         )
         activeVpnTrafficInterfaceName = null
@@ -344,6 +355,7 @@ class WhiteDnsViewModel(
                     connectionProgress = ConnectionProgressState(),
                     connectionVerification = ConnectionVerificationState(),
                     autoTuneTrialResults = emptyList(),
+                    serverTestState = ServerTestState(),
                 )
                 return@launch
             }
@@ -364,6 +376,7 @@ class WhiteDnsViewModel(
                     connectionProgress = ConnectionProgressState(),
                     connectionVerification = ConnectionVerificationState(),
                     autoTuneTrialResults = emptyList(),
+                    serverTestState = ServerTestState(),
                 )
                 return@launch
             }
@@ -415,6 +428,7 @@ class WhiteDnsViewModel(
                     connectionProgress = ConnectionProgressState(),
                     connectionVerification = ConnectionVerificationState(),
                     networkIpAddress = findDeviceNetworkIpAddress(),
+                    serverTestState = ServerTestState(),
                     activeConnectionProfileId = null,
                 )
             }
@@ -658,6 +672,7 @@ class WhiteDnsViewModel(
         val selectedConfigIds = WhiteDnsParallelTest.normalizeConfigIds(
             configIds = baseSettings.parallelTestSelectedConfigIds,
             advancedProfiles = advancedProfiles,
+            includeAggressive = baseSettings.parallelTestAggressivePresetsEnabled,
         )
         return selectedConfigIds.mapNotNull { configId ->
             WhiteDnsParallelTest.presetIdFromConfigId(configId)?.let { presetId ->
@@ -906,13 +921,325 @@ class WhiteDnsViewModel(
         return pingMillis?.let { "${it}ms" } ?: "n/a"
     }
 
+    fun beginServerTest(serverProfileId: String? = null) {
+        if (
+            uiState.connectionStatus != ConnectionStatus.CONNECTED ||
+            uiState.serverTestState.isRunning
+        ) {
+            return
+        }
+
+        serverTestJob?.cancel()
+        val baseSettings = uiState.settings.syncSelectedConnectionProfileFields()
+        val serverProfiles = buildServerTestProfiles(baseSettings, serverProfileId)
+        val resolverEntries = connectedServerTestResolvers(baseSettings)
+
+        if (serverProfiles.isEmpty()) {
+            val message = if (serverProfileId == null) {
+                "Server Test: no saved server profiles are configured"
+            } else {
+                "Server Test: selected server profile is not configured"
+            }
+            appendLog(message)
+            uiState = uiState.copy(serverTestState = ServerTestState(message = message))
+            return
+        }
+        if (resolverEntries.isEmpty()) {
+            val message = "Server Test: no connected resolvers are available"
+            appendLog(message)
+            uiState = uiState.copy(serverTestState = ServerTestState(message = message))
+            return
+        }
+
+        serverTestJob = viewModelScope.launch {
+            val runtimeBaseSettings = baseSettings.runtimeConnectionSettings()
+            val ports = withContext(Dispatchers.IO) {
+                allocateRandomLocalPorts(serverProfiles.size)
+            }
+            val resolverText = resolverEntries.joinToString(separator = "\n")
+            val plans = serverProfiles.mapIndexed { index, serverProfile ->
+                val listenPort = ports[index]
+                ServerTestPlan(
+                    serverProfile = serverProfile,
+                    settings = runtimeBaseSettings.copy(
+                        selectedResolverProfileId = "",
+                        resolverText = resolverText,
+                        connectionMode = WhiteDnsRuntimeStateStore.ModeProxy,
+                        listenIp = WhiteDnsRuntimeProxy.ListenIp,
+                        listenPort = listenPort.toString(),
+                        httpProxyEnabled = false,
+                        httpProxyPort = WhiteDnsRuntimeProxy.HttpProxyPort,
+                        socks5Authentication = false,
+                        socksUsername = "",
+                        socksPassword = "",
+                        localDnsEnabled = false,
+                        localDnsPort = WhiteDnsRuntimeProxy.LocalDnsPort,
+                        startupMode = "resolvers",
+                        trafficWarmupEnabled = false,
+                        autoTuneEnabled = false,
+                    ),
+                    result = ServerTestResult(
+                        serverId = serverProfile.id,
+                        label = serverProfile.label,
+                        domain = serverProfile.domain,
+                        status = ServerTestStatus.Pending,
+                    ),
+                )
+            }
+            val managers = plans.associate { plan ->
+                plan.serverProfile.id to StormDnsProcessManager(appContext)
+            }
+            setServerTestManagers(managers.values.toList())
+            val startedMessage = "Server Test: testing ${plans.size} servers with ${resolverEntries.size} connected resolvers"
+            appendLog(startedMessage)
+            uiState = uiState.copy(
+                serverTestState = ServerTestState(
+                    isRunning = true,
+                    startedAtMillis = System.currentTimeMillis(),
+                    message = startedMessage,
+                    results = plans.map { it.result },
+                ),
+            )
+
+            var failureMessage: String? = null
+            try {
+                val startups = plans.map { plan ->
+                    async(Dispatchers.IO) {
+                        startServerTestPlan(
+                            plan = plan,
+                            manager = managers.getValue(plan.serverProfile.id),
+                        )
+                    }
+                }.awaitAll()
+                val readyStartups = startups.filter { it.ready }
+                if (readyStartups.isNotEmpty()) {
+                    delay(AutoTuneMeasurementSettleMillis)
+                }
+                readyStartups.map { startup ->
+                    async(Dispatchers.IO) {
+                        measureServerTestPlan(startup)
+                    }
+                }.awaitAll()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                failureMessage = error.message ?: error::class.java.simpleName
+                appendLog("Server Test failed: $failureMessage")
+            } finally {
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.IO) {
+                        stopServerTestManagers()
+                    }
+                    if (
+                        uiState.serverTestState.isRunning &&
+                        uiState.connectionStatus == ConnectionStatus.CONNECTED
+                    ) {
+                        val results = uiState.serverTestState.results
+                        uiState = uiState.copy(
+                            serverTestState = uiState.serverTestState.copy(
+                                isRunning = false,
+                                completedAtMillis = System.currentTimeMillis(),
+                                message = failureMessage ?: serverTestSummaryMessage(results),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun startServerTestPlan(
+        plan: ServerTestPlan,
+        manager: StormDnsProcessManager,
+    ): ServerTestStartup {
+        val startupFailure = AtomicReference<String?>(null)
+        return try {
+            withContext(Dispatchers.Main.immediate) {
+                updateServerTestResultOnMain(
+                    plan.result.copy(
+                        status = ServerTestStatus.Starting,
+                        message = "Starting",
+                    ),
+                )
+            }
+            manager.start(plan.serverProfile, plan.settings) { line ->
+                detectStormDnsStartupFailure(line)?.let { failure ->
+                    startupFailure.compareAndSet(null, failure)
+                }
+            }
+            val ready = waitForAutoTuneTrialReady(
+                manager = manager,
+                listenPort = plan.settings.resolve().listenPort,
+                startupFailure = startupFailure,
+            )
+            if (!ready) {
+                val failedResult = plan.result.copy(
+                    status = ServerTestStatus.Failed,
+                    message = startupFailure.get() ?: "Server did not become ready",
+                )
+                withContext(Dispatchers.Main.immediate) {
+                    updateServerTestResultOnMain(failedResult)
+                }
+                return ServerTestStartup(
+                    plan = plan,
+                    manager = manager,
+                    ready = false,
+                )
+            }
+
+            withContext(Dispatchers.Main.immediate) {
+                updateServerTestResultOnMain(
+                    plan.result.copy(
+                        status = ServerTestStatus.Measuring,
+                        message = "Measuring speed",
+                    ),
+                )
+            }
+            ServerTestStartup(
+                plan = plan,
+                manager = manager,
+                ready = true,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            val failedResult = plan.result.copy(
+                status = ServerTestStatus.Failed,
+                message = error.message ?: error::class.java.simpleName,
+            )
+            withContext(Dispatchers.Main.immediate) {
+                updateServerTestResultOnMain(failedResult)
+            }
+            ServerTestStartup(
+                plan = plan,
+                manager = manager,
+                ready = false,
+            )
+        }
+    }
+
+    private suspend fun measureServerTestPlan(startup: ServerTestStartup): ServerTestResult {
+        val plan = startup.plan
+        withContext(Dispatchers.Main.immediate) {
+            updateServerTestResultOnMain(
+                plan.result.copy(
+                    status = ServerTestStatus.Measuring,
+                    message = "Measuring speed",
+                ),
+            )
+        }
+        val probeResult = WhiteDnsTrafficWarmup.measureDownloadThroughput(plan.settings.resolve())
+        val speed = probeResult?.bytesPerSecond ?: 0L
+        val pingMillis = probeResult?.latencyMillis
+        val result = plan.result.copy(
+            status = ServerTestStatus.Ready,
+            speedBytesPerSecond = speed,
+            pingMillis = pingMillis,
+            message = if (speed > 0L) "Measured" else "No speed result",
+        )
+        withContext(Dispatchers.Main.immediate) {
+            updateServerTestResultOnMain(result)
+        }
+        appendLog(
+            "Server Test: ${plan.serverProfile.label} ${formatTrafficSpeed(speed)}, " +
+                "ping ${formatAutoTuneLatency(pingMillis)}",
+        )
+        return result
+    }
+
+    private fun updateServerTestResultOnMain(result: ServerTestResult) {
+        val state = uiState.serverTestState
+        val resultIndex = state.results.indexOfFirst { it.serverId == result.serverId }
+        val nextResults = if (resultIndex >= 0) {
+            state.results.toMutableList().also { results ->
+                results[resultIndex] = result
+            }
+        } else {
+            state.results + result
+        }
+        uiState = uiState.copy(
+            serverTestState = state.copy(
+                results = nextResults,
+                message = serverTestProgressMessage(nextResults),
+            ),
+        )
+    }
+
+    private fun serverTestProgressMessage(results: List<ServerTestResult>): String {
+        val completed = results.count { it.status == ServerTestStatus.Ready || it.status == ServerTestStatus.Failed }
+        return "Server Test: measured $completed/${results.size} servers"
+    }
+
+    private fun serverTestSummaryMessage(results: List<ServerTestResult>): String {
+        val ready = results.count { it.status == ServerTestStatus.Ready }
+        val failed = results.count { it.status == ServerTestStatus.Failed }
+        return "Server Test complete: $ready ready, $failed failed"
+    }
+
+    private fun connectedServerTestResolvers(settings: WhiteDnsSettings): List<String> {
+        val runtimeResolvers = (
+            uiState.resolverRuntimeState.activeResolvers +
+                uiState.resolverRuntimeState.standbyResolvers +
+                uiState.resolverRuntimeState.validResolvers
+            )
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+        return runtimeResolvers.ifEmpty {
+            settings.runtimeConnectionSettings().resolve().resolverEntries
+        }
+    }
+
+    private fun buildServerTestProfiles(
+        settings: WhiteDnsSettings,
+        serverProfileId: String?,
+    ): List<StormDnsServerProfile> {
+        val profiles = settings.normalizedConnectionProfiles()
+            .let { connectionProfiles ->
+                if (serverProfileId == null) {
+                    connectionProfiles
+                } else {
+                    connectionProfiles.filter { it.id == serverProfileId }
+                }
+            }
+            .mapNotNull(::serverProfileFromConnectionProfile)
+        return if (serverProfileId == null) {
+            profiles.distinctBy { profile ->
+                "${profile.domain}\u0000${profile.encryptionKey}\u0000${profile.encryptionMethod}"
+            }
+        } else {
+            profiles
+        }
+    }
+
+    private fun setServerTestManagers(managers: List<StormDnsProcessManager>) {
+        synchronized(serverTestManagersLock) {
+            serverTestManagers = managers
+        }
+    }
+
+    private fun stopServerTestManagers() {
+        val managers = synchronized(serverTestManagersLock) {
+            serverTestManagers.also {
+                serverTestManagers = emptyList()
+            }
+        }
+        managers.forEach { manager ->
+            runCatching {
+                manager.stop()
+            }
+        }
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        serverTestJob?.cancel()
         viewModelScope.launch(Dispatchers.IO) {
             stopAutoTuneTrialManagers()
+            stopServerTestManagers()
             stopAllRuntimeServices()
             if (uiState.settings.resolve().connectionMode == "vpn") {
                 delay(VpnStopBeforeStormDnsStopDelayMillis)
@@ -932,6 +1259,7 @@ class WhiteDnsViewModel(
             connectionProgress = ConnectionProgressState(),
             connectionVerification = ConnectionVerificationState(),
             autoTuneTrialResults = emptyList(),
+            serverTestState = ServerTestState(),
             activeConnectionProfileId = null,
         )
     }
@@ -1169,19 +1497,28 @@ class WhiteDnsViewModel(
     }
 
     fun refreshScanState() {
-        val persistedState = WhiteDnsScanStateStore.read(appContext)
-        val scanState = persistedState.recoverIfStale(
-            nowMillis = System.currentTimeMillis(),
-            staleAfterMillis = StaleScanStateTimeoutMillis,
-        )
-        if (scanState != persistedState) {
-            WhiteDnsScanStateStore.write(appContext, scanState)
+        scanStateRefreshJob?.cancel()
+        val currentSettings = uiState.settings
+        scanStateRefreshJob = viewModelScope.launch {
+            val refreshResult = withContext(Dispatchers.IO) {
+                val persistedState = WhiteDnsScanStateStore.read(appContext)
+                val scanState = persistedState.recoverIfStale(
+                    nowMillis = System.currentTimeMillis(),
+                    staleAfterMillis = StaleScanStateTimeoutMillis,
+                )
+                if (scanState != persistedState) {
+                    WhiteDnsScanStateStore.write(appContext, scanState)
+                }
+                ScanStateRefreshResult(
+                    scanState = scanState,
+                    updatedSettings = syncScannerResultProfile(currentSettings, scanState),
+                )
+            }
+            uiState = uiState.copy(
+                settings = refreshResult.updatedSettings ?: uiState.settings,
+                scanState = refreshResult.scanState,
+            )
         }
-        val updatedSettings = syncScannerResultProfile()
-        uiState = uiState.copy(
-            settings = updatedSettings ?: uiState.settings,
-            scanState = scanState,
-        )
     }
 
     fun resumeScan() {
@@ -1299,8 +1636,11 @@ class WhiteDnsViewModel(
         statsJob?.cancel()
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
+        serverTestJob?.cancel()
         scanLaunchJob?.cancel()
+        scanStateRefreshJob?.cancel()
         stopAutoTuneTrialManagers()
+        stopServerTestManagers()
         WhiteDnsProxyEvents.removeListener(proxyEventListener)
         WhiteDnsVpnEvents.removeListener(vpnEventListener)
         unregisterRuntimeBroadcastReceivers()
@@ -1414,7 +1754,9 @@ class WhiteDnsViewModel(
             connectJob?.cancel()
             statsJob?.cancel()
             verificationJob?.cancel()
+            serverTestJob?.cancel()
             withContext(Dispatchers.IO) {
+                stopServerTestManagers()
                 stopAllRuntimeServices()
             }
             activeProxyListenPort = WhiteDnsRuntimeProxy.ListenPortInt
@@ -1430,6 +1772,7 @@ class WhiteDnsViewModel(
                 connectionProgress = ConnectionProgressState(),
                 connectionVerification = ConnectionVerificationState(),
                 networkIpAddress = findDeviceNetworkIpAddress(),
+                serverTestState = ServerTestState(),
                 activeConnectionProfileId = null,
             )
         }
@@ -1447,7 +1790,9 @@ class WhiteDnsViewModel(
             connectJob?.cancel()
             statsJob?.cancel()
             verificationJob?.cancel()
+            serverTestJob?.cancel()
             withContext(Dispatchers.IO) {
+                stopServerTestManagers()
                 stopAllRuntimeServices()
             }
             activeProxyListenPort = WhiteDnsRuntimeProxy.ListenPortInt
@@ -1463,6 +1808,7 @@ class WhiteDnsViewModel(
                 connectionProgress = ConnectionProgressState(),
                 connectionVerification = ConnectionVerificationState(),
                 networkIpAddress = findDeviceNetworkIpAddress(),
+                serverTestState = ServerTestState(),
                 activeConnectionProfileId = null,
             )
         }
@@ -1556,7 +1902,9 @@ class WhiteDnsViewModel(
         connectJob?.cancel()
         statsJob?.cancel()
         verificationJob?.cancel()
+        serverTestJob?.cancel()
         viewModelScope.launch(Dispatchers.IO) {
+            stopServerTestManagers()
             stopAllRuntimeServices()
         }
         activeProxyListenPort = WhiteDnsRuntimeProxy.ListenPortInt
@@ -1571,6 +1919,7 @@ class WhiteDnsViewModel(
             connectionProgress = ConnectionProgressState(),
             connectionVerification = ConnectionVerificationState(),
             networkIpAddress = findDeviceNetworkIpAddress(),
+            serverTestState = ServerTestState(),
             activeConnectionProfileId = null,
             connectionLogs = prependConnectionLog(message),
         )
@@ -1710,15 +2059,21 @@ class WhiteDnsViewModel(
         return parts.joinToString(separator = "\n")
     }
 
-    private fun syncScannerResultProfile(): WhiteDnsSettings? {
+    private fun syncScannerResultProfile(
+        currentSettings: WhiteDnsSettings,
+        scanState: WhiteDnsScanState,
+    ): WhiteDnsSettings? {
+        if (scanState.isRunning) {
+            return null
+        }
         val scannerResultText = WhiteDnsScannerResultStore.readValidResolvers(appContext)
             .joinToString(separator = "\n")
         if (scannerResultText.isBlank() || scannerResultText == lastScannerResultProfileText) {
             return null
         }
 
-        val currentSettings = uiState.settings.syncSelectedConnectionProfileFields()
-        val resolverProfiles = currentSettings.normalizedResolverProfiles()
+        val normalizedSettings = currentSettings.syncSelectedConnectionProfileFields()
+        val resolverProfiles = normalizedSettings.normalizedResolverProfiles()
         val existingIndex = resolverProfiles.indexOfFirst { it.name == ScannerResultProfileName }
         if (existingIndex >= 0 && resolverProfiles[existingIndex].resolverText == scannerResultText) {
             lastScannerResultProfileText = scannerResultText
@@ -1741,7 +2096,7 @@ class WhiteDnsViewModel(
         } else {
             resolverProfiles + scannerResultProfile
         }
-        val updatedSettings = currentSettings.copy(
+        val updatedSettings = normalizedSettings.copy(
             resolverProfiles = updatedProfiles,
         ).syncSelectedConnectionProfileFields()
         settingsStore.save(updatedSettings)
@@ -1781,7 +2136,10 @@ class WhiteDnsViewModel(
     }
 
     private fun selectServerProfile(settings: WhiteDnsSettings): StormDnsServerProfile? {
-        val connectionProfile = settings.selectedConnectionProfile()
+        return serverProfileFromConnectionProfile(settings.selectedConnectionProfile())
+    }
+
+    private fun serverProfileFromConnectionProfile(connectionProfile: ConnectionProfile): StormDnsServerProfile? {
         val domain = connectionProfile.customServerDomain
             .trim()
             .trimEnd('.')
@@ -1790,8 +2148,8 @@ class WhiteDnsViewModel(
             return null
         }
         return StormDnsServerProfile(
-            id = "custom",
-            label = "Custom StormDNS Server",
+            id = connectionProfile.id.ifBlank { domain },
+            label = connectionProfile.name.ifBlank { domain },
             domain = domain,
             encryptionKey = encryptionKey,
             encryptionMethod = connectionProfile.customServerEncryptionMethod.coerceIn(0, 5),
@@ -2185,6 +2543,11 @@ class WhiteDnsViewModel(
             get() = if (pendingResolverCount > 0) pendingResolverCount else totalResolverCount
     }
 
+    private data class ScanStateRefreshResult(
+        val scanState: WhiteDnsScanState,
+        val updatedSettings: WhiteDnsSettings?,
+    )
+
     private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
         val powerManager = context.getSystemService(PowerManager::class.java) ?: return true
         return powerManager.isIgnoringBatteryOptimizations(context.packageName)
@@ -2283,6 +2646,18 @@ class WhiteDnsViewModel(
         val listenPort: Int,
         val scoreBytesPerSecond: Long,
         val pingMillis: Long?,
+        val ready: Boolean,
+    )
+
+    private data class ServerTestPlan(
+        val serverProfile: StormDnsServerProfile,
+        val settings: WhiteDnsSettings,
+        val result: ServerTestResult,
+    )
+
+    private data class ServerTestStartup(
+        val plan: ServerTestPlan,
+        val manager: StormDnsProcessManager,
         val ready: Boolean,
     )
 

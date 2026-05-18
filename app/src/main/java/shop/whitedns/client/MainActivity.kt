@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
                     onScanWorkerCountChange = viewModel::updateScanWorkerCount,
                     onScanStopClick = viewModel::stopScan,
                     onScanResumeClick = viewModel::resumeScan,
+                    onServerTestClick = { profileId -> viewModel.beginServerTest(profileId) },
                     onSettingsChange = viewModel::updateSettings,
                 )
             }

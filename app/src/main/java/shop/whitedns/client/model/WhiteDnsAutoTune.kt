@@ -13,7 +13,13 @@ data class WhiteDnsAutoTunePreset(
     val downloadDuplication: String,
     val uploadCompression: Int,
     val downloadCompression: Int,
+    val stability: WhiteDnsAutoTunePresetStability = WhiteDnsAutoTunePresetStability.Stable,
 )
+
+enum class WhiteDnsAutoTunePresetStability {
+    Stable,
+    Aggressive,
+}
 
 object WhiteDnsAutoTunePresets {
     val all: List<WhiteDnsAutoTunePreset> = listOf(
@@ -30,6 +36,7 @@ object WhiteDnsAutoTunePresets {
             downloadDuplication = "30",
             uploadCompression = 2,
             downloadCompression = 3,
+            stability = WhiteDnsAutoTunePresetStability.Aggressive,
         ),
         WhiteDnsAutoTunePreset(
             id = "auto-2",
@@ -58,6 +65,7 @@ object WhiteDnsAutoTunePresets {
             downloadDuplication = "1",
             uploadCompression = 0,
             downloadCompression = 0,
+            stability = WhiteDnsAutoTunePresetStability.Aggressive,
         ),
         WhiteDnsAutoTunePreset(
             id = "auto-4",
@@ -86,6 +94,7 @@ object WhiteDnsAutoTunePresets {
             downloadDuplication = "1",
             uploadCompression = 0,
             downloadCompression = 0,
+            stability = WhiteDnsAutoTunePresetStability.Aggressive,
         ),
         WhiteDnsAutoTunePreset(
             id = "auto-6",
@@ -125,7 +134,28 @@ object WhiteDnsParallelTest {
     private const val SettingConfigPrefix = "setting:"
 
     val defaultConfigIds: List<String>
+        get() = stableConfigIds
+
+    val stableConfigIds: List<String>
+        get() = WhiteDnsAutoTunePresets.all
+            .filter { it.stability == WhiteDnsAutoTunePresetStability.Stable }
+            .map { whiteDnsConfigId(it.id) }
+
+    val aggressiveConfigIds: List<String>
+        get() = WhiteDnsAutoTunePresets.all
+            .filter { it.stability == WhiteDnsAutoTunePresetStability.Aggressive }
+            .map { whiteDnsConfigId(it.id) }
+
+    val allConfigIds: List<String>
         get() = WhiteDnsAutoTunePresets.all.map { whiteDnsConfigId(it.id) }
+
+    fun whiteDnsConfigIds(includeAggressive: Boolean): List<String> {
+        return if (includeAggressive) {
+            allConfigIds
+        } else {
+            stableConfigIds
+        }
+    }
 
     fun whiteDnsConfigId(presetId: String): String = "$WhiteDnsConfigPrefix$presetId"
 
@@ -146,8 +176,9 @@ object WhiteDnsParallelTest {
         configIds: List<String>,
         advancedProfiles: List<AdvancedSettingsProfile>,
         defaultIfEmpty: Boolean = true,
+        includeAggressive: Boolean = false,
     ): List<String> {
-        val whiteDnsIds = defaultConfigIds
+        val whiteDnsIds = whiteDnsConfigIds(includeAggressive)
         val settingIds = advancedProfiles
             .filter { it.id.isNotBlank() && it.id != AdvancedSettingsProfile.DefaultId }
             .map { settingConfigId(it.id) }

@@ -292,6 +292,7 @@ data class WhiteDnsSettings(
     val trafficKeepaliveIntervalSeconds: String = "5",
     val autoTuneEnabled: Boolean = WhiteDnsParallelTest.EnabledByDefault,
     val parallelTestSelectedConfigIds: List<String> = WhiteDnsParallelTest.defaultConfigIds,
+    val parallelTestAggressivePresetsEnabled: Boolean = false,
     val fullVpnPerformanceWarningDismissed: Boolean = false,
     val batteryOptimizationWarningDismissed: Boolean = false,
     val splitTunnelMode: String = WhiteDnsOptions.SplitTunnelModeOff,
@@ -434,6 +435,32 @@ data class AutoTuneTrialResult(
     val selected: Boolean = false,
 )
 
+object ServerTestStatus {
+    const val Pending = "pending"
+    const val Starting = "starting"
+    const val Measuring = "measuring"
+    const val Ready = "ready"
+    const val Failed = "failed"
+}
+
+data class ServerTestResult(
+    val serverId: String,
+    val label: String,
+    val domain: String,
+    val status: String = ServerTestStatus.Pending,
+    val speedBytesPerSecond: Long = 0L,
+    val pingMillis: Long? = null,
+    val message: String = "",
+)
+
+data class ServerTestState(
+    val isRunning: Boolean = false,
+    val startedAtMillis: Long = 0L,
+    val completedAtMillis: Long = 0L,
+    val message: String = "",
+    val results: List<ServerTestResult> = emptyList(),
+)
+
 object WhiteDnsScanStatus {
     const val Idle = "idle"
     const val Ready = "ready"
@@ -521,6 +548,7 @@ data class WhiteDnsUiState(
     val connectionProgress: ConnectionProgressState = ConnectionProgressState(),
     val connectionVerification: ConnectionVerificationState = ConnectionVerificationState(),
     val autoTuneTrialResults: List<AutoTuneTrialResult> = emptyList(),
+    val serverTestState: ServerTestState = ServerTestState(),
     val scanState: WhiteDnsScanState = WhiteDnsScanState(),
     val scanWorkerCount: String = WhiteDnsScanDefaults.DefaultWorkerCount.toString(),
     val scanConnectionProfileId: String = ConnectionProfile.DefaultId,
@@ -951,6 +979,16 @@ fun WhiteDnsSettings.upsertResolverProfile(profile: ResolverProfile): WhiteDnsSe
         selectedResolverProfileId = normalizedProfile.id,
         resolverText = normalizedProfile.resolverText,
     ).applyResolverProfileToSelectedConnection(normalizedProfile.id)
+}
+
+fun WhiteDnsSettings.exportAllResolverProfilesText(): String {
+    val resolverEntries = normalizedResolverProfiles()
+        .flatMap { profile -> validateResolverText(profile.resolverText).normalizedResolvers }
+        .distinct()
+    if (resolverEntries.isEmpty()) {
+        throw IllegalArgumentException("No resolver profiles are available to export")
+    }
+    return resolverEntries.joinToString(separator = "\n")
 }
 
 fun WhiteDnsSettings.saveResolverProfileAs(

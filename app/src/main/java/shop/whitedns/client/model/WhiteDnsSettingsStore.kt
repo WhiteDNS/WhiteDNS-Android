@@ -63,6 +63,15 @@ class WhiteDnsSettingsStore(
         val advancedProfiles = decodeAdvancedProfiles(
             raw = preferences.getString(KeyAdvancedProfiles, null),
         )
+        val parallelTestAggressivePresetsEnabled = preferences.getBoolean(
+            KeyParallelTestAggressivePresetsEnabled,
+            defaults.parallelTestAggressivePresetsEnabled,
+        )
+        val parallelTestSelectedConfigIds = WhiteDnsParallelTest.normalizeConfigIds(
+            configIds = decodePackageNames(preferences.getString(KeyParallelTestSelectedConfigIds, null)),
+            advancedProfiles = advancedProfiles,
+            includeAggressive = parallelTestAggressivePresetsEnabled,
+        )
         return WhiteDnsSettings(
             selectedConnectionProfileId = preferences.getString(
                 KeySelectedConnectionProfileId,
@@ -196,9 +205,8 @@ class WhiteDnsSettingsStore(
                 defaults.trafficKeepaliveIntervalSeconds,
             ) ?: defaults.trafficKeepaliveIntervalSeconds,
             autoTuneEnabled = preferences.getBoolean(KeyAutoTuneEnabled, defaults.autoTuneEnabled),
-            parallelTestSelectedConfigIds = decodePackageNames(
-                preferences.getString(KeyParallelTestSelectedConfigIds, null),
-            ).ifEmpty { defaults.parallelTestSelectedConfigIds },
+            parallelTestSelectedConfigIds = parallelTestSelectedConfigIds,
+            parallelTestAggressivePresetsEnabled = parallelTestAggressivePresetsEnabled,
             fullVpnPerformanceWarningDismissed = preferences.getBoolean(
                 KeyFullVpnPerformanceWarningDismissed,
                 defaults.fullVpnPerformanceWarningDismissed,
@@ -221,7 +229,12 @@ class WhiteDnsSettingsStore(
             .putString(KeySelectedConnectionProfileId, normalizedSettings.selectedConnectionProfileId)
             .putString(KeyConnectionProfiles, encodeConnectionProfiles(normalizedSettings.connectionProfiles))
             .putString(KeySelectedResolverProfileId, normalizedSettings.selectedResolverProfileId)
-            .putString(KeyResolverProfiles, encodeResolverProfiles(normalizedSettings.resolverProfiles))
+            .putString(
+                KeyResolverProfiles,
+                encodeResolverProfiles(
+                    normalizedSettings.resolverProfiles.filter { it.id != ResolverProfile.DefaultId },
+                ),
+            )
             .putString(KeySelectedAdvancedProfileId, normalizedSettings.selectedAdvancedProfileId)
             .putString(KeyAdvancedProfiles, encodeAdvancedProfiles(normalizedSettings.advancedProfiles))
             .putString(KeyServerMode, normalizedSettings.serverMode)
@@ -287,6 +300,10 @@ class WhiteDnsSettingsStore(
             .putString(
                 KeyParallelTestSelectedConfigIds,
                 encodePackageNames(normalizedSettings.parallelTestSelectedConfigIds),
+            )
+            .putBoolean(
+                KeyParallelTestAggressivePresetsEnabled,
+                normalizedSettings.parallelTestAggressivePresetsEnabled,
             )
             .putBoolean(
                 KeyFullVpnPerformanceWarningDismissed,
@@ -644,7 +661,8 @@ class WhiteDnsSettingsStore(
     }
 
     private fun migrateAdvancedDefaultsIfNeeded() {
-        if (preferences.getInt(KeyAdvancedDefaultsRevision, 0) >= AdvancedDefaultsRevision) {
+        val currentRevision = preferences.getInt(KeyAdvancedDefaultsRevision, 0)
+        if (currentRevision >= AdvancedDefaultsRevision) {
             return
         }
 
@@ -672,12 +690,23 @@ class WhiteDnsSettingsStore(
         replaceOldDefault(KeyMaxDownloadMtu, oldValue = "140", newValue = "3000")
         replaceOldDefault(KeyMaxDownloadMtu, oldValue = "4000", newValue = "3000")
         replaceOldDefault(KeyStartupMode, oldValue = "logs", newValue = "resolvers")
+        if (currentRevision < StabilityDefaultsRevision) {
+            editor
+                .putBoolean(KeyTrafficWarmupEnabled, false)
+                .putBoolean(KeyAutoTuneEnabled, false)
+                .putString(
+                    KeyParallelTestSelectedConfigIds,
+                    encodePackageNames(WhiteDnsParallelTest.defaultConfigIds),
+                )
+                .putBoolean(KeyParallelTestAggressivePresetsEnabled, false)
+        }
         editor.putInt(KeyAdvancedDefaultsRevision, AdvancedDefaultsRevision).apply()
     }
 
     private companion object {
         const val PreferencesName = "white_dns_settings"
-        const val AdvancedDefaultsRevision = 5
+        const val AdvancedDefaultsRevision = 7
+        const val StabilityDefaultsRevision = 7
         const val LegacyDefaultResolverText = "1.1.1.1\n8.8.8.8\n9.9.9.9"
         const val KeyAdvancedDefaultsRevision = "advanced_defaults_revision"
         const val KeySelectedConnectionProfileId = "selected_connection_profile_id"
@@ -748,6 +777,7 @@ class WhiteDnsSettingsStore(
         const val KeyTrafficKeepaliveIntervalSeconds = "traffic_keepalive_interval_seconds"
         const val KeyAutoTuneEnabled = "auto_tune_enabled"
         const val KeyParallelTestSelectedConfigIds = "parallel_test_selected_config_ids"
+        const val KeyParallelTestAggressivePresetsEnabled = "parallel_test_aggressive_presets_enabled"
         const val KeyFullVpnPerformanceWarningDismissed = "full_vpn_performance_warning_dismissed"
         const val KeyBatteryOptimizationWarningDismissed = "battery_optimization_warning_dismissed"
         const val KeySplitTunnelMode = "split_tunnel_mode"

@@ -54,6 +54,31 @@ interface WhiteDnsStrings {
     // Connect tab labels
     val parallelTest: String
     val connectProgressConnected: String
+    val serverTestTitle: String
+    val serverTestButton: String
+    val serverTestSingleButton: String
+    val serverTestRunning: String
+    val serverTestIdle: String
+    val serverTestReady: String
+    val serverTestFailed: String
+    val serverTestMeasuring: String
+    val serverTestStarting: String
+    val serverTestPending: String
+    val serverTestProgressTemplate: String
+    val serverTestSummaryTemplate: String
+    val serverTestNoSavedServers: String
+    val serverTestNoConnectedResolvers: String
+    val serverTestFailedTemplate: String
+    val serverTestConnectionRequired: String
+    val serverTestServiceConnected: String
+    val serverTestServiceTesting: String
+    val serverTestServiceGood: String
+    val serverTestServiceFair: String
+    val serverTestServicePoor: String
+    val serverTestScoreGood: String
+    val serverTestScoreFair: String
+    val serverTestScorePoor: String
+    val serverTestScoreUnavailable: String
 
     // Profile tabs
     val profileTabConnection: String
@@ -163,7 +188,11 @@ interface WhiteDnsStrings {
     val profileDialogImportConnection: String
     val profileDialogExportConnection: String
     val profileDialogExportAllConnections: String
+    val profileDialogExportAllResolvers: String
     val profileDialogExportSettings: String
+    val profileExportResolverTotalTemplate: String
+    val profileExportSavingFile: String
+    val profileExportSavedToTemplate: String
     val profileFieldName: String
     val profileFieldResolvers: String
     val profileFieldProfileLinks: String
@@ -313,6 +342,7 @@ interface WhiteDnsStrings {
     val shareChooserProfile: String
     val shareChooserClientConfig: String
     val shareChooserAdvancedSettings: String
+    val shareChooserResolvers: String
 
     // File import / validation errors
     val errorUnableToOpenResolverFile: String
@@ -433,11 +463,19 @@ interface WhiteDnsStrings {
     val verificationPending: String
     val verificationNotRunYet: String
     val verificationCheckingRoute: String
+    val verificationProxyReachable: String
+    val verificationVpnReachable: String
+    val verificationProxyWarming: String
+    val verificationVpnWarming: String
+    val verificationModeChanged: String
+    val verificationSocksNotReachable: String
+    val verificationVpnInterfaceInactive: String
 
     // Lists / placeholders
     val noResolversPlaceholder: String
     val whiteDnsResolversLabel: String
     val whiteDnsConfigsLabel: String
+    val whiteDnsAggressiveConfigsLabel: String
     val whiteDnsLogsLabel: String
     val whiteDnsDiagnosticsLabel: String
     val parallelTestCollapseDescription: String
@@ -565,6 +603,31 @@ object EnglishStrings : WhiteDnsStrings {
 
     override val parallelTest = "Parallel Test"
     override val connectProgressConnected = "Connected"
+    override val serverTestTitle = "SERVER TEST"
+    override val serverTestButton = "TEST SERVERS"
+    override val serverTestSingleButton = "Test server"
+    override val serverTestRunning = "TESTING"
+    override val serverTestIdle = "Ready to test saved servers"
+    override val serverTestReady = "Ready"
+    override val serverTestFailed = "Failed"
+    override val serverTestMeasuring = "Measuring"
+    override val serverTestStarting = "Starting"
+    override val serverTestPending = "Pending"
+    override val serverTestProgressTemplate = "Server Test: measured %d/%d servers"
+    override val serverTestSummaryTemplate = "Server Test complete: %d ready, %d failed"
+    override val serverTestNoSavedServers = "Server Test: no saved server profiles are configured"
+    override val serverTestNoConnectedResolvers = "Server Test: no connected resolvers are available"
+    override val serverTestFailedTemplate = "Server Test failed: %s"
+    override val serverTestConnectionRequired = "Connection Required"
+    override val serverTestServiceConnected = "Connected"
+    override val serverTestServiceTesting = "Testing"
+    override val serverTestServiceGood = "Healthy"
+    override val serverTestServiceFair = "Mixed"
+    override val serverTestServicePoor = "Needs Attention"
+    override val serverTestScoreGood = "Good"
+    override val serverTestScoreFair = "Fair"
+    override val serverTestScorePoor = "Poor"
+    override val serverTestScoreUnavailable = "Not available"
 
     override val profileTabConnection = "Connection"
     override val profileTabResolver = "Resolver"
@@ -666,7 +729,11 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileDialogImportConnection = "IMPORT CONNECTION"
     override val profileDialogExportConnection = "EXPORT CONNECTION"
     override val profileDialogExportAllConnections = "EXPORT ALL CONNECTIONS"
+    override val profileDialogExportAllResolvers = "EXPORT ALL RESOLVERS"
     override val profileDialogExportSettings = "EXPORT SETTINGS"
+    override val profileExportResolverTotalTemplate = "Total: %s"
+    override val profileExportSavingFile = "Saving client_resolvers.txt..."
+    override val profileExportSavedToTemplate = "Saved to %s"
     override val profileFieldName = "Name"
     override val profileFieldResolvers = "Resolvers"
     override val profileFieldProfileLinks = "Profile Links"
@@ -813,6 +880,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val shareChooserProfile = "Export WhiteDNS profile"
     override val shareChooserClientConfig = "Export client_config.toml"
     override val shareChooserAdvancedSettings = "Export advanced_settings.toml"
+    override val shareChooserResolvers = "Export client_resolvers.txt"
 
     override val errorUnableToOpenResolverFile = "Unable to open resolver file"
     override val errorInvalidResolverIpTemplate = "Invalid resolver IP: %s"
@@ -926,10 +994,18 @@ object EnglishStrings : WhiteDnsStrings {
     override val verificationPending = "Pending"
     override val verificationNotRunYet = "Connection verification has not run yet"
     override val verificationCheckingRoute = "Checking tunnel route"
+    override val verificationProxyReachable = "Connection verified: proxy tunnel can reach the internet"
+    override val verificationVpnReachable = "Connection verified: VPN tunnel can reach the internet"
+    override val verificationProxyWarming = "Connection ready: proxy tunnel is active; outbound probe is still warming up"
+    override val verificationVpnWarming = "Connection ready: VPN tunnel is active; outbound probe is still warming up"
+    override val verificationModeChanged = "Connection mode changed before verification finished"
+    override val verificationSocksNotReachable = "Connection verification failed: local SOCKS listener is not reachable"
+    override val verificationVpnInterfaceInactive = "Connection verification failed: VPN interface is not active"
 
     override val noResolversPlaceholder = "No resolvers"
     override val whiteDnsResolversLabel = "WhiteDNS resolvers"
     override val whiteDnsConfigsLabel = "WhiteDNS configs"
+    override val whiteDnsAggressiveConfigsLabel = "Aggressive configs"
     override val whiteDnsLogsLabel = "WhiteDNS logs"
     override val whiteDnsDiagnosticsLabel = "WhiteDNS diagnostics"
     override val parallelTestCollapseDescription = "Collapse Parallel Test configs"
@@ -1046,6 +1122,31 @@ object PersianStrings : WhiteDnsStrings {
 
     override val parallelTest = "تست موازی"
     override val connectProgressConnected = "متصل شد"
+    override val serverTestTitle = "تست سرور"
+    override val serverTestButton = "تست سرورها"
+    override val serverTestSingleButton = "تست این سرور"
+    override val serverTestRunning = "در حال تست"
+    override val serverTestIdle = "آماده تست سرورهای ذخیره‌شده"
+    override val serverTestReady = "آماده"
+    override val serverTestFailed = "ناموفق"
+    override val serverTestMeasuring = "در حال اندازه‌گیری"
+    override val serverTestStarting = "در حال شروع"
+    override val serverTestPending = "در انتظار"
+    override val serverTestProgressTemplate = "تست سرور: %d/%d سرور اندازه‌گیری شد"
+    override val serverTestSummaryTemplate = "تست سرور تکمیل شد: %d آماده، %d ناموفق"
+    override val serverTestNoSavedServers = "تست سرور: هیچ پروفایل سروری ذخیره نشده است"
+    override val serverTestNoConnectedResolvers = "تست سرور: ریزالور متصل در دسترس نیست"
+    override val serverTestFailedTemplate = "تست سرور ناموفق بود: %s"
+    override val serverTestConnectionRequired = "نیاز به اتصال"
+    override val serverTestServiceConnected = "متصل"
+    override val serverTestServiceTesting = "در حال تست"
+    override val serverTestServiceGood = "سالم"
+    override val serverTestServiceFair = "ترکیبی"
+    override val serverTestServicePoor = "نیاز به بررسی"
+    override val serverTestScoreGood = "خوب"
+    override val serverTestScoreFair = "متوسط"
+    override val serverTestScorePoor = "ضعیف"
+    override val serverTestScoreUnavailable = "در دسترس نیست"
 
     override val profileTabConnection = "اتصال"
     override val profileTabResolver = "ریزالور"
@@ -1147,7 +1248,11 @@ object PersianStrings : WhiteDnsStrings {
     override val profileDialogImportConnection = "وارد کردن اتصال"
     override val profileDialogExportConnection = "خروجی اتصال"
     override val profileDialogExportAllConnections = "خروجی همه اتصال‌ها"
+    override val profileDialogExportAllResolvers = "خروجی همه ریزالورها"
     override val profileDialogExportSettings = "خروجی تنظیمات"
+    override val profileExportResolverTotalTemplate = "مجموع: %s"
+    override val profileExportSavingFile = "در حال ذخیره client_resolvers.txt..."
+    override val profileExportSavedToTemplate = "ذخیره شد در %s"
     override val profileFieldName = "نام"
     override val profileFieldResolvers = "ریزالورها"
     override val profileFieldProfileLinks = "لینک‌های پروفایل"
@@ -1294,6 +1399,7 @@ object PersianStrings : WhiteDnsStrings {
     override val shareChooserProfile = "اشتراک پروفایل WhiteDNS"
     override val shareChooserClientConfig = "اشتراک client_config.toml"
     override val shareChooserAdvancedSettings = "اشتراک advanced_settings.toml"
+    override val shareChooserResolvers = "اشتراک client_resolvers.txt"
 
     override val errorUnableToOpenResolverFile = "باز کردن فایل ریزالور ممکن نیست"
     override val errorInvalidResolverIpTemplate = "IP ریزالور نامعتبر: %s"
@@ -1406,10 +1512,18 @@ object PersianStrings : WhiteDnsStrings {
     override val verificationPending = "در انتظار"
     override val verificationNotRunYet = "تأیید اتصال هنوز اجرا نشده است"
     override val verificationCheckingRoute = "در حال بررسی مسیر تونل"
+    override val verificationProxyReachable = "اتصال تأیید شد: تونل پروکسی به اینترنت دسترسی دارد"
+    override val verificationVpnReachable = "اتصال تأیید شد: تونل VPN به اینترنت دسترسی دارد"
+    override val verificationProxyWarming = "اتصال آماده است: تونل پروکسی فعال است؛ پروب خروجی هنوز در حال آماده‌سازی است"
+    override val verificationVpnWarming = "اتصال آماده است: تونل VPN فعال است؛ پروب خروجی هنوز در حال آماده‌سازی است"
+    override val verificationModeChanged = "حالت اتصال پیش از پایان تأیید تغییر کرد"
+    override val verificationSocksNotReachable = "تأیید اتصال ناموفق بود: شنونده محلی SOCKS در دسترس نیست"
+    override val verificationVpnInterfaceInactive = "تأیید اتصال ناموفق بود: رابط VPN فعال نیست"
 
     override val noResolversPlaceholder = "بدون ریزالور"
     override val whiteDnsResolversLabel = "ریزالورهای WhiteDNS"
     override val whiteDnsConfigsLabel = "تنظیمات WhiteDNS"
+    override val whiteDnsAggressiveConfigsLabel = "تنظیمات پرریسک"
     override val whiteDnsLogsLabel = "لاگ‌های WhiteDNS"
     override val whiteDnsDiagnosticsLabel = "تشخیص WhiteDNS"
     override val parallelTestCollapseDescription = "بستن تنظیمات تست موازی"
