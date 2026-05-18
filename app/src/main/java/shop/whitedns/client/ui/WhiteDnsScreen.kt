@@ -131,6 +131,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -937,6 +939,7 @@ private fun ParallelTestSelectionPanel(
     onExpandedChange: (Boolean) -> Unit,
     onSettingsChange: (WhiteDnsSettings) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val arrowRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -974,6 +977,13 @@ private fun ParallelTestSelectionPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
+                .semantics {
+                    contentDescription = if (expanded) {
+                        context.getString(R.string.cd_parallel_test_collapse)
+                    } else {
+                        context.getString(R.string.cd_parallel_test_expand)
+                    }
+                }
                 .clickable {
                     haptic.performLight()
                     onExpandedChange(!expanded)
@@ -1543,7 +1553,7 @@ private fun ScanInfoNotice(
         ) {
             Icon(
                 imageVector = Icons.Rounded.Check,
-                contentDescription = "Scanner info",
+                contentDescription = stringResource(R.string.cd_scan_autosave_enabled),
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(16.dp),
             )
@@ -1670,6 +1680,7 @@ private fun ScanWorkerSlider(
     enabled: Boolean,
     onWorkerCountChange: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1694,6 +1705,9 @@ private fun ScanWorkerSlider(
             enabled = enabled,
             valueRange = ScanWorkerMin.toFloat()..ScanWorkerMax.toFloat(),
             steps = ScanWorkerMax - ScanWorkerMin - 1,
+            modifier = Modifier.semantics {
+                contentDescription = context.getString(R.string.cd_worker_count_slider, workerCount)
+            },
             colors = SliderDefaults.colors(
                 thumbColor = WhiteDnsPalette.Accent,
                 activeTrackColor = WhiteDnsPalette.Accent,
@@ -1798,6 +1812,7 @@ private fun BottomNavigationBar(
     selectedTab: WhiteDnsTab,
     onTabSelected: (WhiteDnsTab) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -1830,6 +1845,11 @@ private fun BottomNavigationBar(
                         .weight(1f)
                         .clip(RoundedCornerShape(14.dp))
                         .background(background)
+                        .semantics {
+                            contentDescription = context.getString(
+                                R.string.cd_navigate_to_tab, tab.label
+                            )
+                        }
                         .clickable {
                             haptic.performLight()
                             onTabSelected(tab)
@@ -1864,6 +1884,7 @@ private fun ProfileTabSwitch(
     selectedTab: ProfileTab,
     onTabSelected: (ProfileTab) -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
@@ -1888,6 +1909,13 @@ private fun ProfileTabSwitch(
                             Color.Transparent
                         },
                     )
+                    .semantics {
+                        contentDescription = if (selected) {
+                            context.getString(R.string.cd_profile_tab_selected, tab.label)
+                        } else {
+                            context.getString(R.string.cd_profile_tab_unselected, tab.label)
+                        }
+                    }
                     .clickable {
                         haptic.performLight()
                         onTabSelected(tab)
@@ -1929,6 +1957,9 @@ private fun FooterLink() {
             text = WhiteDnsTelegramUrl,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
+                .semantics {
+                    contentDescription = context.getString(R.string.cd_telegram_link)
+                }
                 .clickable {
                     haptic.performLight()
                     openWhiteDnsTelegram(context)
@@ -2681,6 +2712,7 @@ private fun HomeSelectorSheetRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
@@ -2693,6 +2725,9 @@ private fun HomeSelectorSheetRow(
                 if (selected) WhiteDnsPalette.Accent.copy(alpha = 0.28f) else WhiteDnsPalette.Border,
                 RoundedCornerShape(12.dp),
             )
+            .semantics {
+                contentDescription = context.getString(R.string.cd_select_profile_item, item.title)
+            }
             .clickable {
                 haptic.performLight()
                 onClick()
@@ -5424,6 +5459,7 @@ private fun HeaderCard(
                     .clip(RoundedCornerShape(9.dp))
                     .background(WhiteDnsPalette.SurfaceAlt)
                     .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(9.dp))
+                    .semantics { contentDescription = context.getString(R.string.cd_logo_telegram) }
                     .clickable {
                         haptic.performLight()
                         openWhiteDnsTelegram(context)
@@ -5460,6 +5496,7 @@ private fun HeaderCard(
                         if (overflowExpanded) WhiteDnsPalette.Accent.copy(alpha = 0.28f) else WhiteDnsPalette.Border,
                         RoundedCornerShape(10.dp),
                     )
+                    .semantics { contentDescription = context.getString(R.string.cd_menu_button) }
                     .clickable {
                         haptic.performLight()
                         overflowExpanded = true
@@ -5718,6 +5755,7 @@ private fun DonationWalletField(
     address: String,
     onCopy: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column {
         FieldLabel(label)
         Row(
@@ -5726,6 +5764,7 @@ private fun DonationWalletField(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Input)
                 .border(2.5.dp, WhiteDnsPalette.Divider, RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_copy_address, address) }
                 .clickable(onClick = onCopy)
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -5756,6 +5795,7 @@ private fun DonationWalletField(
 
 @Composable
 private fun NotificationPermissionBanner(onClick: () -> Unit) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -5791,6 +5831,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_enable_vpn_notification) }
                 .clickable {
                     haptic.performMedium()
                     onClick()
@@ -5816,6 +5857,7 @@ private fun BatteryOptimizationBanner(
     onClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -5875,6 +5917,7 @@ private fun BatteryOptimizationBanner(
                 .clip(RoundedCornerShape(10.dp))
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                .semantics { contentDescription = context.getString(R.string.cd_allow_background_vpn) }
                 .clickable {
                     haptic.performMedium()
                     onClick()
@@ -6162,12 +6205,16 @@ private fun SplitTunnelAppRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
+            .semantics {
+                contentDescription = context.getString(R.string.cd_split_tunnel_app_toggle, app.label)
+            }
             .clickable {
                 haptic.performLight()
                 onToggle()
@@ -6577,11 +6624,15 @@ private fun ResolverRuntimeValue(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(10.dp))
+            .semantics {
+                contentDescription = context.getString(R.string.cd_stat_card_detail, label, value)
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
@@ -7474,6 +7525,7 @@ private fun LogActionButton(
             .clip(RoundedCornerShape(8.dp))
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(8.dp))
+            .semantics { contentDescription = label }
             .clickable {
                 haptic.performLight()
                 onClick()
@@ -7782,6 +7834,7 @@ private fun SectionCard(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val isOpen = expanded || !collapsible
     val rotation by animateFloatAsState(
@@ -7825,10 +7878,18 @@ private fun SectionCard(
                 .fillMaxWidth()
                 .let { modifier ->
                     if (collapsible) {
-                        modifier.clickable {
-                            haptic.performLight()
-                            onToggle()
-                        }
+                        modifier
+                            .semantics {
+                                contentDescription = if (expanded) {
+                                    context.getString(R.string.cd_section_collapse, title)
+                                } else {
+                                    context.getString(R.string.cd_section_expand, title)
+                                }
+                            }
+                            .clickable {
+                                haptic.performLight()
+                                onToggle()
+                            }
                     } else {
                         modifier
                     }
@@ -7963,11 +8024,19 @@ private fun ToggleRow(
     enabled: Boolean,
     onToggle: () -> Unit,
 ) {
+    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription = if (enabled) {
+                    context.getString(R.string.cd_toggle_row_on, label)
+                } else {
+                    context.getString(R.string.cd_toggle_row_off, label)
+                }
+            }
             .clickable {
                 haptic.performLight()
                 onToggle()

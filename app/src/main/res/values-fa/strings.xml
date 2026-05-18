@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">وایت‌دی‌ان‌اس</string>
+
+    <!-- Navigation -->
+    <string name="cd_tab_profiles">تب پروفایل‌ها - مدیریت پروفایل‌های اتصال و تحلیل‌گر</string>
+    <string name="cd_tab_connect">تب اتصال - کنترل اتصال وی‌پی‌ان</string>
+    <string name="cd_tab_logs">تب گزارش‌ها - مشاهده گزارش‌های اتصال</string>
+    <string name="cd_back_button">بازگشت</string>
+    <string name="cd_close_dialog">بستن پنجره</string>
+
+    <!-- Accessibility — Missing Labels -->
+    <string name="cd_parallel_test_expand">بسط تنظیمات آزمایش موازی</string>
+    <string name="cd_parallel_test_collapse">بستن تنظیمات آزمایش موازی</string>
+    <string name="cd_navigate_to_tab">رفتن به %1$s</string>
+    <string name="cd_profile_tab_selected">%1$s، تب انتخاب شده</string>
+    <string name="cd_profile_tab_unselected">تب %1$s</string>
+    <string name="cd_telegram_link">باز کردن کمونیتی تلگرام وایت‌دی‌ان‌اس - برنامه خارجی</string>
+    <string name="cd_select_profile_item">انتخاب پروفایل %1$s</string>
+    <string name="cd_logo_telegram">لوگوی وایت‌دی‌ان‌اس، باز کردن کمونیتی تلگرام</string>
+    <string name="cd_menu_button">باز کردن منوی برنامه</string>
+    <string name="cd_copy_address">کپی کردن %1$s به حافظه موقت</string>
+    <string name="cd_enable_vpn_notification">فعال کردن اطلاع‌رسانی وی‌پی‌ان</string>
+    <string name="cd_allow_background_vpn">اجازه دادن به وایت‌دی‌ان‌اس برای اجرا در پس‌زمینه</string>
+    <string name="cd_split_tunnel_app_toggle">تغییر %1$s در تونل تقسیم شده</string>
+    <string name="cd_stat_card_detail">%1$s: %2$s، ضربه برای جزئیات</string>
+    <string name="cd_section_expand">بسط بخش %1$s</string>
+    <string name="cd_section_collapse">بستن بخش %1$s</string>
+    <string name="cd_toggle_row_on">%1$s، فعال - ضربه برای غیرفعال کردن</string>
+    <string name="cd_toggle_row_off">%1$s، غیرفعال - ضربه برای فعال کردن</string>
+    <string name="cd_scan_autosave_enabled">ذخیره خودکار اسکن فعال</string>
+    <string name="cd_worker_count_slider">لغزنده تعداد کارگر، در حال حاضر %1$d کارگر</string>
+</resources>
