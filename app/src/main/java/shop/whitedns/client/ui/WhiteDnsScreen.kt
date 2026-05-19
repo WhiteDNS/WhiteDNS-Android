@@ -2236,7 +2236,6 @@ private fun BottomNavigationBar(
     selectedTab: WhiteDnsTab,
     onTabSelected: (WhiteDnsTab) -> Unit,
 ) {
-    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Column(
@@ -2270,22 +2269,22 @@ private fun BottomNavigationBar(
                         .weight(1f)
                         .clip(RoundedCornerShape(14.dp))
                         .background(background)
-                        .semantics {
-                            contentDescription = context.getString(
-                                R.string.cd_navigate_to_tab, localizedLabel
-                            )
-                        }
-                        .clickable {
-                            haptic.performLight()
-                            onTabSelected(tab)
-                        }
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
+                            onClick = {
+                                haptic.performLight()
+                                onTabSelected(tab)
+                            },
+                        )
+                        .semantics(mergeDescendants = true) {}
                         .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
                         imageVector = tab.icon,
-                        contentDescription = localizedLabel,
+                        contentDescription = null,
                         tint = color,
                         modifier = Modifier.size(20.dp),
                     )
