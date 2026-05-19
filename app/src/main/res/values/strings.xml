@@ -9,12 +9,6 @@
     <string name="cd_back_button">Navigate back</string>
     <string name="cd_close_dialog">Close dialog</string>
 
-    <!-- Connect Button States -->
-    <string name="cd_connect_button_disconnected">Connect button - tap to start VPN</string>
-    <string name="cd_connect_button_connecting">Connecting - establishing VPN connection</string>
-    <string name="cd_connect_button_connected">Stop button - tap to disconnect VPN</string>
-    <string name="cd_connect_button_disabled">Connect button - disabled</string>
-
     <!-- Profile Actions -->
     <string name="cd_profile_edit">Edit profile</string>
     <string name="cd_profile_delete">Delete profile</string>
@@ -222,9 +216,6 @@
     <!-- Accessibility — Missing Labels -->
     <string name="cd_parallel_test_expand">Expand parallel test configurations</string>
     <string name="cd_parallel_test_collapse">Collapse parallel test configurations</string>
-    <string name="cd_navigate_to_tab">Navigate to %1$s</string>
-    <string name="cd_profile_tab_selected">%1$s, selected tab</string>
-    <string name="cd_profile_tab_unselected">%1$s tab</string>
     <string name="cd_telegram_link">Open WhiteDNS Telegram community, opens external app</string>
     <string name="cd_select_profile_item">Select %1$s profile</string>
     <string name="cd_logo_telegram">WhiteDNS logo, opens Telegram community</string>
@@ -236,8 +227,6 @@
     <string name="cd_stat_card_detail">%1$s: %2$s, tap for details</string>
     <string name="cd_section_expand">Expand %1$s section</string>
     <string name="cd_section_collapse">Collapse %1$s section</string>
-    <string name="cd_toggle_row_on">%1$s, enabled, tap to disable</string>
-    <string name="cd_toggle_row_off">%1$s, disabled, tap to enable</string>
     <string name="cd_scan_autosave_enabled">Scan auto-save enabled</string>
     <string name="cd_worker_count_slider">Worker count slider, currently %1$d workers</string>
     <string name="cd_mtu_parallelism_slider">Resolver MTU parallelism slider, currently %1$d parallel tests</string>

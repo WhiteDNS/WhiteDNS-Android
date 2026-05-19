@@ -9,12 +9,6 @@
     <string name="cd_back_button">بازگشت به عقب</string>
     <string name="cd_close_dialog">بستن دیالوگ</string>
 
-    <!-- Connect Button States -->
-    <string name="cd_connect_button_disconnected">دکمه اتصال - ضربه بزنید برای شروع VPN</string>
-    <string name="cd_connect_button_connecting">در حال اتصال - برقراری اتصال VPN</string>
-    <string name="cd_connect_button_connected">دکمه قطع - ضربه بزنید برای قطع VPN</string>
-    <string name="cd_connect_button_disabled">دکمه اتصال - غیرفعال</string>
-
     <!-- Profile Actions -->
     <string name="cd_profile_edit">ویرایش پروفایل</string>
     <string name="cd_profile_delete">حذف پروفایل</string>
@@ -222,9 +216,6 @@
     <!-- Accessibility — Special Labels -->
     <string name="cd_parallel_test_expand">گسترش تنظیمات تست موازی</string>
     <string name="cd_parallel_test_collapse">جمع کردن تنظیمات تست موازی</string>
-    <string name="cd_navigate_to_tab">رفتن به %1$s</string>
-    <string name="cd_profile_tab_selected">%1$s، تب انتخاب شده</string>
-    <string name="cd_profile_tab_unselected">تب %1$s</string>
     <string name="cd_telegram_link">باز کردن انجمن تلگرام WhiteDNS، برنامه خارجی باز می‌شود</string>
     <string name="cd_select_profile_item">انتخاب پروفایل %1$s</string>
     <string name="cd_logo_telegram">لوگوی WhiteDNS، باز کردن انجمن تلگرام</string>
@@ -236,8 +227,6 @@
     <string name="cd_stat_card_detail">%1$s: %2$s، ضربه برای جزئیات</string>
     <string name="cd_section_expand">گسترش بخش %1$s</string>
     <string name="cd_section_collapse">جمع کردن بخش %1$s</string>
-    <string name="cd_toggle_row_on">%1$s، فعال، ضربه برای غیرفعال کردن</string>
-    <string name="cd_toggle_row_off">%1$s، غیرفعال، ضربه برای فعال کردن</string>
     <string name="cd_scan_autosave_enabled">ذخیره خودکار اسکن فعال</string>
     <string name="cd_worker_count_slider">اسلایدر تعداد ورکر، در حال حاضر %1$d ورکر</string>
     <string name="cd_mtu_parallelism_slider">اسلایدر موازی‌سازی MTU ریزالور، در حال حاضر %1$d تست موازی</string>
