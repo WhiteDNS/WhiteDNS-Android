@@ -306,8 +306,9 @@ private enum class WhiteDnsTab(
 
 private const val ScanWorkerMin = 1
 private const val ScanWorkerMax = 32
-private const val MtuParallelismMin = 1
-private const val MtuParallelismMax = 1024
+private const val MtuParallelismMin = 50
+private const val MtuParallelismMax = 1000
+private const val MtuParallelismStep = 50
 private const val MtuParallelismDefault = 100
 
 private enum class CompactActionTone {
@@ -1154,7 +1155,7 @@ private fun ParallelTestSelectionPanel(
                 )
                 ParallelTestConfigRow(
                     label = WhiteDnsL10n.whiteDnsConfigsLabel,
-                    detail = "+${stableWhiteDnsConfigIds.size}",
+                    detail = WhiteDnsL10n.whiteDnsConfigsDescription,
                     checked = allStableWhiteDnsSelected,
                     enabled = controlsEnabled && canAddStableWhiteDnsConfigs,
                     onToggle = {
@@ -1171,7 +1172,7 @@ private fun ParallelTestSelectionPanel(
                 )
                 ParallelTestConfigRow(
                     label = WhiteDnsL10n.whiteDnsAggressiveConfigsLabel,
-                    detail = "+${aggressiveWhiteDnsConfigIds.size}",
+                    detail = WhiteDnsL10n.whiteDnsAggressiveConfigsDescription,
                     checked = allAggressiveWhiteDnsSelected,
                     enabled = controlsEnabled && canAddAggressiveWhiteDnsConfigs,
                     onToggle = {
@@ -1275,11 +1276,12 @@ private fun ParallelTestConfigRow(
             )
             Text(
                 text = detail,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontSize = 10.sp,
                     color = WhiteDnsPalette.Muted.copy(alpha = contentAlpha),
+                    lineHeight = 14.sp,
                 ),
             )
         }
@@ -2069,7 +2071,7 @@ private fun MtuParallelismSlider(
     onParallelismChange: (Int) -> Unit,
 ) {
     val context = LocalContext.current
-    var sliderValue by remember(parallelism) { mutableStateOf(parallelism.toFloat()) }
+    var sliderValue by remember(parallelism) { mutableStateOf(parallelism.toMtuParallelismSliderValue().toFloat()) }
     val displayedParallelism = sliderValue.toMtuParallelismSliderValue()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -2088,9 +2090,9 @@ private fun MtuParallelismSlider(
             )
         }
         Slider(
-            value = sliderValue.coerceIn(MtuParallelismMin.toFloat(), MtuParallelismMax.toFloat()),
+            value = sliderValue,
             onValueChange = { value ->
-                sliderValue = value.coerceIn(MtuParallelismMin.toFloat(), MtuParallelismMax.toFloat())
+                sliderValue = value.toMtuParallelismSliderValue().toFloat()
             },
             onValueChangeFinished = {
                 val committedParallelism = sliderValue.toMtuParallelismSliderValue()
@@ -2100,7 +2102,7 @@ private fun MtuParallelismSlider(
             },
             enabled = enabled,
             valueRange = MtuParallelismMin.toFloat()..MtuParallelismMax.toFloat(),
-            steps = 0,
+            steps = ((MtuParallelismMax - MtuParallelismMin) / MtuParallelismStep) - 1,
             modifier = Modifier.semantics {
                 contentDescription = context.getString(R.string.cd_mtu_parallelism_slider, displayedParallelism)
             },
@@ -2125,11 +2127,16 @@ private fun MtuParallelismSlider(
 }
 
 private fun String.toMtuParallelismSliderValue(): Int {
-    return toIntOrNull()?.coerceIn(MtuParallelismMin, MtuParallelismMax) ?: MtuParallelismDefault
+    return toIntOrNull()?.toMtuParallelismSliderValue() ?: MtuParallelismDefault
 }
 
 private fun Float.toMtuParallelismSliderValue(): Int {
-    return roundToInt().coerceIn(MtuParallelismMin, MtuParallelismMax)
+    return roundToInt().toMtuParallelismSliderValue()
+}
+
+private fun Int.toMtuParallelismSliderValue(): Int {
+    val rounded = (this.toFloat() / MtuParallelismStep).roundToInt() * MtuParallelismStep
+    return rounded.coerceIn(MtuParallelismMin, MtuParallelismMax)
 }
 
 @Composable

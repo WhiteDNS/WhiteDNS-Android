@@ -69,6 +69,7 @@ import shop.whitedns.client.model.resolve
 import shop.whitedns.client.model.runtimeConnectionSettings
 import shop.whitedns.client.model.selectedConnectionProfile
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
+import shop.whitedns.client.model.validateResolverText
 import shop.whitedns.client.proxy.WhiteDnsProxyEvent
 import shop.whitedns.client.proxy.WhiteDnsProxyEvents
 import shop.whitedns.client.proxy.WhiteDnsProxyService
@@ -142,6 +143,7 @@ class WhiteDnsViewModel(
     private val stormDnsTrafficAccounting = StormDnsTrafficAccounting()
     private val autoTuneTrialManagersLock = Any()
     private var autoTuneTrialManagers: List<StormDnsProcessManager> = emptyList()
+    private var lastAutoTuneWinnerConfigId = ""
     private var serverTestJob: Job? = null
     private val serverTestManagersLock = Any()
     private var serverTestManagers: List<StormDnsProcessManager> = emptyList()
@@ -324,7 +326,6 @@ class WhiteDnsViewModel(
         runtimeRefreshJob?.cancel()
         verificationJob?.cancel()
         serverTestJob?.cancel()
-        stopServerTestManagers()
         val sessionId = UUID.randomUUID().toString()
         activeRuntimeSessionId = sessionId
         uiState = uiState.copy(
@@ -345,6 +346,10 @@ class WhiteDnsViewModel(
         resetRuntimeUiThrottles()
 
         connectJob = viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                stopAutoTuneTrialManagers()
+                stopServerTestManagers()
+            }
             val settings = uiState.settings.syncSelectedConnectionProfileFields()
             if (settings.resolve().resolverEntries.isEmpty()) {
                 appendLog("Resolvers are required to connect")
@@ -511,6 +516,12 @@ class WhiteDnsViewModel(
         } else {
             "Proxy Mode"
         }
+        val previousSelectedConfigId = lastAutoTuneWinnerConfigId.ifBlank {
+            uiState.autoTuneTrialResults
+                .firstOrNull { it.selected }
+                ?.configId
+                .orEmpty()
+        }.ifBlank { null }
         val selectedConfigs = buildParallelTestConfigs(baseSettings)
         if (selectedConfigs.isEmpty()) {
             appendLog("Parallel Test: no configuration selected")
@@ -525,15 +536,14 @@ class WhiteDnsViewModel(
             return@coroutineScope false
         }
 
-        val ports = allocateRandomLocalPorts(selectedConfigs.size)
-        val trialPlans = selectedConfigs.mapIndexed { index, config ->
+        val trialPlans = selectedConfigs.map { config ->
             AutoTuneTrialPlan(
                 config = config,
                 settings = config.userSettings
                     .copy(
                         connectionMode = WhiteDnsRuntimeStateStore.ModeProxy,
                         listenIp = WhiteDnsRuntimeProxy.ListenIp,
-                        listenPort = ports[index].toString(),
+                        listenPort = AutoTuneUnassignedPort.toString(),
                         httpProxyEnabled = false,
                         localDnsEnabled = false,
                         trafficWarmupEnabled = false,
@@ -544,9 +554,9 @@ class WhiteDnsViewModel(
                     configId = config.id,
                     label = config.label,
                     listenIp = WhiteDnsRuntimeProxy.ListenIp,
-                    listenPort = ports[index],
-                    status = "starting",
-                    message = "Starting",
+                    listenPort = AutoTuneUnassignedPort,
+                    status = "pending",
+                    message = "Waiting",
                 ),
             )
         }
@@ -573,49 +583,60 @@ class WhiteDnsViewModel(
             autoTuneTrialResults = trialPlans.map { it.result },
             activeConnectionProfileId = connectionProfile.id,
         )
-        appendLog("Parallel Test: testing ${trialPlans.size} SOCKS configurations in parallel before $finalModeLabel")
+        appendLog(
+            "Parallel Test: testing ${trialPlans.size} SOCKS configurations " +
+                "in batches of $AutoTuneMaxConcurrentTrials before $finalModeLabel",
+        )
 
         try {
-            val startups = trialPlans.map { plan ->
-                async(Dispatchers.IO) {
-                    startParallelAutoTuneTrial(
-                        plan = plan,
-                        manager = trialManagers.getValue(plan.config.id),
-                        serverProfile = serverProfile,
-                    )
-                }
-            }.awaitAll()
-            val readyStartups = startups.filter { it.ready }
-            if (readyStartups.isNotEmpty()) {
-                withContext(Dispatchers.Main.immediate) {
-                    uiState = uiState.copy(
-                        connectionVerification = ConnectionVerificationState(
-                            status = ConnectionVerificationStatus.Checking,
-                            message = "Parallel Test: running tests on ${readyStartups.size} SOCKS configurations",
+            val resolverDiscoveryPlan = selectResolverDiscoveryPlan(trialPlans)
+            val resolverDiscoveryResult = runParallelAutoTuneResolverDiscoveryTrial(
+                plan = resolverDiscoveryPlan,
+                manager = trialManagers.getValue(resolverDiscoveryPlan.config.id),
+                serverProfile = serverProfile,
+            )
+            val resolverSubset = resolverDiscoveryResult.resolverEntries
+            val remainingTrialPlans = trialPlans.filterNot { it.config.id == resolverDiscoveryPlan.config.id }
+            val remainingTrialPlansWithResolvers = if (resolverSubset.isNotEmpty()) {
+                appendLog(
+                    "Parallel Test: testing remaining configs with ${resolverSubset.size} " +
+                        "resolvers from ${resolverDiscoveryPlan.config.label}",
+                )
+                remainingTrialPlans.map { plan -> plan.withResolverEntries(resolverSubset) }
+            } else {
+                appendLog("Parallel Test: no reusable resolver subset found; using selected resolver list")
+                remainingTrialPlans
+            }
+            val lowerUsagePlans = remainingTrialPlansWithResolvers.filterNot { it.config.highUsage }
+            val highUsagePlans = remainingTrialPlansWithResolvers.filter { it.config.highUsage }
+            val trialResults = buildList {
+                add(resolverDiscoveryResult.result)
+                if (lowerUsagePlans.isNotEmpty()) {
+                    addAll(
+                        runParallelAutoTunePlanGroup(
+                            plans = lowerUsagePlans,
+                            trialManagers = trialManagers,
+                            serverProfile = serverProfile,
+                            groupLabel = "conservative",
                         ),
                     )
                 }
-                delay(AutoTuneMeasurementSettleMillis)
-            }
-            val measuredResults = readyStartups.map { startup ->
-                async(Dispatchers.IO) {
-                    measureParallelAutoTuneTrial(startup)
+
+                if (highUsagePlans.isNotEmpty()) {
+                    addAll(
+                        runParallelAutoTunePlanGroup(
+                            plans = highUsagePlans,
+                            trialManagers = trialManagers,
+                            serverProfile = serverProfile,
+                            groupLabel = "high-usage",
+                        ),
+                    )
                 }
-            }.awaitAll()
-            val trialResults = measuredResults + startups
-                .filterNot { it.ready }
-                .map { it.result }
-            val selectedResult = trialResults
-                .filter { it.scoreBytesPerSecond > 0L }
-                .sortedWith(
-                    compareByDescending<AutoTuneResult> { it.scoreBytesPerSecond }
-                        .thenBy { it.pingMillis ?: Long.MAX_VALUE },
-                )
-                .firstOrNull()
-                ?: trialResults
-                    .filter { it.ready }
-                    .maxByOrNull { it.scoreBytesPerSecond }
-                ?: run {
+            }
+            val selectedResult = selectParallelAutoTuneResult(
+                trialResults = trialResults,
+                previousSelectedConfigId = previousSelectedConfigId,
+            ) ?: run {
                     appendLog("Parallel Test: no SOCKS configuration became ready")
                     uiState = uiState.copy(
                         connectionProgress = ConnectionProgressState(),
@@ -637,6 +658,7 @@ class WhiteDnsViewModel(
             val selectedRuntimeSettings = selectedUserSettings.runtimeConnectionSettings()
             activeRuntimeSessionId = sessionId
             activeProxyListenPort = selectedRuntimeSettings.resolve().listenPort
+            lastAutoTuneWinnerConfigId = selectedResult.config.id
             uiState = uiState.copy(
                 settings = baseSettings,
                 connectionStatus = ConnectionStatus.CONNECTING,
@@ -674,34 +696,39 @@ class WhiteDnsViewModel(
             advancedProfiles = advancedProfiles,
             includeAggressive = baseSettings.parallelTestAggressivePresetsEnabled,
         )
+        val aggressiveConfigIds = WhiteDnsParallelTest.aggressiveConfigIds.toSet()
         return selectedConfigIds.mapNotNull { configId ->
             WhiteDnsParallelTest.presetIdFromConfigId(configId)?.let { presetId ->
                 val preset = WhiteDnsAutoTunePresets.all.firstOrNull { it.id == presetId } ?: return@mapNotNull null
+                val presetSettings = baseSettings
+                    .applyAutoTunePreset(preset)
+                    .copy(
+                        autoTuneEnabled = true,
+                        parallelTestSelectedConfigIds = selectedConfigIds,
+                    )
+                    .syncSelectedConnectionProfileFields()
                 return@mapNotNull AutoTuneTrialConfig(
                     id = configId,
                     label = preset.label,
-                    userSettings = baseSettings
-                        .applyAutoTunePreset(preset)
-                        .copy(
-                            autoTuneEnabled = true,
-                            parallelTestSelectedConfigIds = selectedConfigIds,
-                        )
-                        .syncSelectedConnectionProfileFields(),
+                    userSettings = presetSettings,
+                    highUsage = configId in aggressiveConfigIds,
                 )
             }
 
             WhiteDnsParallelTest.settingProfileIdFromConfigId(configId)?.let { profileId ->
                 val profile = advancedProfiles.firstOrNull { it.id == profileId } ?: return@mapNotNull null
+                val profileSettings = baseSettings
+                    .applyAdvancedProfile(profile)
+                    .copy(
+                        autoTuneEnabled = true,
+                        parallelTestSelectedConfigIds = selectedConfigIds,
+                    )
+                    .syncSelectedConnectionProfileFields()
                 return@mapNotNull AutoTuneTrialConfig(
                     id = configId,
                     label = profile.name.ifBlank { "Setting" },
-                    userSettings = baseSettings
-                        .applyAdvancedProfile(profile)
-                        .copy(
-                            autoTuneEnabled = true,
-                            parallelTestSelectedConfigIds = selectedConfigIds,
-                        )
-                        .syncSelectedConnectionProfileFields(),
+                    userSettings = profileSettings,
+                    highUsage = profileSettings.isHighUsageParallelConfig(),
                 )
             }
 
@@ -709,10 +736,185 @@ class WhiteDnsViewModel(
         }.take(WhiteDnsParallelTest.MaxSelectedConfigs)
     }
 
+    private fun selectResolverDiscoveryPlan(plans: List<AutoTuneTrialPlan>): AutoTuneTrialPlan {
+        val defaultConfigId = WhiteDnsParallelTest.defaultConfigIds.firstOrNull()
+        return plans.firstOrNull { plan -> plan.config.id == defaultConfigId }
+            ?: plans.firstOrNull { plan -> !plan.config.highUsage }
+            ?: plans.first()
+    }
+
+    private suspend fun runParallelAutoTuneResolverDiscoveryTrial(
+        plan: AutoTuneTrialPlan,
+        manager: StormDnsProcessManager,
+        serverProfile: StormDnsServerProfile,
+    ): AutoTuneResolverDiscoveryResult {
+        val fullResolverCount = plan.settings.resolve().resolverEntries.size
+        val port = withContext(Dispatchers.IO) {
+            allocateRandomLocalPorts(count = 1).first()
+        }
+        val discoveryPlan = plan.withTrialPort(port)
+        val resolverCollector = AutoTuneResolverCollector()
+        withContext(Dispatchers.Main.immediate) {
+            updateAutoTuneTrialResult(discoveryPlan.result.copy(message = "Finding resolvers"))
+            uiState = uiState.copy(
+                connectionVerification = ConnectionVerificationState(
+                    status = ConnectionVerificationStatus.Checking,
+                    message = "Parallel Test: finding reusable resolvers with ${discoveryPlan.config.label}",
+                ),
+            )
+        }
+        appendLog(
+            "Parallel Test: finding reusable resolvers with ${discoveryPlan.config.label} " +
+                "from $fullResolverCount selected resolvers",
+        )
+
+        return try {
+            val startup = withContext(Dispatchers.IO) {
+                startParallelAutoTuneTrial(
+                    plan = discoveryPlan,
+                    manager = manager,
+                    serverProfile = serverProfile,
+                    resolverCollector = resolverCollector,
+                )
+            }
+            val result = if (startup.ready) {
+                delay(AutoTuneMeasurementSettleMillis)
+                measureParallelAutoTuneTrial(startup)
+            } else {
+                startup.result
+            }
+            val resolverEntries = if (startup.ready) {
+                minimumParallelResolverEntries(resolverCollector.preferredResolvers(AutoTuneResolverSubsetMinCount))
+            } else {
+                emptyList()
+            }
+            if (resolverEntries.isNotEmpty()) {
+                appendLog(
+                    "Parallel Test: ${discoveryPlan.config.label} found ${resolverEntries.size} " +
+                        "reusable resolvers for config testing",
+                )
+            }
+            AutoTuneResolverDiscoveryResult(
+                result = result,
+                resolverEntries = resolverEntries,
+            )
+        } finally {
+            withContext(Dispatchers.IO) {
+                manager.stop()
+            }
+            val openPorts = waitForLocalPortsClosed(listOf(port))
+            if (openPorts.isNotEmpty()) {
+                appendLog("Parallel Test: ports still closing: ${openPorts.joinToString()}")
+            }
+        }
+    }
+
+    private suspend fun runParallelAutoTunePlanGroup(
+        plans: List<AutoTuneTrialPlan>,
+        trialManagers: Map<String, StormDnsProcessManager>,
+        serverProfile: StormDnsServerProfile,
+        groupLabel: String,
+    ): List<AutoTuneResult> = coroutineScope {
+        val batches = plans.chunked(AutoTuneMaxConcurrentTrials)
+        val usedTrialPorts = mutableSetOf<Int>()
+        val results = mutableListOf<AutoTuneResult>()
+        batches.forEachIndexed { batchIndex, batch ->
+            val batchNumber = batchIndex + 1
+            val batchPorts = withContext(Dispatchers.IO) {
+                allocateRandomLocalPorts(
+                    count = batch.size,
+                    additionalBlockedPorts = usedTrialPorts,
+                )
+            }
+            usedTrialPorts += batchPorts
+            val batchWithPorts = batch.mapIndexed { index, plan ->
+                plan.withTrialPort(batchPorts[index])
+            }
+            val batchManagers = batchWithPorts.map { plan -> trialManagers.getValue(plan.config.id) }
+            withContext(Dispatchers.Main.immediate) {
+                batchWithPorts.forEach { plan ->
+                    updateAutoTuneTrialResult(plan.result)
+                }
+                uiState = uiState.copy(
+                    connectionVerification = ConnectionVerificationState(
+                        status = ConnectionVerificationStatus.Checking,
+                        message = "Parallel Test: testing $groupLabel batch $batchNumber/${batches.size}",
+                    ),
+                )
+            }
+            appendLog(
+                "Parallel Test: testing $groupLabel batch $batchNumber/${batches.size} " +
+                    "(${batch.size} profiles)",
+            )
+
+            try {
+                val startups = batchWithPorts.map { plan ->
+                    async(Dispatchers.IO) {
+                        startParallelAutoTuneTrial(
+                            plan = plan,
+                            manager = trialManagers.getValue(plan.config.id),
+                            serverProfile = serverProfile,
+                        )
+                    }
+                }.awaitAll()
+
+                val readyStartups = startups.filter { it.ready }
+                results += startups.filterNot { it.ready }.map { it.result }
+                if (readyStartups.isNotEmpty()) {
+                    withContext(Dispatchers.Main.immediate) {
+                        uiState = uiState.copy(
+                            connectionVerification = ConnectionVerificationState(
+                                status = ConnectionVerificationStatus.Checking,
+                                message = "Parallel Test: measuring $groupLabel batch $batchNumber/${batches.size}",
+                            ),
+                        )
+                    }
+                    delay(AutoTuneMeasurementSettleMillis)
+                    results += readyStartups.map { startup ->
+                        async(Dispatchers.IO) {
+                            measureParallelAutoTuneTrial(startup)
+                        }
+                    }.awaitAll()
+                }
+            } finally {
+                withContext(Dispatchers.IO) {
+                    batchManagers.forEach { manager ->
+                        runCatching {
+                            manager.stop()
+                        }
+                    }
+                }
+                val openPorts = waitForLocalPortsClosed(batchWithPorts.map { it.result.listenPort })
+                if (openPorts.isNotEmpty()) {
+                    appendLog("Parallel Test: ports still closing: ${openPorts.joinToString()}")
+                }
+            }
+        }
+        results
+    }
+
+    private fun AutoTuneTrialPlan.withTrialPort(port: Int): AutoTuneTrialPlan {
+        return copy(
+            settings = settings
+                .copy(listenPort = port.toString()),
+            result = result.copy(listenPort = port),
+        )
+    }
+
+    private fun AutoTuneTrialPlan.withResolverEntries(resolverEntries: List<String>): AutoTuneTrialPlan {
+        return copy(
+            settings = settings.copy(
+                selectedResolverProfileId = "",
+                resolverText = resolverEntries.joinToString(separator = "\n"),
+            ),
+        )
+    }
+
     private suspend fun startParallelAutoTuneTrial(
         plan: AutoTuneTrialPlan,
         manager: StormDnsProcessManager,
         serverProfile: StormDnsServerProfile,
+        resolverCollector: AutoTuneResolverCollector? = null,
     ): AutoTuneTrialStartup {
         val startupFailure = AtomicReference<String?>(null)
         return try {
@@ -720,6 +922,7 @@ class WhiteDnsViewModel(
                 updateAutoTuneTrialResult(plan.result.copy(status = "starting", message = "Starting SOCKS proxy"))
             }
             manager.start(serverProfile, plan.settings) { line ->
+                resolverCollector?.observe(line)
                 detectStormDnsStartupFailure(line)?.let { failure ->
                     startupFailure.compareAndSet(null, failure)
                 }
@@ -772,17 +975,38 @@ class WhiteDnsViewModel(
 
     private suspend fun measureParallelAutoTuneTrial(startup: AutoTuneTrialStartup): AutoTuneResult {
         val plan = startup.plan
-        withContext(Dispatchers.Main.immediate) {
-            updateAutoTuneTrialResult(plan.result.copy(status = "measuring", message = "Measuring speed"))
+        val resolvedSettings = plan.settings.resolve()
+        val probeResults = mutableListOf<Long>()
+        val pingResults = mutableListOf<Long>()
+        repeat(AutoTuneMeasurementProbeCount) { probeIndex ->
+            withContext(Dispatchers.Main.immediate) {
+                updateAutoTuneTrialResult(
+                    plan.result.copy(
+                        status = "measuring",
+                        message = "Measuring ${probeIndex + 1}/$AutoTuneMeasurementProbeCount",
+                    ),
+                )
+            }
+            val probeResult = WhiteDnsTrafficWarmup.measureDownloadThroughput(resolvedSettings)
+            if (probeResult != null && probeResult.bytesPerSecond > 0L) {
+                probeResults += probeResult.bytesPerSecond
+                pingResults += probeResult.latencyMillis
+            }
+            if (probeIndex < AutoTuneMeasurementProbeCount - 1) {
+                delay(AutoTuneMeasurementProbeDelayMillis)
+            }
         }
-        val probeResult = WhiteDnsTrafficWarmup.measureDownloadThroughput(plan.settings.resolve())
-        val score = probeResult?.bytesPerSecond ?: 0L
-        val pingMillis = probeResult?.latencyMillis
+        val score = medianLong(probeResults) ?: 0L
+        val pingMillis = medianLong(pingResults)
         val completedResult = plan.result.copy(
             status = "ready",
             speedBytesPerSecond = score,
             pingMillis = pingMillis,
-            message = if (score > 0L) "Measured" else "No speed result",
+            message = if (score > 0L) {
+                "Measured ${probeResults.size}/$AutoTuneMeasurementProbeCount"
+            } else {
+                "No speed result"
+            },
         )
         withContext(Dispatchers.Main.immediate) {
             updateAutoTuneTrialResult(completedResult)
@@ -790,7 +1014,8 @@ class WhiteDnsViewModel(
         }
         appendLog(
             "Parallel Test: ${plan.config.label} ${plan.result.listenIp}:${plan.result.listenPort} " +
-                "${formatTrafficSpeed(score)}, ping ${formatAutoTuneLatency(pingMillis)}",
+                "median ${formatTrafficSpeed(score)}, ping ${formatAutoTuneLatency(pingMillis)} " +
+                "(${probeResults.size}/$AutoTuneMeasurementProbeCount probes)",
         )
         return AutoTuneResult(
             config = plan.config,
@@ -800,6 +1025,111 @@ class WhiteDnsViewModel(
             pingMillis = pingMillis,
             ready = true,
         )
+    }
+
+    private fun selectParallelAutoTuneResult(
+        trialResults: List<AutoTuneResult>,
+        previousSelectedConfigId: String?,
+    ): AutoTuneResult? {
+        val readyResults = trialResults.filter { it.ready }
+        val positiveResults = readyResults.filter { it.scoreBytesPerSecond > 0L }
+        if (positiveResults.isEmpty()) {
+            return readyResults.bestAutoTuneResult()
+        }
+
+        val fastestResult = positiveResults.bestAutoTuneResult() ?: return null
+        val bestConservativeResult = positiveResults
+            .filterNot { it.config.highUsage }
+            .bestAutoTuneResult()
+        val bestHighUsageResult = positiveResults
+            .filter { it.config.highUsage }
+            .bestAutoTuneResult()
+        var selectedResult = if (
+            bestConservativeResult != null &&
+            bestHighUsageResult != null &&
+            bestHighUsageResult.config.id == fastestResult.config.id &&
+            !isAtLeastPercentBetter(
+                candidate = bestHighUsageResult.scoreBytesPerSecond,
+                baseline = bestConservativeResult.scoreBytesPerSecond,
+                percent = AutoTuneSelectionHysteresisPercent,
+            )
+        ) {
+            appendLog(
+                "Parallel Test: high-usage winner was under " +
+                    "$AutoTuneSelectionHysteresisPercent% faster; preferring conservative " +
+                    "${bestConservativeResult.config.label}",
+            )
+            bestConservativeResult
+        } else {
+            fastestResult
+        }
+
+        val previousResult = previousSelectedConfigId?.let { previousId ->
+            positiveResults.firstOrNull { it.config.id == previousId }
+        }
+        if (
+            previousResult != null &&
+            previousResult.config.id != selectedResult.config.id &&
+            !isAtLeastPercentBetter(
+                candidate = selectedResult.scoreBytesPerSecond,
+                baseline = previousResult.scoreBytesPerSecond,
+                percent = AutoTuneSelectionHysteresisPercent,
+            )
+        ) {
+            appendLog(
+                "Parallel Test: kept previous winner ${previousResult.config.label}; " +
+                    "new result was under $AutoTuneSelectionHysteresisPercent% better",
+            )
+            selectedResult = previousResult
+        }
+
+        return selectedResult
+    }
+
+    private fun List<AutoTuneResult>.bestAutoTuneResult(): AutoTuneResult? {
+        return sortedWith(
+            compareByDescending<AutoTuneResult> { it.scoreBytesPerSecond }
+                .thenBy { it.pingMillis ?: Long.MAX_VALUE }
+                .thenBy { it.config.highUsage }
+                .thenBy { it.config.label },
+        ).firstOrNull()
+    }
+
+    private fun isAtLeastPercentBetter(
+        candidate: Long,
+        baseline: Long,
+        percent: Int,
+    ): Boolean {
+        if (baseline <= 0L) {
+            return candidate > 0L
+        }
+        return candidate * 100L >= baseline * (100L + percent)
+    }
+
+    private fun medianLong(values: List<Long>): Long? {
+        if (values.isEmpty()) {
+            return null
+        }
+        val sortedValues = values.sorted()
+        val middleIndex = sortedValues.size / 2
+        return if (sortedValues.size % 2 == 1) {
+            sortedValues[middleIndex]
+        } else {
+            (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2L
+        }
+    }
+
+    private fun WhiteDnsSettings.isHighUsageParallelConfig(): Boolean {
+        val uploadDuplicationCount = uploadDuplication.toIntOrNull() ?: 0
+        val downloadDuplicationCount = downloadDuplication.toIntOrNull() ?: 0
+        return uploadDuplicationCount >= HighUsageUploadDuplicationThreshold ||
+            downloadDuplicationCount >= HighUsageDownloadDuplicationThreshold
+    }
+
+    private fun minimumParallelResolverEntries(rawResolvers: List<String>): List<String> {
+        return validateResolverText(rawResolvers.joinToString(separator = "\n"))
+            .normalizedResolvers
+            .take(AutoTuneResolverSubsetMaxCount)
     }
 
     private suspend fun waitForAutoTuneTrialReady(
@@ -868,16 +1198,33 @@ class WhiteDnsViewModel(
         )
     }
 
-    private fun allocateRandomLocalPorts(count: Int): List<Int> {
+    private suspend fun waitForLocalPortsClosed(ports: List<Int>): List<Int> = withContext(Dispatchers.IO) {
+        val trackedPorts = ports.filter { it in 1..65535 }.distinct()
+        if (trackedPorts.isEmpty()) {
+            return@withContext emptyList()
+        }
+        val deadlineMillis = System.currentTimeMillis() + AutoTunePortReleaseTimeoutMillis
+        while (System.currentTimeMillis() < deadlineMillis) {
+            if (trackedPorts.none { port -> canConnectToLocalPort(port) }) {
+                return@withContext emptyList()
+            }
+            delay(AutoTunePortReleasePollMillis)
+        }
+        trackedPorts.filter { port -> canConnectToLocalPort(port) }
+    }
+
+    private fun allocateRandomLocalPorts(
+        count: Int,
+        additionalBlockedPorts: Set<Int> = emptySet(),
+    ): List<Int> {
         val ports = linkedSetOf<Int>()
         val blockedPorts = setOf(
             WhiteDnsRuntimeProxy.ListenPortInt,
             WhiteDnsRuntimeProxy.HttpProxyPortInt,
             WhiteDnsRuntimeProxy.LocalDnsPortInt,
-        )
+        ) + additionalBlockedPorts
         while (ports.size < count) {
             val port = ServerSocket(0).use { socket ->
-                socket.reuseAddress = true
                 socket.localPort
             }
             if (port !in blockedPorts) {
@@ -2607,6 +2954,17 @@ class WhiteDnsViewModel(
         const val AutoTuneReadyTimeoutMillis = 90_000L
         const val AutoTuneSignalPollMillis = 100L
         const val AutoTuneMeasurementSettleMillis = 1_500L
+        const val AutoTuneMaxConcurrentTrials = 3
+        const val AutoTuneMeasurementProbeCount = 3
+        const val AutoTuneMeasurementProbeDelayMillis = 500L
+        const val AutoTuneSelectionHysteresisPercent = 20
+        const val HighUsageUploadDuplicationThreshold = 10
+        const val HighUsageDownloadDuplicationThreshold = 20
+        const val AutoTuneResolverSubsetMinCount = 8
+        const val AutoTuneResolverSubsetMaxCount = 24
+        const val AutoTuneUnassignedPort = 0
+        const val AutoTunePortReleaseTimeoutMillis = 3_000L
+        const val AutoTunePortReleasePollMillis = 100L
         const val MaxScanWorkerDigits = 3
         const val StaleScanStateTimeoutMillis = 15_000L
         const val ScannerResultProfileName = "Scanner result"
@@ -2626,6 +2984,7 @@ class WhiteDnsViewModel(
         val id: String,
         val label: String,
         val userSettings: WhiteDnsSettings,
+        val highUsage: Boolean,
     )
 
     private data class AutoTuneTrialPlan(
@@ -2641,6 +3000,11 @@ class WhiteDnsViewModel(
         val result: AutoTuneResult,
     )
 
+    private data class AutoTuneResolverDiscoveryResult(
+        val result: AutoTuneResult,
+        val resolverEntries: List<String>,
+    )
+
     private data class AutoTuneResult(
         val config: AutoTuneTrialConfig,
         val listenIp: String,
@@ -2649,6 +3013,34 @@ class WhiteDnsViewModel(
         val pingMillis: Long?,
         val ready: Boolean,
     )
+
+    private class AutoTuneResolverCollector {
+        private val lock = Any()
+        private val activeResolvers = linkedSetOf<String>()
+        private val standbyResolvers = linkedSetOf<String>()
+        private val validResolvers = linkedSetOf<String>()
+
+        fun observe(line: String) {
+            val state = parseStormDnsResolverStateLine(line) ?: return
+            synchronized(lock) {
+                activeResolvers += state.activeResolvers
+                standbyResolvers += state.standbyResolvers
+                validResolvers += state.validResolvers
+            }
+        }
+
+        fun preferredResolvers(minCount: Int): List<String> {
+            return synchronized(lock) {
+                val activeAndStandby = (activeResolvers + standbyResolvers).distinct()
+                val preferred = if (activeAndStandby.size >= minCount) {
+                    activeAndStandby
+                } else {
+                    (activeAndStandby + validResolvers).distinct()
+                }
+                preferred
+            }
+        }
+    }
 
     private data class ServerTestPlan(
         val serverProfile: StormDnsServerProfile,

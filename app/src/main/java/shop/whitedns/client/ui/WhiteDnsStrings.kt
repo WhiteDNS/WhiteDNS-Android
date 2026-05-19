@@ -495,7 +495,9 @@ interface WhiteDnsStrings {
     val noResolversPlaceholder: String
     val whiteDnsResolversLabel: String
     val whiteDnsConfigsLabel: String
+    val whiteDnsConfigsDescription: String
     val whiteDnsAggressiveConfigsLabel: String
+    val whiteDnsAggressiveConfigsDescription: String
     val whiteDnsLogsLabel: String
     val whiteDnsDiagnosticsLabel: String
     val parallelTestCollapseDescription: String
@@ -1166,7 +1168,9 @@ object EnglishStrings : WhiteDnsStrings {
     override val noResolversPlaceholder = "No resolvers"
     override val whiteDnsResolversLabel = "WhiteDNS resolvers"
     override val whiteDnsConfigsLabel = "WhiteDNS configs"
-    override val whiteDnsAggressiveConfigsLabel = "Aggressive configs"
+    override val whiteDnsConfigsDescription = "Conservative: lower data usage, recommended for most users"
+    override val whiteDnsAggressiveConfigsLabel = "High usage configs"
+    override val whiteDnsAggressiveConfigsDescription = "High usage: use when internet usage is not a concern"
     override val whiteDnsLogsLabel = "WhiteDNS logs"
     override val whiteDnsDiagnosticsLabel = "WhiteDNS diagnostics"
     override val parallelTestCollapseDescription = "Collapse Parallel Test configs"
@@ -1824,7 +1828,9 @@ object PersianStrings : WhiteDnsStrings {
     override val noResolversPlaceholder = "بدون ریزالور"
     override val whiteDnsResolversLabel = "ریزالورهای WhiteDNS"
     override val whiteDnsConfigsLabel = "تنظیمات WhiteDNS"
-    override val whiteDnsAggressiveConfigsLabel = "تنظیمات پرریسک"
+    override val whiteDnsConfigsDescription = "محافظه‌کارانه: مصرف اینترنت کمتر، مناسب بیشتر کاربران"
+    override val whiteDnsAggressiveConfigsLabel = "تنظیمات پرمصرف"
+    override val whiteDnsAggressiveConfigsDescription = "پرمصرف: وقتی مصرف اینترنت برایتان مهم نیست استفاده کنید"
     override val whiteDnsLogsLabel = "لاگ‌های WhiteDNS"
     override val whiteDnsDiagnosticsLabel = "تشخیص WhiteDNS"
     override val parallelTestCollapseDescription = "بستن تنظیمات تست موازی"

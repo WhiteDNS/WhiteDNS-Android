@@ -627,7 +627,9 @@ object WhiteDnsL10n {
     val noResolversPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.noResolversPlaceholder
     val whiteDnsResolversLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsResolversLabel
     val whiteDnsConfigsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsConfigsLabel
+    val whiteDnsConfigsDescription: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsConfigsDescription
     val whiteDnsAggressiveConfigsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsAggressiveConfigsLabel
+    val whiteDnsAggressiveConfigsDescription: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsAggressiveConfigsDescription
     val whiteDnsLogsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsLogsLabel
     val whiteDnsDiagnosticsLabel: String @Composable get() = LocalWhiteDnsStrings.current.whiteDnsDiagnosticsLabel
     val parallelTestCollapseDescription: String @Composable get() = LocalWhiteDnsStrings.current.parallelTestCollapseDescription

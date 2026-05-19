@@ -677,22 +677,29 @@ class WhiteDnsModelsTest {
     }
 
     @Test
-    fun applyAutoTunePresetAppliesHighDuplicationAndMtuValues() {
+    fun autoTunePresetsExposeTenIranBucketsForParallelTesting() {
+        assertEquals(10, WhiteDnsAutoTunePresets.all.size)
+        assertEquals(7, WhiteDnsParallelTest.stableConfigIds.size)
+        assertEquals(3, WhiteDnsParallelTest.aggressiveConfigIds.size)
+    }
+
+    @Test
+    fun applyAutoTunePresetAppliesIranDefaultValues() {
         val settings = WhiteDnsSettings(autoTuneEnabled = true)
             .applyAutoTunePreset(WhiteDnsAutoTunePresets.all.first())
         val resolvedSettings = settings.resolve()
 
         assertEquals(true, settings.autoTuneEnabled)
-        assertEquals(100, resolvedSettings.minUploadMtu)
-        assertEquals(1000, resolvedSettings.maxUploadMtu)
-        assertEquals(200, resolvedSettings.minDownloadMtu)
-        assertEquals(4000, resolvedSettings.maxDownloadMtu)
-        assertEquals(0.5, resolvedSettings.mtuTestTimeoutResolvers, 0.0)
+        assertEquals(40, resolvedSettings.minUploadMtu)
+        assertEquals(140, resolvedSettings.maxUploadMtu)
+        assertEquals(300, resolvedSettings.minDownloadMtu)
+        assertEquals(3000, resolvedSettings.maxDownloadMtu)
+        assertEquals(2.5, resolvedSettings.mtuTestTimeoutResolvers, 0.0)
         assertEquals(256, resolvedSettings.dnsResponseFragmentStoreCapacity)
-        assertEquals(15, resolvedSettings.uploadDuplication)
-        assertEquals(30, resolvedSettings.downloadDuplication)
+        assertEquals(3, resolvedSettings.uploadDuplication)
+        assertEquals(7, resolvedSettings.downloadDuplication)
         assertEquals(2, resolvedSettings.uploadCompression)
-        assertEquals(3, resolvedSettings.downloadCompression)
+        assertEquals(2, resolvedSettings.downloadCompression)
     }
 
     @Test
@@ -740,11 +747,7 @@ class WhiteDnsModelsTest {
         assertEquals(WhiteDnsParallelTest.defaultConfigIds, defaultIds)
         assertEquals(WhiteDnsParallelTest.stableConfigIds, stableOnlyIds)
         assertEquals(WhiteDnsParallelTest.MaxSelectedConfigs, cappedIds.size)
-        assertEquals(
-            WhiteDnsParallelTest.allConfigIds +
-                profiles.take(3).map { WhiteDnsParallelTest.settingConfigId(it.id) },
-            cappedIds,
-        )
+        assertEquals(WhiteDnsParallelTest.allConfigIds, cappedIds)
     }
 
     @Test
