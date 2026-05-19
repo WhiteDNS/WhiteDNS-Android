@@ -485,6 +485,9 @@ object WhiteDnsL10n {
     val autoTuneMeasuringSpeed: String @Composable get() = LocalWhiteDnsStrings.current.autoTuneMeasuringSpeed
     val cdParallelTestSpeed: String @Composable get() = LocalWhiteDnsStrings.current.cdParallelTestSpeed
     val cdParallelTestPing: String @Composable get() = LocalWhiteDnsStrings.current.cdParallelTestPing
+    val cdConnectButtonDisconnected: String @Composable get() = LocalWhiteDnsStrings.current.cdConnectButtonDisconnected
+    val cdConnectButtonConnecting: String @Composable get() = LocalWhiteDnsStrings.current.cdConnectButtonConnecting
+    val cdConnectButtonConnected: String @Composable get() = LocalWhiteDnsStrings.current.cdConnectButtonConnected
     val cdAutoTuneMtuFailed: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuFailed
     val cdAutoTuneMtuPassed: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuPassed
     val cdAutoTuneMtuTesting: String @Composable get() = LocalWhiteDnsStrings.current.cdAutoTuneMtuTesting

@@ -353,6 +353,9 @@ interface WhiteDnsStrings {
     val autoTuneMeasuringSpeed: String
     val cdParallelTestSpeed: String
     val cdParallelTestPing: String
+    val cdConnectButtonDisconnected: String
+    val cdConnectButtonConnecting: String
+    val cdConnectButtonConnected: String
     val cdAutoTuneMtuFailed: String
     val cdAutoTuneMtuPassed: String
     val cdAutoTuneMtuTesting: String
@@ -1035,6 +1038,9 @@ object EnglishStrings : WhiteDnsStrings {
     override val autoTuneMeasuringSpeed = "Measuring speed"
     override val cdParallelTestSpeed = "Parallel Test speed"
     override val cdParallelTestPing = "Parallel Test ping"
+    override val cdConnectButtonDisconnected = "Connect button - tap to start VPN"
+    override val cdConnectButtonConnecting = "Connecting - establishing VPN connection"
+    override val cdConnectButtonConnected = "Stop button - tap to disconnect VPN"
     override val cdAutoTuneMtuFailed = "MTU failed"
     override val cdAutoTuneMtuPassed = "MTU passed"
     override val cdAutoTuneMtuTesting = "MTU testing"
@@ -1696,6 +1702,9 @@ object PersianStrings : WhiteDnsStrings {
     override val autoTuneMeasuringSpeed = "در حال اندازه‌گیری سرعت"
     override val cdParallelTestSpeed = "سرعت تست موازی"
     override val cdParallelTestPing = "پینگ تست موازی"
+    override val cdConnectButtonDisconnected = "دکمه اتصال - ضربه بزنید برای شروع VPN"
+    override val cdConnectButtonConnecting = "در حال اتصال - برقراری اتصال VPN"
+    override val cdConnectButtonConnected = "دکمه قطع - ضربه بزنید برای قطع VPN"
     override val cdAutoTuneMtuFailed = "MTU ناموفق"
     override val cdAutoTuneMtuPassed = "MTU موفق"
     override val cdAutoTuneMtuTesting = "در حال تست MTU"

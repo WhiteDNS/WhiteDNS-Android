@@ -7410,7 +7410,8 @@ private fun ConnectButton(
                             haptic.performMedium()
                             onClick()
                         },
-                    ),
+                    )
+                    .semantics(mergeDescendants = true) {},
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
@@ -7423,13 +7424,11 @@ private fun ConnectButton(
                         } else {
                             Icons.Rounded.PowerSettingsNew
                         },
-                        contentDescription = stringResource(
-                            when (status) {
-                                ConnectionStatus.DISCONNECTED -> R.string.cd_connect_button_disconnected
-                                ConnectionStatus.CONNECTING -> R.string.cd_connect_button_connecting
-                                ConnectionStatus.CONNECTED -> R.string.cd_connect_button_connected
-                            }
-                        ),
+                        contentDescription = when (status) {
+                            ConnectionStatus.DISCONNECTED -> WhiteDnsL10n.cdConnectButtonDisconnected
+                            ConnectionStatus.CONNECTING -> WhiteDnsL10n.cdConnectButtonConnecting
+                            ConnectionStatus.CONNECTED -> WhiteDnsL10n.cdConnectButtonConnected
+                        },
                         tint = iconColor,
                         modifier = Modifier.size(if (status == ConnectionStatus.CONNECTED) 30.dp else 34.dp),
                     )
