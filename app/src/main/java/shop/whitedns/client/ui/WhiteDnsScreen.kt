@@ -1250,7 +1250,12 @@ private fun ParallelTestConfigRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
-            .clickable(enabled = enabled, onClick = onToggle)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() },
+            )
             .padding(vertical = 7.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1258,7 +1263,8 @@ private fun ParallelTestConfigRow(
         Checkbox(
             checked = checked,
             enabled = enabled,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = null,
+            modifier = Modifier.clearAndSetSemantics {},
             colors = CheckboxDefaults.colors(
                 checkedColor = WhiteDnsPalette.Accent,
                 uncheckedColor = WhiteDnsPalette.ControlBorder,
