@@ -9334,43 +9334,38 @@ private fun ToggleRow(
     interactiveEnabled: Boolean = true,
     onToggle: () -> Unit,
 ) {
-    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
     val contentAlpha = if (interactiveEnabled) 1f else 0.46f
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .semantics {
-                contentDescription = if (enabled) {
-                    context.getString(R.string.cd_toggle_row_on, label)
-                } else {
-                    context.getString(R.string.cd_toggle_row_off, label)
-                }
-            }
-            .clickable(enabled = interactiveEnabled) {
-                haptic.performLight()
-                onToggle()
-            }
+            .toggleable(
+                value = enabled,
+                enabled = interactiveEnabled,
+                role = Role.Switch,
+                onValueChange = {
+                    haptic.performLight()
+                    onToggle()
+                },
+            )
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 13.sp,
-                    color = WhiteDnsPalette.FieldLabel.copy(alpha = contentAlpha),
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 13.sp,
+                color = WhiteDnsPalette.FieldLabel.copy(alpha = contentAlpha),
+                fontWeight = FontWeight.Medium,
+            ),
+        )
         Switch(
             checked = enabled,
+            onCheckedChange = null,
             enabled = interactiveEnabled,
-            onCheckedChange = {
-                haptic.performLight()
-                onToggle()
-            },
+            modifier = Modifier.clearAndSetSemantics {},
             colors = SwitchDefaults.colors(
                 checkedThumbColor = WhiteDnsPalette.OnAccent,
                 checkedTrackColor = WhiteDnsPalette.Accent,
