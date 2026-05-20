@@ -2451,10 +2451,16 @@ private fun ConnectionModeSegmentedControl(
                         .weight(1f)
                         .clip(RoundedCornerShape(9.dp))
                         .background(background)
-                        .clickable(enabled = enabled && !selected) {
-                            haptic.performLight()
-                            onModeChange(modeValue)
-                        }
+                        .selectable(
+                            selected = selected,
+                            enabled = enabled,
+                            role = Role.RadioButton,
+                            onClick = {
+                                haptic.performLight()
+                                onModeChange(modeValue)
+                            },
+                        )
+                        .semantics(mergeDescendants = true) {}
                         .padding(horizontal = 6.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -2516,10 +2522,15 @@ private fun ThemeModeSegmentedControl(
                         .weight(1f)
                         .clip(RoundedCornerShape(9.dp))
                         .background(background)
-                        .clickable(enabled = !selected) {
-                            haptic.performLight()
-                            onModeChange(modeValue)
-                        }
+                        .selectable(
+                            selected = selected,
+                            role = Role.RadioButton,
+                            onClick = {
+                                haptic.performLight()
+                                onModeChange(modeValue)
+                            },
+                        )
+                        .semantics(mergeDescendants = true) {}
                         .padding(horizontal = 6.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -6579,10 +6590,15 @@ private fun LanguageModeSegmentedControl(
                         .weight(1f)
                         .clip(RoundedCornerShape(9.dp))
                         .background(background)
-                        .clickable(enabled = !selected) {
-                            haptic.performLight()
-                            onCodeChange(code)
-                        }
+                        .selectable(
+                            selected = selected,
+                            role = Role.RadioButton,
+                            onClick = {
+                                haptic.performLight()
+                                onCodeChange(code)
+                            },
+                        )
+                        .semantics(mergeDescendants = true) {}
                         .padding(horizontal = 6.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center,
                 ) {
