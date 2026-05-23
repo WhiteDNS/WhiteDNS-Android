@@ -68,9 +68,15 @@ class WhiteDnsScanService : Service() {
                 START_NOT_STICKY
             }
             else -> {
-                enterForeground("Preparing scan")
-                startScan(intent)
-                START_REDELIVER_INTENT
+                currentSessionId = intent?.getStringExtra(ExtraSessionId).orEmpty()
+                try {
+                    enterForeground("Preparing scan")
+                    startScan(intent)
+                    START_REDELIVER_INTENT
+                } catch (error: Exception) {
+                    failScanStart(currentSessionId, "Scan failed to start", error)
+                    START_NOT_STICKY
+                }
             }
         }
     }
@@ -623,6 +629,21 @@ class WhiteDnsScanService : Service() {
                 .putExtra(BroadcastExtraSessionId, state.sessionId)
                 .putExtra(BroadcastExtraMessage, state.message),
         )
+    }
+
+    private fun failScanStart(sessionId: String, message: String, error: Throwable) {
+        val failureMessage = "$message: ${error.message ?: error::class.java.simpleName}"
+        Log.e(Tag, failureMessage, error)
+        publishState(
+            WhiteDnsScanStateStore.read(applicationContext).copy(
+                sessionId = sessionId,
+                status = WhiteDnsScanStatus.Failed,
+                updatedAtMillis = System.currentTimeMillis(),
+                message = failureMessage,
+            ),
+        )
+        exitForeground()
+        stopSelf()
     }
 
     private fun notificationTextFor(state: WhiteDnsScanState): String {

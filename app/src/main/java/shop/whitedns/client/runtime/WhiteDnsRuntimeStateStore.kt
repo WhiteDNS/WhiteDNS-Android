@@ -98,15 +98,13 @@ object WhiteDnsRuntimeStateStore {
         val previous = read(context, mode)
         writeState(
             context = context,
-            state = WhiteDnsRuntimeState(
-                sessionId = sessionId.ifBlank { previous?.sessionId.orEmpty() },
+            state = modeStateFromPrevious(
+                previous = previous,
                 mode = mode,
+                sessionId = sessionId,
                 status = status,
-                connectionProfileId = previous?.connectionProfileId.orEmpty(),
-                listenIp = previous?.listenIp.orEmpty(),
-                listenPort = previous?.listenPort ?: 0,
-                updatedAtMillis = System.currentTimeMillis(),
                 message = message,
+                nowMillis = System.currentTimeMillis(),
             ),
         )
     }
@@ -158,4 +156,29 @@ object WhiteDnsRuntimeStateStore {
     }
 
     private const val RuntimeStateDirectory = "runtime-state"
+}
+
+internal fun modeStateFromPrevious(
+    previous: WhiteDnsRuntimeState?,
+    mode: String,
+    sessionId: String,
+    status: String,
+    message: String,
+    nowMillis: Long,
+): WhiteDnsRuntimeState {
+    val resolvedSessionId = sessionId.ifBlank { previous?.sessionId.orEmpty() }
+    val preserveFailure = status == WhiteDnsRuntimeStateStore.StatusStopped &&
+        sessionId.isNotBlank() &&
+        previous?.sessionId == sessionId &&
+        previous.status == WhiteDnsRuntimeStateStore.StatusFailed
+    return WhiteDnsRuntimeState(
+        sessionId = resolvedSessionId,
+        mode = mode,
+        status = if (preserveFailure) previous.status else status,
+        connectionProfileId = previous?.connectionProfileId.orEmpty(),
+        listenIp = previous?.listenIp.orEmpty(),
+        listenPort = previous?.listenPort ?: 0,
+        updatedAtMillis = nowMillis,
+        message = if (preserveFailure) previous.message else message,
+    )
 }
