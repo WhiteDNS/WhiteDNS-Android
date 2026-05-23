@@ -802,6 +802,81 @@ class WhiteDnsModelsTest {
     }
 
     @Test
+    fun previewStormDnsProfileLinkReturnsSafeImportSummary() {
+        val payload = """
+            {
+              "schema": "whitedns.profile",
+              "version": 1,
+              "profile": {
+                "name": "Imported Profile",
+                "server": {
+                  "domain": "server.example.com",
+                  "encryption_key": "secret-key",
+                  "encryption_method": 3
+                }
+              }
+            }
+        """.trimIndent()
+        val link = "stormdns://${Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())}"
+
+        val preview = previewStormDnsProfileLink(link)
+
+        assertEquals("Imported Profile", preview.name)
+        assertEquals("server.example.com", preview.domain)
+        assertEquals(3, preview.encryptionMethod)
+    }
+
+    @Test
+    fun importStormDnsProfileLinkRejectsControlCharacters() {
+        val payload = """
+            {
+              "schema": "whitedns.profile",
+              "version": 1,
+              "profile": {
+                "name": "Imported Profile",
+                "server": {
+                  "domain": "server.example.com",
+                  "encryption_key": "secret\nkey",
+                  "encryption_method": 2
+                }
+              }
+            }
+        """.trimIndent()
+        val link = "stormdns://${Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())}"
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            WhiteDnsSettings().importStormDnsProfileLink(link, nowMillis = 42L)
+        }
+
+        assertEquals("Server encryption key cannot contain control characters", error.message)
+    }
+
+    @Test
+    fun importStormDnsProfileLinkRejectsDomainWhitespace() {
+        val payload = """
+            {
+              "schema": "whitedns.profile",
+              "version": 1,
+              "profile": {
+                "name": "Imported Profile",
+                "server": {
+                  "domain": "server example.com",
+                  "encryption_key": "secret-key",
+                  "encryption_method": 2
+                }
+              }
+            }
+        """.trimIndent()
+        val link = "stormdns://${Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray())}"
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            WhiteDnsSettings().importStormDnsProfileLink(link, nowMillis = 42L)
+        }
+
+        assertEquals("Server domain cannot contain whitespace", error.message)
+    }
+
+    @Test
     fun exportAndImportStormDnsProfileLinkUsesOnlyRequiredProfileFields() {
         val resolverProfile = ResolverProfile(
             id = "resolver-main",

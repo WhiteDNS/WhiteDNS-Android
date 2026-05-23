@@ -119,4 +119,26 @@ class StormDnsConfigRendererTest {
         assertTrue(toml.contains("MTU_TEST_PARALLELISM_RESOLVERS = 1"))
         assertTrue(toml.contains("STARTUP_MODE = \"resolvers\""))
     }
+
+    @Test
+    fun renderClientTomlEscapesControlCharactersInStrings() {
+        val toml = StormDnsConfigRenderer.renderClientToml(
+            serverProfile = shop.whitedns.client.model.StormDnsServerProfile(
+                id = "server",
+                label = "Server",
+                domain = "server.example.com",
+                encryptionKey = "line\nkey\t\"\\${1.toChar()}",
+                encryptionMethod = 1,
+            ),
+            settings = WhiteDnsSettings(
+                socks5Authentication = true,
+                socksUsername = "user\rname",
+                socksPassword = "pass\bword",
+            ),
+        )
+
+        assertTrue(toml.contains("ENCRYPTION_KEY = \"line\\nkey\\t\\\"\\\\\\u0001\""))
+        assertTrue(toml.contains("SOCKS5_USER = \"user\\rname\""))
+        assertTrue(toml.contains("SOCKS5_PASS = \"pass\\bword\""))
+    }
 }

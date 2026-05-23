@@ -6,6 +6,14 @@ import org.json.JSONObject
 private const val StormDnsProfileScheme = "stormdns"
 private const val StormDnsProfileSchema = "whitedns.profile"
 private const val StormDnsProfileVersion = 1
+private val UnsafeProfileControlRegex = Regex("""[\u0000-\u001F\u007F]""")
+private val UnsafeDomainWhitespaceRegex = Regex("""\s""")
+
+data class StormDnsProfileLinkPreview(
+    val name: String,
+    val domain: String,
+    val encryptionMethod: Int,
+)
 
 fun WhiteDnsSettings.exportStormDnsProfileLink(profile: ConnectionProfile = selectedConnectionProfile()): String {
     val normalizedProfile = profile.copy(
@@ -85,6 +93,40 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
     rawLink: String,
     nowMillis: Long = System.currentTimeMillis(),
 ): WhiteDnsSettings {
+    val imported = parseStormDnsProfileLink(rawLink)
+    val profileId = uniqueImportedProfileId(normalizedConnectionProfiles(), nowMillis)
+
+    val importedProfile = ConnectionProfile(
+        id = profileId,
+        name = imported.name,
+        serverMode = "custom",
+        customServerDomain = imported.domain,
+        customServerEncryptionKey = imported.encryptionKey,
+        customServerEncryptionMethod = imported.encryptionMethod,
+        resolverProfileId = "",
+        connectionMode = connectionMode,
+    )
+
+    return copy(
+        selectedConnectionProfileId = profileId,
+        connectionProfiles = normalizedConnectionProfiles() + importedProfile,
+        serverMode = "custom",
+        customServerDomain = imported.domain,
+        customServerEncryptionKey = imported.encryptionKey,
+        customServerEncryptionMethod = importedProfile.customServerEncryptionMethod,
+    ).syncSelectedConnectionProfileFields()
+}
+
+fun previewStormDnsProfileLink(rawLink: String): StormDnsProfileLinkPreview {
+    val imported = parseStormDnsProfileLink(rawLink)
+    return StormDnsProfileLinkPreview(
+        name = imported.name,
+        domain = imported.domain,
+        encryptionMethod = imported.encryptionMethod,
+    )
+}
+
+private fun parseStormDnsProfileLink(rawLink: String): ImportedStormDnsProfile {
     val root = decodeProfilePayload(rawLink)
     val schema = root.requiredString("schema")
     if (schema != StormDnsProfileSchema) {
@@ -101,6 +143,11 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
         ?: throw IllegalArgumentException("Missing server")
     val domain = serverJson.requiredString("domain").trim().trimEnd('.')
     val encryptionKey = serverJson.requiredString("encryption_key").trim()
+    rejectControlCharacters(domain, "Server domain")
+    rejectControlCharacters(encryptionKey, "Server encryption key")
+    if (UnsafeDomainWhitespaceRegex.containsMatchIn(domain)) {
+        throw IllegalArgumentException("Server domain cannot contain whitespace")
+    }
     if (domain.isBlank()) {
         throw IllegalArgumentException("Server domain is required")
     }
@@ -109,30 +156,20 @@ fun WhiteDnsSettings.importStormDnsProfileLink(
     }
 
     val profileName = profileJson.requiredString("name").trim()
-    val profileId = uniqueImportedProfileId(normalizedConnectionProfiles(), nowMillis)
+    rejectControlCharacters(profileName, "Profile name")
+    if (profileName.isBlank()) {
+        throw IllegalArgumentException("Profile name is required")
+    }
     val encryptionMethod = serverJson.requiredInt("encryption_method")
     if (encryptionMethod !in 0..5) {
         throw IllegalArgumentException("Server encryption method must be between 0 and 5")
     }
-    val importedProfile = ConnectionProfile(
-        id = profileId,
+    return ImportedStormDnsProfile(
         name = profileName,
-        serverMode = "custom",
-        customServerDomain = domain,
-        customServerEncryptionKey = encryptionKey,
-        customServerEncryptionMethod = encryptionMethod,
-        resolverProfileId = "",
-        connectionMode = connectionMode,
+        domain = domain,
+        encryptionKey = encryptionKey,
+        encryptionMethod = encryptionMethod,
     )
-
-    return copy(
-        selectedConnectionProfileId = profileId,
-        connectionProfiles = normalizedConnectionProfiles() + importedProfile,
-        serverMode = "custom",
-        customServerDomain = domain,
-        customServerEncryptionKey = encryptionKey,
-        customServerEncryptionMethod = importedProfile.customServerEncryptionMethod,
-    ).syncSelectedConnectionProfileFields()
 }
 
 private fun encodeProfilePayload(root: JSONObject): String {
@@ -209,3 +246,16 @@ private fun JSONObject.optionalInt(name: String): Int? {
         else -> null
     }
 }
+
+private fun rejectControlCharacters(value: String, label: String) {
+    if (UnsafeProfileControlRegex.containsMatchIn(value)) {
+        throw IllegalArgumentException("$label cannot contain control characters")
+    }
+}
+
+private data class ImportedStormDnsProfile(
+    val name: String,
+    val domain: String,
+    val encryptionKey: String,
+    val encryptionMethod: Int,
+)
