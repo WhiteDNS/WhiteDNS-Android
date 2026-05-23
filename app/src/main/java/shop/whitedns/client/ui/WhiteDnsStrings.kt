@@ -319,6 +319,11 @@ interface WhiteDnsStrings {
     val splitTunnelSearchPlaceholder: String
     val splitTunnelDialogTitle: String
     val splitTunnelSearchLabel: String
+    val splitTunnelPackageNameLabel: String
+    val splitTunnelPackageNamePlaceholder: String
+    val splitTunnelAddPackage: String
+    val splitTunnelShowSystemApps: String
+    val splitTunnelSelectedCountTemplate: String
 
     // Connection logs (inline panel)
     val logsInlineTitle: String
@@ -1006,6 +1011,11 @@ object EnglishStrings : WhiteDnsStrings {
     override val splitTunnelSearchPlaceholder = "Search apps"
     override val splitTunnelDialogTitle = "SELECT APPS"
     override val splitTunnelSearchLabel = "Search"
+    override val splitTunnelPackageNameLabel = "Package name"
+    override val splitTunnelPackageNamePlaceholder = "com.google.android.gms"
+    override val splitTunnelAddPackage = "ADD"
+    override val splitTunnelShowSystemApps = "Show visible system apps"
+    override val splitTunnelSelectedCountTemplate = "Selected: %d"
 
     // Connection logs (inline panel)
     override val logsInlineTitle = "CONNECTION LOGS"
@@ -1670,6 +1680,11 @@ object PersianStrings : WhiteDnsStrings {
     override val splitTunnelSearchPlaceholder = "جستجوی برنامه‌ها"
     override val splitTunnelDialogTitle = "انتخاب برنامه‌ها"
     override val splitTunnelSearchLabel = "جستجو"
+    override val splitTunnelPackageNameLabel = "نام پکیج"
+    override val splitTunnelPackageNamePlaceholder = "com.google.android.gms"
+    override val splitTunnelAddPackage = "افزودن"
+    override val splitTunnelShowSystemApps = "نمایش برنامه‌های سیستمی قابل مشاهده"
+    override val splitTunnelSelectedCountTemplate = "%d انتخاب شده"
 
     // Connection logs (inline panel)
     override val logsInlineTitle = "لاگ‌های اتصال"

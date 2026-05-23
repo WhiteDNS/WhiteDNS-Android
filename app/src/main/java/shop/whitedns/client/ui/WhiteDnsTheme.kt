@@ -453,6 +453,11 @@ object WhiteDnsL10n {
     val splitTunnelSearchPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSearchPlaceholder
     val splitTunnelDialogTitle: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelDialogTitle
     val splitTunnelSearchLabel: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSearchLabel
+    val splitTunnelPackageNameLabel: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelPackageNameLabel
+    val splitTunnelPackageNamePlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelPackageNamePlaceholder
+    val splitTunnelAddPackage: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelAddPackage
+    val splitTunnelShowSystemApps: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelShowSystemApps
+    val splitTunnelSelectedCountTemplate: String @Composable get() = LocalWhiteDnsStrings.current.splitTunnelSelectedCountTemplate
 
     // Connection logs (inline panel)
     val logsInlineTitle: String @Composable get() = LocalWhiteDnsStrings.current.logsInlineTitle

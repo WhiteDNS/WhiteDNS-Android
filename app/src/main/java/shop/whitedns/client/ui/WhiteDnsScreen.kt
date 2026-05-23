@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -3934,7 +3935,12 @@ private fun ResolverProfilesSettings(
         }
         clearDragState()
         if (commit && profileId != null && targetIndex != null && canChangeProfiles) {
-            onSettingsChange(settings.moveResolverProfileToIndex(profileId, targetIndex))
+            onSettingsChange(
+                settings.moveResolverProfileToIndex(
+                    profileId = profileId,
+                    targetIndex = resolverCustomDropTargetIndex(profiles, targetIndex),
+                ),
+            )
         }
     }
 
@@ -5524,7 +5530,7 @@ private fun ConnectionProfileRow(
                         onClick = onExport,
                     ),
                     ProfileMenuAction(
-                        label = if (selected) WhiteDnsL10n.profileMenuUseSelected else WhiteDnsL10n.profileMenuEdit,
+                        label = WhiteDnsL10n.profileMenuEdit,
                         icon = Icons.Rounded.Edit,
                         contentDescription = WhiteDnsL10n.editConnectionProfileAction,
                         enabled = canEdit,
@@ -7078,19 +7084,18 @@ private fun SplitTunnelAppDialog(
     onSave: (List<String>) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var manualPackageName by rememberSaveable { mutableStateOf("") }
+    var showSystemApps by rememberSaveable { mutableStateOf(false) }
     var selected by remember(selectedPackages.joinToString("|")) {
         mutableStateOf(selectedPackages.toSet())
     }
-    val normalizedQuery = query.trim().lowercase(Locale.US)
-    val visibleApps = remember(apps, normalizedQuery) {
-        if (normalizedQuery.isEmpty()) {
-            apps
-        } else {
-            apps.filter { app ->
-                app.label.lowercase(Locale.US).contains(normalizedQuery) ||
-                    app.packageName.lowercase(Locale.US).contains(normalizedQuery)
-            }
-        }
+    val visibleApps = remember(apps, selected, query, showSystemApps) {
+        splitTunnelVisibleAppOptions(
+            apps = apps,
+            selectedPackages = selected,
+            query = query,
+            showSystemApps = showSystemApps,
+        )
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -7119,6 +7124,74 @@ private fun SplitTunnelAppDialog(
                 onValueChange = { query = it },
                 placeholder = WhiteDnsL10n.appsSearchPlaceholder,
             )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                WhiteDnsTextField(
+                    modifier = Modifier.weight(1f),
+                    label = WhiteDnsL10n.splitTunnelPackageNameLabel,
+                    value = manualPackageName,
+                    onValueChange = { manualPackageName = it },
+                    placeholder = WhiteDnsL10n.splitTunnelPackageNamePlaceholder,
+                    rawValue = true,
+                )
+                CompactActionButton(
+                    modifier = Modifier.widthIn(min = 72.dp),
+                    label = WhiteDnsL10n.splitTunnelAddPackage,
+                    emphasized = false,
+                    enabled = manualPackageName.trim().isNotEmpty(),
+                    onClick = {
+                        selected = addSplitTunnelPackageSelection(selected, manualPackageName)
+                        manualPackageName = ""
+                    },
+                )
+            }
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(11.dp))
+                    .toggleable(
+                        value = showSystemApps,
+                        role = Role.Switch,
+                        onValueChange = { showSystemApps = it },
+                    )
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = WhiteDnsL10n.splitTunnelShowSystemApps,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 12.sp,
+                            color = WhiteDnsPalette.Ink,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    )
+                    Text(
+                        text = WhiteDnsL10n.splitTunnelSelectedCountTemplate.format(selected.size),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 10.sp,
+                            color = WhiteDnsPalette.Muted,
+                        ),
+                    )
+                }
+                Switch(
+                    checked = showSystemApps,
+                    onCheckedChange = null,
+                    modifier = Modifier.clearAndSetSemantics {},
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = WhiteDnsPalette.OnAccent,
+                        checkedTrackColor = WhiteDnsPalette.Accent,
+                        uncheckedThumbColor = WhiteDnsPalette.Muted,
+                        uncheckedTrackColor = WhiteDnsPalette.ControlBorder,
+                    ),
+                )
+            }
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.inputSpacing))
             Column(
                 modifier = Modifier
@@ -7175,13 +7248,7 @@ private fun SplitTunnelAppDialog(
                     label = WhiteDnsL10n.btnSave,
                     emphasized = true,
                     enabled = true,
-                    onClick = {
-                        val installedPackageOrder = apps.map { it.packageName }
-                        onSave(
-                            installedPackageOrder.filter { it in selected } +
-                                selected.filterNot { it in installedPackageOrder }.sorted(),
-                        )
-                    },
+                    onClick = { onSave(orderedSplitTunnelPackageSelection(apps, selected)) },
                 )
             }
         }
@@ -7194,30 +7261,29 @@ private fun SplitTunnelAppRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
-    val context = LocalContext.current
     val haptic = rememberHapticFeedback()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
-            .semantics {
-                contentDescription = context.getString(R.string.cd_split_tunnel_app_toggle, app.label)
-            }
-            .clickable {
-                haptic.performLight()
-                onToggle()
-            }
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = {
+                    haptic.performLight()
+                    onToggle()
+                },
+            )
+            .semantics(mergeDescendants = true) {}
             .padding(vertical = 9.dp, horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = {
-                haptic.performLight()
-                onToggle()
-            },
+            onCheckedChange = null,
+            modifier = Modifier.clearAndSetSemantics {},
             colors = CheckboxDefaults.colors(
                 checkedColor = WhiteDnsPalette.Accent,
                 uncheckedColor = WhiteDnsPalette.ControlBorder,
@@ -8414,9 +8480,10 @@ private data class CompactMetric(
     val value: String,
 )
 
-private data class SplitTunnelAppInfo(
+internal data class SplitTunnelAppInfo(
     val packageName: String,
     val label: String,
+    val isSystemApp: Boolean = false,
 )
 
 @Composable
@@ -9709,29 +9776,114 @@ private fun loadSplitTunnelAppOptions(context: Context): List<SplitTunnelAppInfo
     val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
     }
-    return packageManager.queryIntentActivities(launcherIntent, 0)
+    val launchableApps = packageManager.queryIntentActivities(launcherIntent, 0)
         .asSequence()
         .mapNotNull { resolveInfo ->
-            val appPackage = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
-            if (appPackage == context.packageName) {
-                return@mapNotNull null
-            }
-            val label = resolveInfo.loadLabel(packageManager)
-                .toString()
-                .trim()
-                .takeIf(String::isNotEmpty)
-                ?: appPackage
-            SplitTunnelAppInfo(
-                packageName = appPackage,
-                label = label,
-            )
+            resolveInfo.activityInfo?.applicationInfo?.toSplitTunnelAppInfo(packageManager, context.packageName)
         }
+    val installedApps = packageManager.getInstalledApplications(0)
+        .asSequence()
+        .mapNotNull { appInfo ->
+            appInfo.toSplitTunnelAppInfo(packageManager, context.packageName)
+        }
+    return (launchableApps + installedApps)
         .distinctBy { it.packageName }
         .sortedWith(
             compareBy<SplitTunnelAppInfo> { it.label.lowercase(Locale.US) }
                 .thenBy { it.packageName },
         )
         .toList()
+}
+
+private fun ApplicationInfo.toSplitTunnelAppInfo(
+    packageManager: android.content.pm.PackageManager,
+    ownPackageName: String,
+): SplitTunnelAppInfo? {
+    if (packageName == ownPackageName || !enabled) {
+        return null
+    }
+    val label = loadLabel(packageManager)
+        .toString()
+        .trim()
+        .takeIf(String::isNotEmpty)
+        ?: packageName
+    return SplitTunnelAppInfo(
+        packageName = packageName,
+        label = label,
+        isSystemApp = isSystemApplication(),
+    )
+}
+
+private fun ApplicationInfo.isSystemApplication(): Boolean {
+    return flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+}
+
+internal fun splitTunnelVisibleAppOptions(
+    apps: List<SplitTunnelAppInfo>,
+    selectedPackages: Set<String>,
+    query: String,
+    showSystemApps: Boolean,
+): List<SplitTunnelAppInfo> {
+    val normalizedQuery = query.trim().lowercase(Locale.US)
+    val appsByPackage = apps.associateBy { it.packageName }
+    val manuallySelectedApps = selectedPackages
+        .filterNot(appsByPackage::containsKey)
+        .map { packageName ->
+            SplitTunnelAppInfo(
+                packageName = packageName,
+                label = packageName,
+                isSystemApp = true,
+            )
+        }
+    return (apps + manuallySelectedApps).asSequence()
+        .filter { app ->
+            showSystemApps || !app.isSystemApp || app.packageName in selectedPackages
+        }
+        .filter { app ->
+            normalizedQuery.isEmpty() ||
+                app.label.lowercase(Locale.US).contains(normalizedQuery) ||
+                app.packageName.lowercase(Locale.US).contains(normalizedQuery)
+        }
+        .sortedWith(
+            compareByDescending<SplitTunnelAppInfo> { it.packageName in selectedPackages }
+                .thenBy { it.label.lowercase(Locale.US) }
+                .thenBy { it.packageName },
+        )
+        .toList()
+}
+
+internal fun addSplitTunnelPackageSelection(
+    selectedPackages: Set<String>,
+    rawPackageName: String,
+): Set<String> {
+    val packageName = rawPackageName.trim()
+    if (packageName.isEmpty()) {
+        return selectedPackages
+    }
+    return selectedPackages + packageName
+}
+
+internal fun orderedSplitTunnelPackageSelection(
+    apps: List<SplitTunnelAppInfo>,
+    selectedPackages: Set<String>,
+): List<String> {
+    val installedPackageOrder = apps.map { it.packageName }
+    return installedPackageOrder.filter { it in selectedPackages } +
+        selectedPackages.filterNot { it in installedPackageOrder }.sorted()
+}
+
+internal fun resolverCustomDropTargetIndex(
+    profiles: List<ResolverProfile>,
+    fullTargetIndex: Int,
+): Int {
+    val customProfiles = profiles.filter { it.id != ResolverProfile.DefaultId }
+    if (customProfiles.isEmpty()) {
+        return 0
+    }
+    val customProfilesBeforeTarget = profiles
+        .take(fullTargetIndex.coerceIn(0, profiles.lastIndex))
+        .count { it.id != ResolverProfile.DefaultId }
+    return customProfilesBeforeTarget.coerceIn(0, customProfiles.lastIndex)
 }
 
 private fun selectedSplitTunnelLabels(
