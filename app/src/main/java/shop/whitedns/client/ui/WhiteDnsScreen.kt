@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -1429,24 +1430,33 @@ private fun SettingProfileGuideButton(
     onClick: () -> Unit,
 ) {
     val haptic = rememberHapticFeedback()
+    val buttonDescription = WhiteDnsL10n.cdSettingGuide
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(CircleShape)
-            .background(WhiteDnsPalette.AccentSurface)
-            .border(1.5.dp, WhiteDnsPalette.Accent.copy(alpha = 0.26f), CircleShape)
-            .clickable {
+            .clickable(role = Role.Button) {
                 haptic.performLight()
                 onClick()
-            },
+            }
+            .semantics { this.contentDescription = buttonDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
-            contentDescription = WhiteDnsL10n.cdSettingGuide,
-            tint = WhiteDnsPalette.AccentText,
-            modifier = Modifier.size(20.dp),
-        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(WhiteDnsPalette.AccentSurface)
+                .border(1.5.dp, WhiteDnsPalette.Accent.copy(alpha = 0.26f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
+                contentDescription = null,
+                tint = WhiteDnsPalette.AccentText,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -1886,6 +1896,7 @@ private fun ScanInfoNotice(
     onDismiss: () -> Unit,
 ) {
     val haptic = rememberHapticFeedback()
+    val dismissDescription = WhiteDnsL10n.cdDismissScannerInfo
 
     Row(
         modifier = Modifier
@@ -1934,17 +1945,18 @@ private fun ScanInfoNotice(
         }
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                 .clip(CircleShape)
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performLight()
                     onDismiss()
-                },
+                }
+                .semantics { this.contentDescription = dismissDescription },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Close,
-                contentDescription = WhiteDnsL10n.cdDismissScannerInfo,
+                contentDescription = null,
                 tint = WhiteDnsPalette.AccentText,
                 modifier = Modifier.size(16.dp),
             )
@@ -2638,7 +2650,7 @@ private fun HomeSelectorCard(
             }
             Icon(
                 imageVector = Icons.Rounded.KeyboardArrowDown,
-                contentDescription = stringResource(R.string.cd_dropdown_advanced_settings),
+                contentDescription = null,
                 tint = if (enabled) WhiteDnsPalette.Muted else WhiteDnsPalette.Disabled,
                 modifier = Modifier.size(18.dp),
             )
@@ -5845,6 +5857,7 @@ private fun ProfileIconButton(
     modifier: Modifier = Modifier,
 ) {
     val haptic = rememberHapticFeedback()
+    val buttonDescription = contentDescription
     val background = when {
         !enabled -> WhiteDnsPalette.SurfaceAlt
         emphasized -> WhiteDnsPalette.Accent
@@ -5863,22 +5876,30 @@ private fun ProfileIconButton(
 
     Box(
         modifier = modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(background)
-            .border(1.5.dp, border, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled) {
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performMedium()
                 onClick()
-            },
+            }
+            .semantics { this.contentDescription = buttonDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = iconColor,
-            modifier = Modifier.size(16.dp),
-        )
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(background)
+                .border(1.5.dp, border, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
@@ -5914,10 +5935,11 @@ private fun CompactActionButton(
 
     Box(
         modifier = modifier
+            .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(9.dp))
             .background(background)
             .border(1.5.dp, border, RoundedCornerShape(9.dp))
-            .clickable(enabled = enabled) {
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performMedium()
                 onClick()
             }
@@ -5927,11 +5949,14 @@ private fun CompactActionButton(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 8.sp,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
                 color = textColor,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.9.sp,
+                letterSpacing = 0.sp,
             ),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -9438,6 +9463,7 @@ private fun WhiteDnsTextField(
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .semantics { contentDescription = label }
                     .onFocusChanged {
                         focused = it.isFocused
                         onFocusChange(it.isFocused)
@@ -9597,7 +9623,7 @@ private fun <T> WhiteDnsDropdownField(
                 )
                 Icon(
                     imageVector = Icons.Rounded.KeyboardArrowDown,
-                    contentDescription = stringResource(R.string.cd_dropdown_advanced_settings),
+                    contentDescription = null,
                     tint = when {
                         !enabled -> WhiteDnsPalette.Disabled
                         expanded -> WhiteDnsPalette.Accent

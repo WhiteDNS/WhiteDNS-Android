@@ -526,6 +526,24 @@ data class WhiteDnsScanState(
         )
     }
 
+    fun completeResumeWithoutRemainingResolvers(nowMillis: Long): WhiteDnsScanState {
+        val completedCount = totalResolvers.takeIf { it > 0 }
+            ?: maxOf(completedResolvers, validResolvers + rejectedResolvers)
+        val duration = if (startedAtMillis > 0L) {
+            (nowMillis - startedAtMillis).coerceAtLeast(0L)
+        } else {
+            durationMillis
+        }
+        return copy(
+            status = WhiteDnsScanStatus.Completed,
+            completedResolvers = completedCount,
+            updatedAtMillis = nowMillis,
+            durationMillis = duration,
+            message = "No remaining resolvers to resume; Scanner result is up to date",
+            workerFailures = emptyList(),
+        )
+    }
+
     val fraction: Float
         get() = if (totalResolvers > 0) {
             completedResolvers.coerceIn(0, totalResolvers).toFloat() / totalResolvers

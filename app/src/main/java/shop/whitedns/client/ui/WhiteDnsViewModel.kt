@@ -156,6 +156,11 @@ class WhiteDnsViewModel(
             is WhiteDnsProxyEvent.Log -> handleRuntimeLog(event.sessionId, event.message)
             is WhiteDnsProxyEvent.Ready -> handleRuntimeReady(event.sessionId, event.message, expectedConnectionMode = "proxy")
             is WhiteDnsProxyEvent.Failed -> handleProxyFailure(event.sessionId, event.message)
+            is WhiteDnsProxyEvent.Stopped -> handleRuntimeStopped(
+                event.sessionId,
+                event.message,
+                expectedConnectionMode = WhiteDnsRuntimeStateStore.ModeProxy,
+            )
         }
     }
     private val vpnEventListener: (WhiteDnsVpnEvent) -> Unit = { event ->
@@ -163,6 +168,11 @@ class WhiteDnsViewModel(
             is WhiteDnsVpnEvent.Log -> handleRuntimeLog(event.sessionId, event.message)
             is WhiteDnsVpnEvent.Ready -> handleRuntimeReady(event.sessionId, event.message, expectedConnectionMode = "vpn")
             is WhiteDnsVpnEvent.Failed -> handleVpnFailure(event.sessionId, event.message)
+            is WhiteDnsVpnEvent.Stopped -> handleRuntimeStopped(
+                event.sessionId,
+                event.message,
+                expectedConnectionMode = WhiteDnsRuntimeStateStore.ModeVpn,
+            )
         }
     }
     private val proxyBroadcastReceiver = object : BroadcastReceiver() {
@@ -176,6 +186,11 @@ class WhiteDnsViewModel(
                 WhiteDnsProxyService.BroadcastTypeLog -> handleRuntimeLog(sessionId, message)
                 WhiteDnsProxyService.BroadcastTypeReady -> handleRuntimeReady(sessionId, message, expectedConnectionMode = "proxy")
                 WhiteDnsProxyService.BroadcastTypeFailed -> handleProxyFailure(sessionId, message)
+                WhiteDnsProxyService.BroadcastTypeStopped -> handleRuntimeStopped(
+                    sessionId,
+                    message,
+                    expectedConnectionMode = WhiteDnsRuntimeStateStore.ModeProxy,
+                )
             }
         }
     }
@@ -190,6 +205,11 @@ class WhiteDnsViewModel(
                 WhiteDnsVpnService.BroadcastTypeLog -> handleRuntimeLog(sessionId, message)
                 WhiteDnsVpnService.BroadcastTypeReady -> handleRuntimeReady(sessionId, message, expectedConnectionMode = "vpn")
                 WhiteDnsVpnService.BroadcastTypeFailed -> handleVpnFailure(sessionId, message)
+                WhiteDnsVpnService.BroadcastTypeStopped -> handleRuntimeStopped(
+                    sessionId,
+                    message,
+                    expectedConnectionMode = WhiteDnsRuntimeStateStore.ModeVpn,
+                )
             }
         }
     }
@@ -1916,9 +1936,8 @@ class WhiteDnsViewModel(
                 return@launch
             }
             if (remainingResolverCount == 0) {
-                val updatedState = previousState.copy(
-                    updatedAtMillis = System.currentTimeMillis(),
-                    message = "No remaining resolvers to resume",
+                val updatedState = previousState.completeResumeWithoutRemainingResolvers(
+                    nowMillis = System.currentTimeMillis(),
                 )
                 WhiteDnsScanStateStore.write(appContext, updatedState)
                 uiState = uiState.copy(scanState = updatedState)
@@ -2158,6 +2177,22 @@ class WhiteDnsViewModel(
                 serverTestState = ServerTestState(),
                 activeConnectionProfileId = null,
             )
+        }
+    }
+
+    private fun handleRuntimeStopped(
+        sessionId: String,
+        message: String,
+        expectedConnectionMode: String,
+    ) {
+        if (isStaleRuntimeEvent(sessionId)) {
+            return
+        }
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            if (!shouldHandleRuntimeEvent(expectedConnectionMode)) {
+                return@launch
+            }
+            markRuntimeDisconnected(message)
         }
     }
 

@@ -1153,6 +1153,27 @@ class WhiteDnsModelsTest {
         assertEquals(freshState, recovered)
     }
 
+    @Test
+    fun completeResumeWithoutRemainingResolversMarksScanCompleted() {
+        val completed = WhiteDnsScanState(
+            sessionId = "scan-3",
+            status = WhiteDnsScanStatus.Stopped,
+            totalResolvers = 4,
+            completedResolvers = 2,
+            validResolvers = 1,
+            rejectedResolvers = 1,
+            startedAtMillis = 1_000L,
+            workerFailures = listOf("old worker failure"),
+        ).completeResumeWithoutRemainingResolvers(nowMillis = 6_000L)
+
+        assertEquals(WhiteDnsScanStatus.Completed, completed.status)
+        assertEquals(4, completed.completedResolvers)
+        assertEquals("No remaining resolvers to resume; Scanner result is up to date", completed.message)
+        assertEquals(6_000L, completed.updatedAtMillis)
+        assertEquals(5_000L, completed.durationMillis)
+        assertEquals(emptyList<String>(), completed.workerFailures)
+    }
+
     private fun decodeStormDnsProfilePayload(link: String): String {
         val payload = link.removePrefix("stormdns://")
         val paddedPayload = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), '=')

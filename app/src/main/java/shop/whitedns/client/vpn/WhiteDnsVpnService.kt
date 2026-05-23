@@ -209,7 +209,7 @@ class WhiteDnsVpnService : VpnService() {
                 }
                 val serverProfile = launchRequest.serverProfile
 
-                stopVpn()
+                stopVpn(notifyStopped = false)
                 WhiteDnsProxyService.stop(applicationContext)
                 waitForLocalPortToClose(resolvedSettings.listenPort)
                 stopping = false
@@ -393,7 +393,7 @@ class WhiteDnsVpnService : VpnService() {
         }
     }
 
-    private fun stopVpn() {
+    private fun stopVpn(notifyStopped: Boolean = true) {
         stopping = true
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
@@ -421,12 +421,15 @@ class WhiteDnsVpnService : VpnService() {
         }.onFailure { error ->
             Log.w(Tag, "Failed to stop StormDNS", error)
         }
-        WhiteDnsRuntimeStateStore.markStopped(
-            context = applicationContext,
-            mode = WhiteDnsRuntimeStateStore.ModeVpn,
-            sessionId = currentSessionId,
-            message = "VPN service stopped",
-        )
+        if (notifyStopped) {
+            WhiteDnsRuntimeStateStore.markStopped(
+                context = applicationContext,
+                mode = WhiteDnsRuntimeStateStore.ModeVpn,
+                sessionId = currentSessionId,
+                message = "VPN service stopped",
+            )
+            reportStopped("VPN service stopped")
+        }
     }
 
     private fun startTrafficKeepalive(resolvedSettings: ResolvedWhiteDnsSettings) {
@@ -608,6 +611,11 @@ class WhiteDnsVpnService : VpnService() {
         sendVpnEvent(BroadcastTypeFailed, message)
     }
 
+    private fun reportStopped(message: String) {
+        WhiteDnsVpnEvents.stopped(currentSessionId, message)
+        sendVpnEvent(BroadcastTypeStopped, message)
+    }
+
     private fun reportReady(message: String) {
         Log.i(Tag, message)
         WhiteDnsVpnEvents.ready(currentSessionId, message)
@@ -633,6 +641,7 @@ class WhiteDnsVpnService : VpnService() {
         const val BroadcastTypeLog = "log"
         const val BroadcastTypeReady = "ready"
         const val BroadcastTypeFailed = "failed"
+        const val BroadcastTypeStopped = "stopped"
         private const val ActionStart = "shop.whitedns.client.vpn.START"
         private const val ActionStop = "shop.whitedns.client.vpn.STOP"
         private const val ExtraSessionId = "shop.whitedns.client.vpn.extra.SESSION_ID"

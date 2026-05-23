@@ -6,6 +6,7 @@ sealed class WhiteDnsProxyEvent {
     data class Log(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
     data class Ready(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
     data class Failed(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
+    data class Stopped(val sessionId: String, val message: String) : WhiteDnsProxyEvent()
 }
 
 object WhiteDnsProxyEvents {
@@ -29,6 +30,10 @@ object WhiteDnsProxyEvents {
 
     fun failed(sessionId: String, message: String) {
         emit(WhiteDnsProxyEvent.Failed(sessionId, message))
+    }
+
+    fun stopped(sessionId: String, message: String) {
+        emit(WhiteDnsProxyEvent.Stopped(sessionId, message))
     }
 
     private fun emit(event: WhiteDnsProxyEvent) {

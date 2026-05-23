@@ -71,12 +71,7 @@ class WhiteDnsProxyService : Service() {
                 stopProxyRuntime()
                 runtimeReady = false
                 lastTrafficNotificationUpdateMillis = 0L
-                WhiteDnsRuntimeStateStore.markStopped(
-                    context = applicationContext,
-                    mode = WhiteDnsRuntimeStateStore.ModeProxy,
-                    sessionId = currentSessionId,
-                    message = "Proxy service stopped",
-                )
+                reportStopped("Proxy service stopped")
                 exitForeground()
                 stopSelf()
                 START_NOT_STICKY
@@ -103,12 +98,7 @@ class WhiteDnsProxyService : Service() {
         stopProxyRuntime()
         runtimeReady = false
         lastTrafficNotificationUpdateMillis = 0L
-        WhiteDnsRuntimeStateStore.markStopped(
-            context = applicationContext,
-            mode = WhiteDnsRuntimeStateStore.ModeProxy,
-            sessionId = currentSessionId,
-            message = "Proxy service stopped",
-        )
+        reportStopped("Proxy service stopped")
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
@@ -479,6 +469,17 @@ class WhiteDnsProxyService : Service() {
         sendProxyEvent(BroadcastTypeFailed, message)
     }
 
+    private fun reportStopped(message: String) {
+        WhiteDnsRuntimeStateStore.markStopped(
+            context = applicationContext,
+            mode = WhiteDnsRuntimeStateStore.ModeProxy,
+            sessionId = currentSessionId,
+            message = message,
+        )
+        WhiteDnsProxyEvents.stopped(currentSessionId, message)
+        sendProxyEvent(BroadcastTypeStopped, message)
+    }
+
     private fun reportReady(message: String) {
         Log.i(Tag, message)
         WhiteDnsProxyEvents.ready(currentSessionId, message)
@@ -504,6 +505,7 @@ class WhiteDnsProxyService : Service() {
         const val BroadcastTypeLog = "log"
         const val BroadcastTypeReady = "ready"
         const val BroadcastTypeFailed = "failed"
+        const val BroadcastTypeStopped = "stopped"
         private const val ActionStart = "shop.whitedns.client.proxy.START"
         private const val ActionStop = "shop.whitedns.client.proxy.STOP"
         private const val ExtraSessionId = "shop.whitedns.client.proxy.extra.SESSION_ID"

@@ -16,6 +16,7 @@ class WhiteDnsVpnEventsTest {
             WhiteDnsVpnEvents.log("session-b", "log")
             WhiteDnsVpnEvents.ready("session-b", "ready")
             WhiteDnsVpnEvents.failed("session-b", "failed")
+            WhiteDnsVpnEvents.stopped("session-b", "stopped")
         } finally {
             WhiteDnsVpnEvents.removeListener(listener)
         }
@@ -25,6 +26,7 @@ class WhiteDnsVpnEventsTest {
                 WhiteDnsVpnEvent.Log("session-b", "log"),
                 WhiteDnsVpnEvent.Ready("session-b", "ready"),
                 WhiteDnsVpnEvent.Failed("session-b", "failed"),
+                WhiteDnsVpnEvent.Stopped("session-b", "stopped"),
             ),
             receivedEvents,
         )
