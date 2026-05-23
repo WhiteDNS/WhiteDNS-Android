@@ -1,0 +1,49 @@
+name: Android CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_ANDROID_NDK_VERSION: "26.3.11579264"
+
+jobs:
+  gradle:
+    name: Unit tests and debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout WhiteDNS
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          command -v sdkmanager
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;${GRADLE_ANDROID_NDK_VERSION}"
+
+      - name: Run Gradle checks
+        run: ./gradlew testDebugUnitTest :app:assembleDebug --stacktrace
