@@ -1,7 +1,10 @@
 package shop.whitedns.client.runtime
 
 import android.content.Context
+import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONObject
 import shop.whitedns.client.model.ConnectionProfile
@@ -34,7 +37,7 @@ object RuntimeLaunchRequestStore {
             settings = settings.runtimeConnectionSettings().syncSelectedConnectionProfileFields(),
         )
         launchDirectory(context).mkdirs()
-        requestFile(context, requestId).writeText(encode(request).toString(), Charsets.UTF_8)
+        writeAtomicText(requestFile(context, requestId), encode(request).toString())
         return request
     }
 
@@ -262,5 +265,18 @@ object RuntimeLaunchRequestStore {
 
     private fun String.isSafeRequestId(): Boolean {
         return isNotBlank() && length <= 128 && SafeIdRegex.matches(this)
+    }
+
+    private fun writeAtomicText(file: File, text: String) {
+        val atomicFile = AtomicFile(file)
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (error: IOException) {
+            stream?.let(atomicFile::failWrite)
+            throw error
+        }
     }
 }

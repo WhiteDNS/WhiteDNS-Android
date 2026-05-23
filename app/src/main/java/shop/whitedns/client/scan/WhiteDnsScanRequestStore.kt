@@ -1,7 +1,10 @@
 package shop.whitedns.client.scan
 
 import android.content.Context
+import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import org.json.JSONObject
 
 data class WhiteDnsScanLaunchRequest(
@@ -23,7 +26,7 @@ object WhiteDnsScanRequestStore {
     fun save(context: Context, request: WhiteDnsScanLaunchRequest) {
         require(request.id.isSafeRequestId()) { "Invalid scan launch request ID" }
         requestDirectory(context).mkdirs()
-        requestFile(context, request.id).writeText(encode(request).toString(), Charsets.UTF_8)
+        writeAtomicText(requestFile(context, request.id), encode(request).toString())
     }
 
     fun load(context: Context, requestId: String): WhiteDnsScanLaunchRequest? {
@@ -94,5 +97,18 @@ object WhiteDnsScanRequestStore {
 
     private fun String.isSafeRequestId(): Boolean {
         return isNotBlank() && SafeIdRegex.matches(this)
+    }
+
+    private fun writeAtomicText(file: File, text: String) {
+        val atomicFile = AtomicFile(file)
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomicFile.startWrite()
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            atomicFile.finishWrite(stream)
+        } catch (error: IOException) {
+            stream?.let(atomicFile::failWrite)
+            throw error
+        }
     }
 }
