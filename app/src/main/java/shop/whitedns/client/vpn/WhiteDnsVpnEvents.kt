@@ -6,6 +6,7 @@ sealed class WhiteDnsVpnEvent {
     data class Log(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
     data class Ready(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
     data class Failed(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
+    data class Stopped(val sessionId: String, val message: String) : WhiteDnsVpnEvent()
 }
 
 object WhiteDnsVpnEvents {
@@ -29,6 +30,10 @@ object WhiteDnsVpnEvents {
 
     fun failed(sessionId: String, message: String) {
         emit(WhiteDnsVpnEvent.Failed(sessionId, message))
+    }
+
+    fun stopped(sessionId: String, message: String) {
+        emit(WhiteDnsVpnEvent.Stopped(sessionId, message))
     }
 
     private fun emit(event: WhiteDnsVpnEvent) {

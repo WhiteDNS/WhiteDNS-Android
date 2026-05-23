@@ -16,6 +16,7 @@ class WhiteDnsProxyEventsTest {
             WhiteDnsProxyEvents.log("session-a", "log")
             WhiteDnsProxyEvents.ready("session-a", "ready")
             WhiteDnsProxyEvents.failed("session-a", "failed")
+            WhiteDnsProxyEvents.stopped("session-a", "stopped")
         } finally {
             WhiteDnsProxyEvents.removeListener(listener)
         }
@@ -25,6 +26,7 @@ class WhiteDnsProxyEventsTest {
                 WhiteDnsProxyEvent.Log("session-a", "log"),
                 WhiteDnsProxyEvent.Ready("session-a", "ready"),
                 WhiteDnsProxyEvent.Failed("session-a", "failed"),
+                WhiteDnsProxyEvent.Stopped("session-a", "stopped"),
             ),
             receivedEvents,
         )

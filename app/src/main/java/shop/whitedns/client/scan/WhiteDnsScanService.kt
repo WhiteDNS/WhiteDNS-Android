@@ -27,6 +27,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -41,6 +42,14 @@ import shop.whitedns.client.runtime.RuntimeLaunchRequestStore
 import shop.whitedns.client.runtime.parseStormDnsConnectionProgressLine
 import shop.whitedns.client.storm.StormDnsBinaryInstaller
 import shop.whitedns.client.storm.StormDnsConfigRenderer
+
+internal fun shouldPublishScanHeartbeat(
+    nowMillis: Long,
+    lastHeartbeatMillis: Long,
+    heartbeatIntervalMillis: Long,
+): Boolean {
+    return heartbeatIntervalMillis > 0L && nowMillis - lastHeartbeatMillis >= heartbeatIntervalMillis
+}
 
 class WhiteDnsScanService : Service() {
 
@@ -164,6 +173,7 @@ class WhiteDnsScanService : Service() {
         val totalResolverCount = maxOf(requestedTotalResolvers, pendingResolverCount + initialProcessedCount)
         val startedAtMillis = System.currentTimeMillis()
         var lastAggregatePublishMillis = 0L
+        var lastHeartbeatPublishMillis = startedAtMillis
 
         fun aggregateState(status: String, message: String): WhiteDnsScanState {
             val completed = (initialProcessedCount + workerStats.sumOf { it.completed })
@@ -261,7 +271,22 @@ class WhiteDnsScanService : Service() {
             }
         }
 
-        val results = jobs.awaitAll()
+        val heartbeatJob = launch(Dispatchers.IO) {
+            while (isActive && !stopRequested) {
+                delay(ScanHeartbeatIntervalMillis)
+                val now = System.currentTimeMillis()
+                if (shouldPublishScanHeartbeat(now, lastHeartbeatPublishMillis, ScanHeartbeatIntervalMillis)) {
+                    lastHeartbeatPublishMillis = now
+                    publishAggregate(WhiteDnsScanStatus.Running, "Scanning", forcePublish = true)
+                }
+            }
+        }
+
+        val results = try {
+            jobs.awaitAll()
+        } finally {
+            heartbeatJob.cancelAndJoin()
+        }
         val successfulWorkers = results.count { it }
         val finalStatus = if (successfulWorkers == workerInputs.size && workerFailures.isEmpty()) {
             WhiteDnsScanStatus.Completed
@@ -748,6 +773,7 @@ class WhiteDnsScanService : Service() {
         private const val MaxWorkerFailureOutputLines = 6
         private const val MaxWorkerFailureOutputChars = 180
         private const val ScanUiPublishMinIntervalMillis = 750L
+        private const val ScanHeartbeatIntervalMillis = 10_000L
         private val AnsiEscapeRegex = Regex("${27.toChar()}\\[[;?0-9]*[ -/]*[@-~]")
 
         fun start(
