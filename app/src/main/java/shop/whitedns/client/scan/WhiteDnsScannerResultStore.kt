@@ -93,7 +93,7 @@ object WhiteDnsScannerResultStore {
                     return@forEach
                 }
                 if (candidateCount > 0) {
-                    writer.newLine()
+                    writer.write("\n")
                 }
                 writer.write(line)
                 candidateCount += 1
@@ -131,7 +131,7 @@ object WhiteDnsScannerResultStore {
                         alreadyValidResolverCount += 1
                     } else {
                         if (pendingResolverCount > 0) {
-                            writer.newLine()
+                            writer.write("\n")
                         }
                         writer.write(resolver)
                         pendingResolverCount += 1
