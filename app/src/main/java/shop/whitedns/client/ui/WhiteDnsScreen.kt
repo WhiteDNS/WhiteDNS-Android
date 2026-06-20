@@ -1093,7 +1093,7 @@ private fun ParallelTestSelectionPanel(
                         context.getString(R.string.cd_parallel_test_expand)
                     }
                 }
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performLight()
                     onExpandedChange(!expanded)
                 }
@@ -1435,7 +1435,7 @@ private fun SettingProfileGuideButton(
             .clip(CircleShape)
             .background(WhiteDnsPalette.AccentSurface)
             .border(1.5.dp, WhiteDnsPalette.Accent.copy(alpha = 0.26f), CircleShape)
-            .clickable {
+            .clickable(role = Role.Button) {
                 haptic.performLight()
                 onClick()
             },
@@ -1936,7 +1936,7 @@ private fun ScanInfoNotice(
             modifier = Modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performLight()
                     onDismiss()
                 },
@@ -2388,7 +2388,7 @@ private fun FooterLink() {
                 .semantics {
                     contentDescription = context.getString(R.string.cd_telegram_link)
                 }
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performLight()
                     openWhiteDnsTelegram(context)
                 }
@@ -2596,7 +2596,7 @@ private fun HomeSelectorCard(
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (enabled) WhiteDnsPalette.Surface else WhiteDnsPalette.SurfaceAlt)
                 .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
-                .clickable(enabled = enabled) {
+                .clickable(enabled = enabled, role = Role.Button) {
                     haptic.performLight()
                     onClick()
                 }
@@ -3177,7 +3177,7 @@ private fun HomeSelectorSheetRow(
             .semantics {
                 contentDescription = context.getString(R.string.cd_select_profile_item, item.title)
             }
-            .clickable {
+            .clickable(role = Role.Button) {
                 haptic.performLight()
                 onClick()
             }
@@ -3411,7 +3411,7 @@ private fun SetupActionButton(
             .clip(RoundedCornerShape(11.dp))
             .background(background)
             .border(1.5.dp, border, RoundedCornerShape(11.dp))
-            .clickable(enabled = enabled) {
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performMedium()
                 onClick()
             }
@@ -5653,7 +5653,7 @@ private fun ProfileActionsMenu(
                 .clip(RoundedCornerShape(10.dp))
                 .background(background)
                 .border(1.5.dp, border, RoundedCornerShape(10.dp))
-                .clickable(enabled = enabled) {
+                .clickable(enabled = enabled, role = Role.Button) {
                     haptic.performLight()
                     expanded = true
                 },
@@ -5867,7 +5867,7 @@ private fun ProfileIconButton(
             .clip(RoundedCornerShape(8.dp))
             .background(background)
             .border(1.5.dp, border, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled) {
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performMedium()
                 onClick()
             },
@@ -5917,7 +5917,7 @@ private fun CompactActionButton(
             .clip(RoundedCornerShape(9.dp))
             .background(background)
             .border(1.5.dp, border, RoundedCornerShape(9.dp))
-            .clickable(enabled = enabled) {
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performMedium()
                 onClick()
             }
@@ -6366,7 +6366,7 @@ private fun HeaderCard(
                     .background(WhiteDnsPalette.SurfaceAlt)
                     .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(9.dp))
                     .semantics { contentDescription = context.getString(R.string.cd_logo_telegram) }
-                    .clickable {
+                    .clickable(role = Role.Button) {
                         haptic.performLight()
                         openWhiteDnsTelegram(context)
                     },
@@ -6403,7 +6403,7 @@ private fun HeaderCard(
                         RoundedCornerShape(10.dp),
                     )
                     .semantics { contentDescription = context.getString(R.string.cd_menu_button) }
-                    .clickable {
+                    .clickable(role = Role.Button) {
                         haptic.performLight()
                         overflowExpanded = true
                     },
@@ -6750,7 +6750,7 @@ private fun DonationWalletField(
                 .background(WhiteDnsPalette.Input)
                 .border(2.5.dp, WhiteDnsPalette.Divider, RoundedCornerShape(10.dp))
                 .semantics { contentDescription = context.getString(R.string.cd_copy_address, address) }
-                .clickable(onClick = onCopy)
+                .clickable(role = Role.Button, onClick = onCopy)
                 .padding(horizontal = 12.dp, vertical = 11.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -6817,7 +6817,7 @@ private fun NotificationPermissionBanner(onClick: () -> Unit) {
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
                 .semantics { contentDescription = context.getString(R.string.cd_enable_vpn_notification) }
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performMedium()
                     onClick()
                 }
@@ -6872,7 +6872,7 @@ private fun BatteryOptimizationBanner(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .clickable {
+                    .clickable(role = Role.Button) {
                         haptic.performLight()
                         onDismiss()
                     },
@@ -6903,7 +6903,7 @@ private fun BatteryOptimizationBanner(
                 .background(WhiteDnsPalette.Surface)
                 .border(1.5.dp, WhiteDnsPalette.Warning.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
                 .semantics { contentDescription = context.getString(R.string.cd_allow_background_vpn) }
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performMedium()
                     onClick()
                 }
@@ -6968,7 +6968,7 @@ private fun FullVpnPerformanceWarning(onDismiss: () -> Unit) {
             modifier = Modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .clickable {
+                .clickable(role = Role.Button) {
                     haptic.performLight()
                     onDismiss()
                 },
@@ -7201,12 +7201,16 @@ private fun SplitTunnelAppRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(11.dp))
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = {
+                    haptic.performLight()
+                    onToggle()
+                },
+            )
             .semantics {
                 contentDescription = context.getString(R.string.cd_split_tunnel_app_toggle, app.label)
-            }
-            .clickable {
-                haptic.performLight()
-                onToggle()
             }
             .padding(vertical = 9.dp, horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -7214,10 +7218,8 @@ private fun SplitTunnelAppRow(
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = {
-                haptic.performLight()
-                onToggle()
-            },
+            onCheckedChange = null,
+            modifier = Modifier.clearAndSetSemantics {},
             colors = CheckboxDefaults.colors(
                 checkedColor = WhiteDnsPalette.Accent,
                 uncheckedColor = WhiteDnsPalette.ControlBorder,
@@ -7427,7 +7429,7 @@ private fun ConnectButton(
                             onClick()
                         },
                     )
-                    .semantics(mergeDescendants = true) {},
+                    .semantics(mergeDescendants = true) { role = Role.Button },
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
@@ -7624,7 +7626,7 @@ private fun ResolverRuntimeValue(
             .semantics {
                 contentDescription = context.getString(R.string.cd_stat_card_detail, label, value)
             }
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         Text(
@@ -8718,7 +8720,7 @@ private fun LogActionButton(
             .background(WhiteDnsPalette.Surface)
             .border(1.5.dp, WhiteDnsPalette.Border, RoundedCornerShape(8.dp))
             .semantics { contentDescription = label }
-            .clickable {
+            .clickable(role = Role.Button) {
                 haptic.performLight()
                 onClick()
             }
@@ -9135,7 +9137,7 @@ private fun ResolverActionButton(
             .clip(RoundedCornerShape(10.dp))
             .background(background)
             .border(1.5.dp, border, RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled) {
+            .clickable(enabled = enabled, role = Role.Button) {
                 haptic.performLight()
                 onClick()
             }
@@ -9216,7 +9218,7 @@ private fun SectionCard(
                                     context.getString(R.string.cd_section_expand, title)
                                 }
                             }
-                            .clickable {
+                            .clickable(role = Role.Button) {
                                 haptic.performLight()
                                 onToggle()
                             }
@@ -9241,7 +9243,7 @@ private fun SectionCard(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = iconContentDescription,
+                        contentDescription = if (collapsible) iconContentDescription else null,
                         tint = iconColor,
                         modifier = Modifier.size(17.dp),
                     )
@@ -9430,7 +9432,7 @@ private fun WhiteDnsTextField(
         textStyle
     }
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.semantics(mergeDescendants = true) {}) {
         FieldLabel(label)
         val textField: @Composable () -> Unit = {
             BasicTextField(
@@ -9576,7 +9578,7 @@ private fun <T> WhiteDnsDropdownField(
                     .clip(shape)
                     .background(backgroundColor)
                     .border(1.5.dp, borderColor, shape)
-                    .clickable(enabled = enabled) {
+                    .clickable(enabled = enabled, role = Role.Button) {
                         haptic.performLight()
                         expanded = true
                     }
