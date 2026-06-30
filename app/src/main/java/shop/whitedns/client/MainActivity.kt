@@ -2,6 +2,7 @@ package shop.whitedns.client
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -26,11 +27,15 @@ import shop.whitedns.client.ui.WhiteDnsScreen
 import shop.whitedns.client.ui.WhiteDnsTheme
 import shop.whitedns.client.ui.WhiteDnsViewModel
 import shop.whitedns.client.model.ConnectionStatus
+import shop.whitedns.client.model.StormDnsProfileLinkPreview
+import shop.whitedns.client.model.WhiteDnsOptions
+import shop.whitedns.client.model.previewStormDnsProfileLink
 import shop.whitedns.client.model.resolve
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel by viewModels<WhiteDnsViewModel>()
+    private var profileImportDialog: AlertDialog? = null
 
     override fun onResume() {
         super.onResume()
@@ -147,6 +152,12 @@ class MainActivity : ComponentActivity() {
         handleProfileLinkIntent(intent)
     }
 
+    override fun onDestroy() {
+        profileImportDialog?.dismiss()
+        profileImportDialog = null
+        super.onDestroy()
+    }
+
     private fun openNotificationSettings() {
         val packageUri = Uri.parse("package:$packageName")
         val settingsIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -190,7 +201,36 @@ class MainActivity : ComponentActivity() {
         }
         val link = intent.dataString?.takeIf(String::isNotBlank) ?: return
         intent.putExtra(ExtraProfileImportHandled, true)
-        viewModel.importProfileLink(link)
+        val preview = runCatching {
+            previewStormDnsProfileLink(link)
+        }.getOrElse {
+            viewModel.importProfileLink(link)
+            return
+        }
+        showProfileImportConfirmation(link, preview)
+    }
+
+    private fun showProfileImportConfirmation(
+        link: String,
+        preview: StormDnsProfileLinkPreview,
+    ) {
+        profileImportDialog?.dismiss()
+        profileImportDialog = AlertDialog.Builder(this)
+            .setTitle("Import StormDNS profile?")
+            .setMessage(
+                buildString {
+                    appendLine("Name: ${preview.name.ifBlank { "Imported profile" }}")
+                    appendLine("Server: ${preview.domain}")
+                    appendLine("Encryption: ${WhiteDnsOptions.encryptionMethodLabel(preview.encryptionMethod)}")
+                    appendLine()
+                    append("Only import profiles from sources you trust.")
+                },
+            )
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton("Import") { _, _ ->
+                viewModel.importProfileLink(link)
+            }
+            .show()
     }
 
     private companion object {
