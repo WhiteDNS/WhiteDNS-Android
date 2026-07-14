@@ -63,6 +63,11 @@ class WhiteDnsProxyService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        logWarning("Foreground service timeout reached (type=$fgsType), stopping proxy")
+        stopSelf(startId)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ActionStop -> {
