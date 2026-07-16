@@ -57,6 +57,11 @@ class WhiteDnsScanService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Log.w(Tag, "Foreground service timeout reached (type=$fgsType), stopping scan")
+        stopSelf(startId)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ActionStop -> {
