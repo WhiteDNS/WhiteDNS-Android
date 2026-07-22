@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -45,6 +45,7 @@ type Stream_client struct {
 
 	StreamID           uint16
 	LocalSocksVersion  byte
+	IsUDPAssociation   bool
 	NetConn            net.Conn
 	CreateTime         time.Time
 	LastActivityTime   time.Time
@@ -112,7 +113,6 @@ func (s *Stream_client) ingestFECShard(a *arq.ARQ, frame []byte) {
 	}
 }
 
-// get_new_stream_id finds the next available stream ID using a circular counter (1-65535).
 // activeLocalStreamCount reports how many local tunnel streams are currently
 // tracked, excluding the reserved virtual control stream (ID 0). It backs the
 // MAX_ACTIVE_STREAMS admission cap.
@@ -132,6 +132,7 @@ func (c *Client) activeLocalStreamCount() int {
 	return count
 }
 
+// get_new_stream_id finds the next available stream ID using a circular counter (1-65535).
 func (c *Client) get_new_stream_id() (uint16, bool) {
 	c.streamsMu.Lock()
 	defer c.streamsMu.Unlock()

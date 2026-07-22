@@ -4,6 +4,13 @@ import android.content.Context
 import android.util.Log
 import com.github.shadowsocks.bg.Tun2proxy
 
+data class Tun2proxySettings(
+    val maxSessions: Int = 1_024,
+    val tcpTimeoutSeconds: Int = 300,
+    val udpTimeoutSeconds: Int = 120,
+    val ipv6Enabled: Boolean = true,
+)
+
 class Tun2SocksProcessManager(
     context: Context,
     private val binaryInstaller: Tun2SocksBinaryInstaller = Tun2SocksBinaryInstaller(context),
@@ -22,6 +29,7 @@ class Tun2SocksProcessManager(
         socksPort: Int,
         socksUsername: String? = null,
         socksPassword: String? = null,
+		settings: Tun2proxySettings = Tun2proxySettings(),
         onOutput: (String) -> Unit = {},
         onExit: (Int) -> Unit = {},
     ) {
@@ -35,16 +43,20 @@ class Tun2SocksProcessManager(
             username = socksUsername,
             password = socksPassword,
         )
+		val cliArgs = buildTun2proxyCliArgs(
+			proxyUrl = proxyUrl,
+			tunFileDescriptor = tunFileDescriptor,
+			closeTunFileDescriptorOnDrop = closeTunFileDescriptorOnDrop,
+			settings = settings,
+		)
         val activeThread = Thread {
             val exitCode = try {
-                Tun2proxy.run(
-                    proxyUrl,
-                    tunFileDescriptor,
-                    closeTunFileDescriptorOnDrop,
-                    TunMtu.toChar(),
-                    Tun2proxy.VERBOSITY_WARN,
-                    Tun2proxy.DNS_VIRTUAL,
-                )
+				synchronized(NativeStateLock) {
+					if (runnerThread === Thread.currentThread()) {
+						nativeRunEntered = true
+					}
+				}
+                Tun2proxy.run(cliArgs, TunMtu.toChar())
             } catch (error: Throwable) {
                 runCatching {
                     onOutput("tun2proxy native runner failed: ${error.message ?: error::class.java.simpleName}")
@@ -56,6 +68,7 @@ class Tun2SocksProcessManager(
                     runnerThread = null
                     runnerOwnerToken = null
                     stopSignalSentThread = null
+					nativeRunEntered = false
                     true
                 } else {
                     false
@@ -77,11 +90,61 @@ class Tun2SocksProcessManager(
                 runnerThread = activeThread
                 runnerOwnerToken = ownerToken
                 stopSignalSentThread = null
+				nativeRunEntered = false
             }
             activeThread.start()
         }
-        onOutput("tun2proxy native runner started")
+		onOutput(
+			"tun2proxy native runner starting " +
+				"(maxSessions=${settings.maxSessions}, tcpTimeout=${settings.tcpTimeoutSeconds}s, " +
+				"udpTimeout=${settings.udpTimeoutSeconds}s, ipv6=${settings.ipv6Enabled})",
+		)
     }
+
+	fun isRunning(): Boolean = synchronized(NativeStateLock) {
+		runnerOwnerToken === ownerToken && runnerThread?.isAlive == true && nativeRunEntered
+	}
+
+	fun awaitRunning(timeoutMillis: Long = 1_500): Boolean {
+		val deadline = System.currentTimeMillis() + timeoutMillis.coerceAtLeast(0)
+		var stableSince = 0L
+		do {
+			if (isRunning()) {
+				if (stableSince == 0L) stableSince = System.currentTimeMillis()
+				if (System.currentTimeMillis() - stableSince >= RunnerStabilityMillis) return true
+			} else {
+				stableSince = 0L
+			}
+			try {
+				Thread.sleep(RunnerPollMillis)
+			} catch (_: InterruptedException) {
+				Thread.currentThread().interrupt()
+				return false
+			}
+		} while (System.currentTimeMillis() < deadline)
+		return false
+	}
+
+	fun requestStop(force: Boolean = false): Boolean {
+		return synchronized(NativeOperationLock) operation@{
+			val activeThread = synchronized(NativeStateLock) state@{
+				if (!force && runnerOwnerToken !== ownerToken) return@state null
+				runnerThread
+			} ?: return@operation true
+			val shouldSignal = synchronized(NativeStateLock) {
+				if (!nativeRunEntered || stopSignalSentThread === activeThread) {
+					false
+				} else {
+					stopSignalSentThread = activeThread
+					true
+				}
+			}
+			if (!shouldSignal) return@operation true
+			runCatching { Tun2proxy.stop() }
+				.onFailure { error -> Log.w(Tag, "Failed to request tun2proxy stop", error) }
+				.isSuccess
+		}
+	}
 
     fun stop(
         gracePeriodMillis: Long = 3_000,
@@ -135,6 +198,7 @@ class Tun2SocksProcessManager(
                     runnerThread = null
                     runnerOwnerToken = null
                     stopSignalSentThread = null
+					nativeRunEntered = false
                 }
             }
         } else {
@@ -191,6 +255,8 @@ class Tun2SocksProcessManager(
         const val TunMtu = 1500
         const val NativeRunnerFailureExitCode = -1
         const val StopBeforeStartGracePeriodMillis = 5_000L
+		const val RunnerStabilityMillis = 100L
+		const val RunnerPollMillis = 20L
         val NativeOperationLock = Any()
         val NativeStateLock = Any()
 
@@ -202,5 +268,42 @@ class Tun2SocksProcessManager(
 
         @Volatile
         var stopSignalSentThread: Thread? = null
+
+		@Volatile
+		var nativeRunEntered: Boolean = false
     }
+}
+
+internal fun buildTun2proxyCliArgs(
+	proxyUrl: String,
+	tunFileDescriptor: Int,
+	closeTunFileDescriptorOnDrop: Boolean,
+	settings: Tun2proxySettings,
+): String {
+	return buildList {
+		add("tun2proxy-bin")
+		add("--tun-fd")
+		add(tunFileDescriptor.toString())
+		add("--close-fd-on-drop")
+		add(closeTunFileDescriptorOnDrop.toString())
+		add("--proxy")
+		add(proxyUrl)
+		add("--dns")
+		add("virtual")
+		add("--verbosity")
+		add("warn")
+		add("--max-sessions")
+		add(settings.maxSessions.coerceIn(64, 8_192).toString())
+		add("--tcp-timeout")
+		add(settings.tcpTimeoutSeconds.coerceIn(30, 3_600).toString())
+		add("--udp-timeout")
+		add(settings.udpTimeoutSeconds.coerceIn(10, 3_600).toString())
+		if (settings.ipv6Enabled) add("--ipv6-enabled")
+		add("--exit-on-fatal-error")
+	}.joinToString(" ") { tun2proxyShellQuote(it) }
+}
+
+private fun tun2proxyShellQuote(value: String): String {
+	if (value.all { it.isLetterOrDigit() || it in "-._:/[]%" }) return value
+	return "'${value.replace("'", "'\\''")}'"
 }

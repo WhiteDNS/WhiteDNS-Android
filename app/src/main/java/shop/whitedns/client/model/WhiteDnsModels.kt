@@ -325,7 +325,7 @@ data class WhiteDnsSettings(
     val dnsResponseFragmentStoreCapacity: String = "256",
     val maxActiveStreams: String = "2048",
     val localHandshakeTimeoutSeconds: String = "5.0",
-    val socksUdpAssociateReadTimeoutSeconds: String = "30.0",
+	val socksUdpAssociateReadTimeoutSeconds: String = "120.0",
     val clientTerminalStreamRetentionSeconds: String = "45.0",
     val clientCancelledSetupRetentionSeconds: String = "120.0",
     val sessionInitRetryBaseSeconds: String = "1.0",

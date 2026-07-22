@@ -19,14 +19,7 @@ public final class Tun2proxy {
     private Tun2proxy() {
     }
 
-    public static native int run(
-        String proxyUrl,
-        int tunFd,
-        boolean closeFdOnDrop,
-        char tunMtu,
-        int verbosity,
-        int dnsStrategy
-    );
+    public static native int run(String cliArgs, char tunMtu);
 
     public static native int stop();
 }

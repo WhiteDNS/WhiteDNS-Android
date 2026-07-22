@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -15,8 +14,6 @@ import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
-import android.system.Os
-import android.system.OsConstants
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -65,6 +62,8 @@ class WhiteDnsVpnService : VpnService() {
     private var currentSessionId = ""
     @Volatile
     private var stopping = false
+	@Volatile
+	private var activeResolvedSettings: ResolvedWhiteDnsSettings? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val CottenDnsProcessManager by lazy {
         CottenDnsProcessManager(applicationContext)
@@ -79,15 +78,20 @@ class WhiteDnsVpnService : VpnService() {
     private var defaultNetworkSignature = ""
     private val defaultNetworkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            scheduleNetworkHandover(network, null, "available")
+			scheduleNetworkHandover(network, "available")
         }
 
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-            scheduleNetworkHandover(network, capabilities, "capabilities changed")
+			// Transport/capability churn is common on unstable mobile links. The
+			// native engine already rebalances resolvers and paths in-place, so it
+			// must not be killed for these non-identity changes.
+			if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return
         }
 
         override fun onLost(network: Network) {
-            scheduleNetworkHandover(network, null, "lost")
+			if (defaultNetworkSignature == network.toString()) {
+				scheduleNetworkHandover(connectivityManager.activeNetwork, "lost")
+			}
         }
     }
 
@@ -107,10 +111,14 @@ class WhiteDnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return when (intent?.action) {
             ActionStop -> {
-                startJob?.cancel()
-                stopVpn()
-                exitForeground()
-                stopSelf()
+				stopping = true
+				val activeStart = startJob
+				serviceScope.launch {
+					activeStart?.cancelAndJoin()
+					stopVpn()
+					exitForeground()
+					stopSelf()
+				}
                 START_NOT_STICKY
             }
             else -> {
@@ -130,14 +138,39 @@ class WhiteDnsVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+		stopping = true
         startJob?.cancel()
         networkRestartJob?.cancel()
         runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
-        stopVpn()
+		// Normal disconnects finish teardown in the IO scope before stopSelf.
+		// This bounded fallback prevents Android's main thread from waiting up
+		// to the full native grace period if the system destroys us directly.
+		runCatching { vpnInterface?.close() }
+		vpnInterface = null
+		Thread {
+			runCatching { tun2SocksProcessManager.stop(250, signalNative = true) }
+			runCatching { CottenDnsProcessManager.stop() }
+		}.apply {
+			name = "whitedns-vpn-destroy-cleanup"
+			isDaemon = true
+			start()
+		}
         exitForeground()
         serviceScope.cancel()
         super.onDestroy()
     }
+
+	override fun onRevoke() {
+		stopping = true
+		val activeStart = startJob
+		serviceScope.launch {
+			activeStart?.cancelAndJoin()
+			stopVpn()
+			exitForeground()
+			stopSelf()
+		}
+		super.onRevoke()
+	}
 
     private fun enterForeground(statusText: String) {
         createNotificationChannel()
@@ -313,21 +346,8 @@ class WhiteDnsVpnService : VpnService() {
         startVpnRouting(sessionId, settings, resolvedSettings)
     }
 
-    private fun scheduleNetworkHandover(
-        network: Network,
-        capabilities: NetworkCapabilities?,
-        reason: String,
-    ) {
-        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) {
-            return
-        }
-        val transports = buildString {
-            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) append("wifi,")
-            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true) append("cellular,")
-            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) append("ethernet,")
-            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) append("vpn,")
-        }
-        val signature = "$network|$reason|$transports"
+    private fun scheduleNetworkHandover(network: Network?, reason: String) {
+		val signature = network?.toString().orEmpty()
         if (signature == defaultNetworkSignature) {
             return
         }
@@ -338,12 +358,22 @@ class WhiteDnsVpnService : VpnService() {
 
         networkRestartJob?.cancel()
         networkRestartJob = serviceScope.launch {
-            delay(NetworkHandoverDebounceMillis)
+			delay(NetworkRecoveryGraceMillis)
             if (!runtimeReady || stopping || !isActive) {
                 return@launch
             }
-            logWarning("Default network $reason; restarting the DNS tunnel on the new route")
-            CottenDnsProcessManager.stop()
+			if (defaultNetworkSignature != signature) return@launch
+			val settings = activeResolvedSettings ?: return@launch
+			val recovered = WhiteDnsTrafficWarmup.runProbe(settings) || run {
+				delay(NetworkRecoveryProbeSpacingMillis)
+				WhiteDnsTrafficWarmup.runProbe(settings)
+			}
+			if (recovered) {
+				logInfo("Native tunnel recovered after default network $reason without a restart")
+				return@launch
+			}
+			logWarning("Default network $reason did not recover after grace period; restarting native tunnel")
+			CottenDnsProcessManager.stop()
         }
     }
 
@@ -440,12 +470,8 @@ class WhiteDnsVpnService : VpnService() {
                 .setSession("WhiteDNS")
                 .setMtu(VpnMtu)
                 .addAddress(TunIpv4Address, TunIpv4PrefixLength)
-                // IPv6 sinkhole: this is an IPv4-only DNS tunnel, so IPv6 must be
-                // pulled into the tun (and dropped) instead of leaking out the
-                // physical interface. Dual-stack apps fall back to IPv4 via Happy
-                // Eyeballs, so IPv4 connectivity is unaffected.
-                // ponytail: failure-based sinkhole (tun2proxy resets v6 connects);
-                // strip AAAA at the resolver if the fallback latency ever matters.
+				// CottenDNS now carries IPv6 TCP targets and generic IPv6 UDP
+				// datagrams, so dual-stack traffic can remain native end-to-end.
                 .addAddress(TunIpv6Address, TunIpv6PrefixLength)
                 .addDnsServer(TunDnsServer)
                 .addRoute(TunDnsServer, 32)
@@ -461,7 +487,6 @@ class WhiteDnsVpnService : VpnService() {
                 ?: throw IllegalStateException("Failed to establish WhiteDNS VPN interface")
 
             vpnInterface = tun
-            clearCloseOnExec(tun)
             val tunFd = tun.fd
             logInfo("Routing device traffic to SOCKS $socksHost:$socksPort")
             tun2SocksProcessManager.start(
@@ -483,6 +508,10 @@ class WhiteDnsVpnService : VpnService() {
                     }
                 },
             )
+			if (!tun2SocksProcessManager.awaitRunning(Tun2proxyStartupTimeoutMillis)) {
+				throw IllegalStateException("tun2proxy exited before the VPN route became ready")
+			}
+			activeResolvedSettings = resolvedSettings
             updateForegroundNotification("Full-device VPN is active")
             runtimeReady = true
             WhiteDnsRuntimeStateStore.markReady(
@@ -503,25 +532,29 @@ class WhiteDnsVpnService : VpnService() {
         networkRestartJob?.cancel()
         networkRestartJob = null
         runtimeReady = false
+		activeResolvedSettings = null
         lastTrafficNotificationUpdateMillis = 0L
         stopTrafficKeepalive()
+		// Signal native shutdown, then close the TUN immediately so any blocked
+		// read wakes before we wait for the runner thread.
+		runCatching { tun2SocksProcessManager.requestStop() }
+		val interfaceToClose = vpnInterface
+		vpnInterface = null
+		runCatching {
+			interfaceToClose?.close()
+		}.onFailure { error ->
+			Log.w(Tag, "Failed to close VPN interface", error)
+		}
         runCatching {
-            val stopped = tun2SocksProcessManager.stop(
-                gracePeriodMillis = Tun2proxyStopGracePeriodMillis,
-                signalNative = true,
+			val stopped = tun2SocksProcessManager.stop(
+				gracePeriodMillis = Tun2proxyStopGracePeriodMillis,
+				signalNative = true,
             )
             if (!stopped) {
                 Log.w(Tag, "tun2proxy did not stop before VPN interface close")
             }
         }.onFailure { error ->
             Log.w(Tag, "Failed to stop tun2proxy", error)
-        }
-        val interfaceToClose = vpnInterface
-        vpnInterface = null
-        runCatching {
-            interfaceToClose?.close()
-        }.onFailure { error ->
-            Log.w(Tag, "Failed to close VPN interface", error)
         }
         runCatching {
             CottenDnsProcessManager.stop()
@@ -592,25 +625,20 @@ class WhiteDnsVpnService : VpnService() {
         when (splitTunnelMode) {
             WhiteDnsOptions.SplitTunnelModeInclude -> {
                 if (selectedPackages.isEmpty()) {
-                    excludeWhiteDnsApp()
-                    logWarning("No split tunnel apps selected; using full-device VPN routing")
-                    return
+					throw IllegalStateException("Split tunnel include mode requires at least one selected app")
                 }
 
-                val allowedCount = selectedPackages.count { appPackage ->
-                    tryAddAllowedApplication(appPackage)
+				selectedPackages.forEach { appPackage ->
+					requireAllowedApplication(appPackage)
                 }
-                if (allowedCount == 0) {
-                    throw IllegalStateException("No selected split tunnel apps could be routed through the VPN")
-                }
-                logInfo("Split tunnel routes $allowedCount selected app(s) through the VPN")
+				logInfo("Split tunnel routes ${selectedPackages.size} selected app(s) through the VPN")
             }
             WhiteDnsOptions.SplitTunnelModeExclude -> {
                 excludeWhiteDnsApp()
-                val excludedCount = selectedPackages.count { appPackage ->
-                    tryAddDisallowedApplication(appPackage, "Unable to bypass $appPackage")
+				selectedPackages.forEach { appPackage ->
+					requireDisallowedApplication(appPackage, "Unable to bypass $appPackage")
                 }
-                logInfo("Split tunnel bypasses $excludedCount selected app(s)")
+				logInfo("Split tunnel bypasses ${selectedPackages.size} selected app(s)")
             }
             else -> {
                 excludeWhiteDnsApp()
@@ -623,14 +651,13 @@ class WhiteDnsVpnService : VpnService() {
         logInfo("WhiteDNS app traffic bypasses VPN routing")
     }
 
-    private fun Builder.tryAddAllowedApplication(appPackage: String): Boolean {
-        return runCatching {
-            addAllowedApplication(appPackage)
-            true
-        }.getOrElse { error ->
-            logWarning("Unable to route $appPackage through VPN: ${error.message ?: error::class.java.simpleName}")
-            false
-        }
+	private fun Builder.requireAllowedApplication(appPackage: String) {
+		runCatching { addAllowedApplication(appPackage) }.onFailure { error ->
+			throw IllegalStateException(
+				"Unable to route $appPackage through VPN: ${error.message ?: error::class.java.simpleName}",
+				error,
+			)
+		}
     }
 
     private fun Builder.requireDisallowedApplication(appPackage: String, message: String) {
@@ -642,26 +669,6 @@ class WhiteDnsVpnService : VpnService() {
                 error,
             )
         }
-    }
-
-    private fun Builder.tryAddDisallowedApplication(appPackage: String, message: String): Boolean {
-        return runCatching {
-            addDisallowedApplication(appPackage)
-            true
-        }.getOrElse { error ->
-            logWarning("$message: ${error.message ?: error::class.java.simpleName}")
-            false
-        }
-    }
-
-    @SuppressLint("NewApi")
-    private fun clearCloseOnExec(tun: ParcelFileDescriptor) {
-        val flags = Os.fcntlInt(tun.fileDescriptor, OsConstants.F_GETFD, 0)
-        Os.fcntlInt(
-            tun.fileDescriptor,
-            OsConstants.F_SETFD,
-            flags and OsConstants.FD_CLOEXEC.inv(),
-        )
     }
 
     private fun logInfo(message: String) {
@@ -767,7 +774,9 @@ class WhiteDnsVpnService : VpnService() {
         private const val PreviousRuntimeStopPollMillis = 100L
         private const val TrafficNotificationUpdateIntervalMillis = 1_000L
         private const val TrafficWarmupProbeSpacingMillis = 300L
-        private const val NetworkHandoverDebounceMillis = 1_500L
+		private const val Tun2proxyStartupTimeoutMillis = 1_500L
+		private const val NetworkRecoveryGraceMillis = 15_000L
+		private const val NetworkRecoveryProbeSpacingMillis = 2_000L
         private const val RestartInitialDelayMillis = 2_000L
         private const val RestartMaxDelayMillis = 30_000L
         private const val NotificationId = 3101

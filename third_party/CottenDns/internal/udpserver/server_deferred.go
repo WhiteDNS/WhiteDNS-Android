@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -8,6 +8,7 @@
 package udpserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	Enums "cottendns-go/internal/enums"
 	SocksProto "cottendns-go/internal/socksproto"
+	"cottendns-go/internal/udpframe"
 	VpnProto "cottendns-go/internal/vpnproto"
 )
 
@@ -275,6 +277,56 @@ func (s *Server) processDeferredSOCKS5Syn(ctx context.Context, vpnPacket VpnProt
 		return
 	}
 	s.maybeEnableStreamFEC(stream)
+
+	// A native UDP association uses the existing reliable stream machinery but
+	// has no fixed destination: each length-framed datagram carries its own
+	// SOCKS address. Older servers reject this reserved marker as an unsupported
+	// address type, so compatibility failure is explicit rather than corrupting
+	// traffic.
+	if bytes.Equal(assembledTarget, udpframe.AssociationMarker) {
+		stream.mu.RLock()
+		alreadyConnected := stream.Connected
+		stream.mu.RUnlock()
+		if alreadyConnected {
+			stream.ARQ.SendControlPacketWithTTL(
+				Enums.PACKET_SOCKS5_CONNECTED,
+				vpnPacket.SequenceNum, 0, 0, nil,
+				Enums.DefaultPacketPriority(Enums.PACKET_SOCKS5_CONNECTED),
+				true, nil, s.cfg.StreamResultPacketTTL(),
+			)
+			s.finalizeStreamArtifacts(vpnPacket.SessionID, vpnPacket.StreamID)
+			return
+		}
+
+		association, associationErr := s.newUDPAssociationContext(ctx)
+		if associationErr != nil {
+			packetType := s.mapSOCKSConnectError(associationErr)
+			stream.ARQ.SendControlPacketWithTTL(
+				packetType,
+				vpnPacket.SequenceNum, 0, 0, nil,
+				Enums.DefaultPacketPriority(packetType),
+				true, nil, s.cfg.StreamFailurePacketTTL(),
+			)
+			s.finalizeStreamArtifacts(vpnPacket.SessionID, vpnPacket.StreamID)
+			return
+		}
+		if record.isClosed() || !stream.attachUpstreamConn(association, "udp-association", 0, "CONNECTED") {
+			_ = association.Close()
+			s.finalizeStreamArtifacts(vpnPacket.SessionID, vpnPacket.StreamID)
+			return
+		}
+		stream.ARQ.SetLocalConn(association)
+		stream.ARQ.SetIOReady(true)
+		stream.ARQ.SendControlPacketWithTTL(
+			Enums.PACKET_SOCKS5_CONNECTED,
+			vpnPacket.SequenceNum, 0, 0, nil,
+			Enums.DefaultPacketPriority(Enums.PACKET_SOCKS5_CONNECTED),
+			true, nil, s.cfg.StreamResultPacketTTL(),
+		)
+		s.finalizeStreamArtifacts(vpnPacket.SessionID, vpnPacket.StreamID)
+		return
+	}
+
 	target, err := SocksProto.ParseTargetPayload(assembledTarget)
 	if err != nil {
 		if !s.shouldExecuteDeferredPacket(vpnPacket) {

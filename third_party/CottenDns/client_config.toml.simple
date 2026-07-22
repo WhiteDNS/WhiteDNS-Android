@@ -459,7 +459,7 @@ DNS_RESPONSE_FRAGMENT_STORE_CAPACITY = 1024
 
 # Local UDP ASSOCIATE read timeout.
 # Clamped to [1s, 3600s].
-SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS = 30.0
+SOCKS_UDP_ASSOCIATE_READ_TIMEOUT_SECONDS = 120.0
 
 # How long terminal streams are retained before cleanup.
 # Clamped to [1s, 3600s].

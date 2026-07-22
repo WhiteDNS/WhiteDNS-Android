@@ -57,9 +57,9 @@ SOFTWARE.
 ## tun2proxy
 
 Source: https://github.com/tun2proxy/tun2proxy
-Release: v0.7.21
+Release: v0.8.1
 Asset: tun2proxy-android-libs.zip
-SHA-256: 25fe0fb6c853cbb8b1c0c58db8eb9b3f9901336d3511edec5650651c1144c11e
+SHA-256: 2947c9c73d44683e3c2f21707a6cc40178ec9fc62e20dcd0d028fba8a5f2dba4
 License: MIT
 
 MIT License
