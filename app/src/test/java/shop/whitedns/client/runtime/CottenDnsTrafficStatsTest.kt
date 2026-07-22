@@ -51,6 +51,24 @@ class CottenDnsTrafficStatsTest {
     }
 
     @Test
+    fun parseCottenDnsTrafficStatsLineReadsRecoveryTelemetry() {
+        val stats = parseCottenDnsTrafficStatsLine(
+            "↑ 1 KB/s (Total: 2 KB) | ↓ 3 KB/s (Total: 4 KB) | loss 2.0% | resolvers 5 | " +
+                "transport DoH | queues 1/2/3 | drops rx=4 tx=5 | recoveries 6 | stream-fail dial=7 write=8",
+        )
+        requireNotNull(stats)
+        assertEquals("DoH", stats.transport)
+        assertEquals(1, stats.txQueueDepth)
+        assertEquals(2, stats.encodedQueueDepth)
+        assertEquals(3, stats.rxQueueDepth)
+        assertEquals(4L, stats.rxDrops)
+        assertEquals(5L, stats.txDrops)
+        assertEquals(6L, stats.recoveries)
+        assertEquals(7L, stats.streamDialFailures)
+        assertEquals(8L, stats.streamWriteFailures)
+    }
+
+    @Test
     fun trafficAccountingKeepsSessionTotalsAcrossRawCounterResets() {
         val accounting = CottenDnsTrafficAccounting()
 

@@ -19,6 +19,7 @@ import (
 	"cottendns-go/internal/arq"
 	"cottendns-go/internal/client/handlers"
 	DnsParser "cottendns-go/internal/dnsparser"
+	Enums "cottendns-go/internal/enums"
 	fragmentStore "cottendns-go/internal/fragmentstore"
 )
 
@@ -256,9 +257,12 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 		c.resetRuntimeBindings(false)
 	}()
 
-	// 3. Open dedicated UDP sockets for each RX/TX worker.
+	// 3. Open dedicated UDP sockets only for UDP mode. Stream transports own
+	// their sockets and queues; allocating unused UDP descriptors wastes scarce
+	// resources on Android and large resolver fleets.
+	useStream := c.usesStreamTransport()
 	conns := make([]*net.UDPConn, 0, c.tunnelRX_TX_Workers)
-	for i := 0; i < c.tunnelRX_TX_Workers; i++ {
+	for i := 0; !useStream && i < c.tunnelRX_TX_Workers; i++ {
 		conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 		if err != nil {
 			for _, opened := range conns {
@@ -295,7 +299,7 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 	// 6. Spawn ingestion. In UDP mode each socket has a reader worker. In TCP
 	// mode the persistent per-resolver TCP connections feed rxChannel from their
 	// own read loops, so no UDP readers are started.
-	if c.usesStreamTransport() {
+	if useStream {
 		active := c.activeTransport()
 		switch active {
 		case transportDoH:
@@ -329,7 +333,11 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 	// 7. Spawn Writer Workers (UDP send stage)
 	for i := 0; i < c.tunnelRX_TX_Workers; i++ {
 		c.asyncWG.Add(1)
-		go c.asyncWriterWorker(runtimeCtx, i, conns[i])
+		var conn *net.UDPConn
+		if !useStream {
+			conn = conns[i]
+		}
+		go c.asyncWriterWorker(runtimeCtx, i, conn)
 	}
 
 	// 8. Spawn Dispatcher (Fair Queuing & Packing)
@@ -537,10 +545,8 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 			var (
 				firstDomain    string
 				firstDNSPacket []byte
+				firstQueryType uint16
 			)
-			// Pick one query type for this datagram so all of its duplicate
-			// sends (across resolvers/domains) carry the same qType (A1).
-			datagramQueryType := c.nextQueryType()
 			if packetByDomain != nil {
 				clear(packetByDomain)
 			}
@@ -550,6 +556,7 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 			frames = frames[:0]
 
 			for _, resolverConn := range task.conns {
+				datagramQueryType := c.nextQueryTypeForPath(resolverConn.Key)
 				domain := resolverConn.Domain
 				if domain == "" {
 					domain = defaultDomain
@@ -580,21 +587,23 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 						continue
 					}
 					firstDomain = domain
+					firstQueryType = datagramQueryType
 					firstDNSPacket = dnsPacket
-				case domain == firstDomain:
+				case domain == firstDomain && firstQueryType == datagramQueryType:
 					dnsPacket = firstDNSPacket
 				default:
 					if packetByDomain == nil {
 						packetByDomain = make(map[string][]byte, len(task.conns)-1)
 					}
 					var cached bool
-					dnsPacket, cached = packetByDomain[domain]
+					cacheKey := domain + "#" + itoaInt(int(datagramQueryType))
+					dnsPacket, cached = packetByDomain[cacheKey]
 					if !cached {
 						dnsPacket, err = c.buildTunnelTXTQuestionBytesPrepared(prepared, encoded, datagramQueryType)
 						if err != nil {
 							continue
 						}
-						packetByDomain[domain] = dnsPacket
+						packetByDomain[cacheKey] = dnsPacket
 					}
 				}
 
@@ -602,6 +611,7 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 					addr:      addr,
 					serverKey: resolverConn.Key,
 					packet:    dnsPacket,
+					priority:  Enums.DefaultPacketPriority(task.packetType),
 				})
 			}
 
@@ -641,6 +651,7 @@ func (c *Client) asyncWriterWorker(ctx context.Context, id int, conn *net.UDPCon
 		localAddr = conn.LocalAddr().String()
 	}
 	refreshWindow := c.tunnelPacketTimeout / 2
+	useStream := c.usesStreamTransport()
 	if refreshWindow < 250*time.Millisecond {
 		refreshWindow = 250 * time.Millisecond
 	}
@@ -653,13 +664,12 @@ func (c *Client) asyncWriterWorker(ctx context.Context, id int, conn *net.UDPCon
 				return
 			}
 			now := time.Now()
-			if c.tunnelPacketTimeout > 0 {
+			if !useStream && conn != nil && c.tunnelPacketTimeout > 0 {
 				if lastDeadline.IsZero() || now.Add(refreshWindow).After(lastDeadline) {
 					lastDeadline = now.Add(c.tunnelPacketTimeout)
 					_ = conn.SetWriteDeadline(lastDeadline)
 				}
 			}
-			useStream := c.usesStreamTransport()
 			for _, frame := range task.frames {
 				if frame.addr == nil || len(frame.packet) == 0 {
 					continue
@@ -668,7 +678,7 @@ func (c *Client) asyncWriterWorker(ctx context.Context, id int, conn *net.UDPCon
 					// TCP/DoT/DoH: route through the persistent per-resolver
 					// transport; Send handles its own send-tracking.
 					if c.streamData != nil {
-						c.streamData.Send(frame.serverKey, frame.addr, frame.packet, now)
+						c.streamData.Send(frame.serverKey, frame.addr, frame.packet, frame.priority, now)
 					}
 					continue
 				}

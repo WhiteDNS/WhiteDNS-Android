@@ -107,7 +107,10 @@ func applyClientSpeedPreset(cfg *ClientConfig, isDefined configKeyDefinedFunc) {
 	setClientInt(isDefined, "RESOLVER_BALANCING_STRATEGY", &cfg.ResolverBalancingStrategy, 5)
 	setClientString(isDefined, "RESOLVER_TRANSPORT", &cfg.ResolverTransport, "auto")
 	setClientInt(isDefined, "UPLOAD_PACKET_DUPLICATION_COUNT", &cfg.UploadPacketDuplicationCount, 1)
-	setClientInt(isDefined, "DOWNLOAD_PACKET_DUPLICATION_COUNT", &cfg.DownloadPacketDuplicationCount, 3)
+	// Keep healthy data/ACK traffic at one copy. Adaptive duplication raises it
+	// from this floor when measured loss demands redundancy and naturally falls
+	// back to one as the loss windows decay.
+	setClientInt(isDefined, "DOWNLOAD_PACKET_DUPLICATION_COUNT", &cfg.DownloadPacketDuplicationCount, 1)
 	setClientInt(isDefined, "UPLOAD_SETUP_PACKET_DUPLICATION_COUNT", &cfg.UploadSetupPacketDuplicationCount, 2)
 	setClientInt(isDefined, "DOWNLOAD_SETUP_PACKET_DUPLICATION_COUNT", &cfg.DownloadSetupPacketDuplicationCount, 4)
 	setClientBool(isDefined, "DUPLICATION_PREFER_DISTINCT_DOMAINS", &cfg.DuplicationPreferDistinctDomains, true)
@@ -127,6 +130,7 @@ func applyClientSpeedPreset(cfg *ClientConfig, isDefined configKeyDefinedFunc) {
 	// yield exactly one session. This matches the parallelism this preset
 	// already leans on elsewhere, and costs a few extra queries once, at connect.
 	setClientInt(isDefined, "SESSION_INIT_RACING_COUNT", &cfg.SessionInitRacingCount, 5)
+	setClientFloat(isDefined, "PING_WATCHDOG_TIMEOUT_SECONDS", &cfg.PingWatchdogTimeoutSeconds, 20.0)
 	setClientInt(isDefined, "MAX_PACKETS_PER_BATCH", &cfg.MaxPacketsPerBatch, 12)
 	setClientInt(isDefined, "ARQ_WINDOW_SIZE", &cfg.ARQWindowSize, 1500)
 	setClientFloat(isDefined, "ARQ_INITIAL_RTO_SECONDS", &cfg.ARQInitialRTOSeconds, 0.45)
@@ -150,6 +154,7 @@ func applyClientSurvivalPreset(cfg *ClientConfig, isDefined configKeyDefinedFunc
 	setClientInt(isDefined, "DOWNLOAD_SETUP_PACKET_DUPLICATION_COUNT", &cfg.DownloadSetupPacketDuplicationCount, 8)
 	setClientBool(isDefined, "DUPLICATION_PREFER_DISTINCT_DOMAINS", &cfg.DuplicationPreferDistinctDomains, true)
 	setClientBool(isDefined, "ADAPTIVE_DUPLICATION", &cfg.AdaptiveDuplication, true)
+	setClientFloat(isDefined, "PING_WATCHDOG_TIMEOUT_SECONDS", &cfg.PingWatchdogTimeoutSeconds, 15.0)
 	setClientFloat(isDefined, "ADAPTIVE_DUPLICATION_TARGET_DELIVERY", &cfg.AdaptiveDuplicationTargetDelivery, 0.97)
 	setClientInt(isDefined, "MIN_UPLOAD_MTU", &cfg.MinUploadMTU, 80)
 	setClientInt(isDefined, "MAX_UPLOAD_MTU", &cfg.MaxUploadMTU, 180)

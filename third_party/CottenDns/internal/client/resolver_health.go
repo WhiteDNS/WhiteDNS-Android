@@ -370,8 +370,7 @@ func (c *Client) pruneResolverHealthLocked(state *resolverHealthState, now time.
 }
 
 func (c *Client) runResolverAutoDisable(now time.Time) {
-	if c == nil || !c.cfg.AutoDisableTimeoutServers ||
-		(c.balancer.ValidCount() <= 3 && !c.hasStrategy5Reserve("")) {
+	if c == nil || !c.cfg.AutoDisableTimeoutServers {
 		return
 	}
 
@@ -408,6 +407,16 @@ func (c *Client) runResolverAutoDisable(now time.Time) {
 		candidates = append(candidates, candidate)
 	}
 	c.resolverHealthMu.Unlock()
+
+	// The three-resolver safety floor deliberately avoids disabling the entire
+	// fleet, but when every remaining path has a mature timeout-only window it
+	// also means there is nowhere useful to send. Recover the transport now
+	// instead of waiting for the longer session watchdog.
+	validCount := c.balancer.ValidCount()
+	if validCount > 0 && len(candidates) >= validCount {
+		c.requestTransportRecovery("all active resolvers reached the timeout window")
+		return
+	}
 
 	if debugEnabled {
 		for _, candidate := range candidates {

@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -210,7 +210,7 @@ func (p *PingManager) pingLoop() {
 					"⏱ <yellow>Ping watchdog triggered: no server response for <cyan>%s</cyan>, restarting session</yellow>",
 					noResponseFor.Round(time.Second),
 				)
-				p.client.requestSessionRestart("ping watchdog: no server response")
+				p.client.requestTransportRecovery("ping watchdog: no server response")
 			}
 		}
 

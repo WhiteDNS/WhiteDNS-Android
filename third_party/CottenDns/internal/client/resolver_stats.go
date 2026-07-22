@@ -172,7 +172,7 @@ func (c *Client) trackResolverSuccess(packet []byte, addr *net.UDPAddr, localAdd
 	// frame, so empty/NODATA replies and duplicated DNS answers cannot inflate a
 	// carrier's delivery rate.
 	if qType, qTypeOK := DnsParser.FirstQuestionQType(packet); qTypeOK {
-		c.carrier.recordSuccess(qType)
+		c.carrier.recordSuccessForPath(sample.serverKey, qType)
 	}
 
 	if sample.timedOut && !sample.timedOutAt.IsZero() {

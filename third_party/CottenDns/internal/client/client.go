@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -145,11 +146,21 @@ type Client struct {
 	// nil when it stated none. Published atomically because it is written on
 	// the init collector goroutine while the send path, stream setup and ping
 	// manager are already reading the values it governs.
-	serverPolicy atomic.Pointer[VpnProto.SessionAcceptClientPolicy]
+	serverPolicy        atomic.Pointer[VpnProto.SessionAcceptClientPolicy]
 	runtimeResetPending atomic.Bool
 	sessionResetSignal  chan struct{}
-	rxDroppedPackets    atomic.Uint64
-	lastRXDropLogUnix   atomic.Int64
+	// Runtime path recovery is rate-limited so a flapping network cannot trigger
+	// continuous fleet scans while still allowing fast transport/MTU failover.
+	transportRecoveryPending atomic.Bool
+	lastTransportRecovery    atomic.Int64
+	transportRecoveryCount   atomic.Uint64
+	rxDroppedPackets         atomic.Uint64
+	txAdmissionDrops         atomic.Uint64
+	streamDialFailures       atomic.Uint64
+	streamWriteFailures      atomic.Uint64
+	lastFECReceived          atomic.Int64
+	runtimeReadBufferSize    int
+	lastRXDropLogUnix        atomic.Int64
 	// injectedNXDOMAINCount counts forged NXDOMAIN responses ignored as on-path
 	// DNS poisoning (see RESOLVER_IGNORE_INJECTED_NXDOMAIN). Purely observational.
 	injectedNXDOMAINCount atomic.Uint64
@@ -181,6 +192,8 @@ type Client struct {
 	// used by the data plane whenever the transport is not UDP.
 	transport  atomic.Int32
 	streamData streamDataTransport
+	dohHTTPMu  sync.Mutex
+	dohHTTP    *http.Client
 
 	// pacer applies per-resolver adaptive rate limiting (see resolver_pacer.go).
 	pacer *resolverPacer
@@ -250,6 +263,7 @@ type encodedOutboundDatagram struct {
 	addr      *net.UDPAddr
 	serverKey string
 	packet    []byte
+	priority  int
 }
 
 type encodedOutboundTask struct {
@@ -418,6 +432,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 	if cfg.FastConnect {
 		balancerStrategy = BalancingHighestMTU
 	}
+	runtimeBufferSize := runtimeDNSReadBufferSize(cfg.MaxDownloadMTU)
 
 	c := &Client{
 		cfg:                      cfg,
@@ -436,10 +451,11 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		dnsCaseRandomize:         cfg.DNSQNameCaseRandomization,
 		dupPreferDistinctDomains: cfg.DuplicationPreferDistinctDomains,
 		responseMode:             responseMode,
+		runtimeReadBufferSize:    runtimeBufferSize,
 		connectionsByKey:         make(map[string]int, len(cfg.Domains)*len(cfg.Resolvers)),
 		udpBufferPool: sync.Pool{
 			New: func() any {
-				return make([]byte, RuntimeUDPReadBufferSize)
+				return make([]byte, runtimeBufferSize)
 			},
 		},
 		resolverConns:                         make(map[string]chan pooledUDPConn),
@@ -520,6 +536,7 @@ func (c *Client) Run(ctx context.Context) error {
 	sessionInitRetryFailures := 0
 
 	defer c.closeResolverCacheLog()
+	defer c.closeSharedDoHHTTPClient()
 
 	// Ensure local DNS cache is loaded from file if persistence is enabled
 	c.ensureLocalDNSCacheLoaded()
@@ -599,6 +616,14 @@ func (c *Client) Run(ctx context.Context) error {
 				c.logConnectionProgress("session", 90, "attempt", sessionInitRetryFailures+1)
 				if err := c.InitializeSession(retries); err != nil {
 					sessionInitRetryFailures++
+					lastRecovery := c.lastTransportRecovery.Load()
+					if sessionInitRetryFailures >= runtimeSessionInitFailureLimit &&
+						(lastRecovery == 0 || c.now().Sub(time.Unix(0, lastRecovery)) >= runtimeTransportRecoveryCooldown) {
+						c.transportRecoveryPending.Store(true)
+						c.lastTransportRecovery.Store(c.now().UnixNano())
+						c.transportRecoveryCount.Add(1)
+						c.activatePendingTransportRecovery()
+					}
 					sessionInitRetryDelay = c.nextSessionInitRetryDelay(sessionInitRetryFailures)
 					c.log.Errorf("<red>❌ Session initialization failed: %v</red>", err)
 					c.logConnectionProgress("retry", 90, "attempt", sessionInitRetryFailures)
@@ -639,6 +664,7 @@ func (c *Client) Run(ctx context.Context) error {
 			case <-c.sessionResetSignal:
 				c.StopAsyncRuntime()
 				c.resetSessionState(true)
+				c.activatePendingTransportRecovery()
 				c.clearRuntimeResetRequest()
 				sessionInitRetryFailures++
 				sessionInitRetryDelay = c.nextSessionInitRetryDelay(sessionInitRetryFailures)
@@ -700,6 +726,7 @@ func (c *Client) HandleStreamPacket(packet VpnProto.Packet) error {
 		if arqObj.IsClosed() || !s.TerminalSince().IsZero() {
 			return nil
 		}
+		c.lastFECReceived.Store(c.now().UnixNano())
 		s.ingestFECShard(arqObj, packet.Payload)
 
 	case Enums.PACKET_STREAM_DATA_NACK:

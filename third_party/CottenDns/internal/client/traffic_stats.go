@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -83,13 +83,18 @@ func (c *Client) runTrafficStatsReporter(ctx context.Context) {
 				lossPM := c.tunnelLossPerMille()
 				activeResolvers := c.balancer.ValidCount()
 				c.log.Infof(
-					"\U0001F4CA <cyan>↑</cyan> <yellow>%s</yellow> <gray>(Total: %s)</gray> <magenta>|</magenta> <cyan>↓</cyan> <yellow>%s</yellow> <gray>(Total: %s)</gray> <magenta>|</magenta> <cyan>loss</cyan> <yellow>%.1f%%</yellow> <magenta>|</magenta> <cyan>resolvers</cyan> <yellow>%d</yellow>",
+					"\U0001F4CA <cyan>↑</cyan> <yellow>%s</yellow> <gray>(Total: %s)</gray> <magenta>|</magenta> <cyan>↓</cyan> <yellow>%s</yellow> <gray>(Total: %s)</gray> <magenta>|</magenta> <cyan>loss</cyan> <yellow>%.1f%%</yellow> <magenta>|</magenta> <cyan>resolvers</cyan> <yellow>%d</yellow> <magenta>|</magenta> <cyan>transport</cyan> <yellow>%s</yellow> <magenta>|</magenta> <cyan>queues</cyan> <yellow>%d/%d/%d</yellow> <magenta>|</magenta> <cyan>drops</cyan> <yellow>rx=%d tx=%d</yellow> <magenta>|</magenta> <cyan>recoveries</cyan> <yellow>%d</yellow> <magenta>|</magenta> <cyan>stream-fail</cyan> <yellow>dial=%d write=%d</yellow>",
 					formatSpeed(upSpeed),
 					formatBytes(currentTX),
 					formatSpeed(downSpeed),
 					formatBytes(currentRX),
 					float64(lossPM)/10.0,
 					activeResolvers,
+					c.activeTransport(),
+					len(c.txChannel), len(c.encodedTXChannel), len(c.rxChannel),
+					c.rxDroppedPackets.Load(), c.txAdmissionDrops.Load(),
+					c.transportRecoveryCount.Load(),
+					c.streamDialFailures.Load(), c.streamWriteFailures.Load(),
 				)
 			}
 		}

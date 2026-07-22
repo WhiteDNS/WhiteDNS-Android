@@ -68,3 +68,28 @@ func TestCarrierSelector_DropsBlockedCarrierAndReexplores(t *testing.T) {
 		t.Fatal("dropped carrier should be re-explored after decay")
 	}
 }
+
+func TestCarrierSelector_IsolatesBlockedCarrierByPath(t *testing.T) {
+	now := time.Now()
+	s := newCarrierSelector([]uint16{Enums.DNS_RECORD_TYPE_TXT, Enums.DNS_RECORD_TYPE_CNAME}, func() time.Time { return now })
+	for i := 0; i < 200; i++ {
+		if qt := s.nextForPath("blocked"); qt == Enums.DNS_RECORD_TYPE_TXT {
+			s.recordSuccessForPath("blocked", qt)
+		}
+		qt := s.nextForPath("clean")
+		s.recordSuccessForPath("clean", qt)
+	}
+	now = now.Add(carrierEvalInterval + time.Second)
+	blockedCNAME, cleanCNAME := 0, 0
+	for i := 0; i < 100; i++ {
+		if s.nextForPath("blocked") == Enums.DNS_RECORD_TYPE_CNAME {
+			blockedCNAME++
+		}
+		if s.nextForPath("clean") == Enums.DNS_RECORD_TYPE_CNAME {
+			cleanCNAME++
+		}
+	}
+	if blockedCNAME >= cleanCNAME/2 {
+		t.Fatalf("blocked carrier leaked across path scores: blocked=%d clean=%d", blockedCNAME, cleanCNAME)
+	}
+}

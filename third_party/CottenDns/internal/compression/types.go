@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -140,6 +141,12 @@ func CompressPayload(data []byte, compType uint8, minSize int) ([]byte, uint8) {
 	if len(data) <= minSize {
 		return data, TypeOff
 	}
+	// TLS, QUIC and media payloads are commonly already compressed. A cheap
+	// entropy sample avoids running a full codec when there is virtually no
+	// compressible structure, reducing latency and battery use on native clients.
+	if payloadEntropyBits(data) >= 7.6 {
+		return data, TypeOff
+	}
 
 	var compData []byte
 	var err error
@@ -161,6 +168,28 @@ func CompressPayload(data []byte, compType uint8, minSize int) ([]byte, uint8) {
 	}
 
 	return compData, compType
+}
+
+func payloadEntropyBits(data []byte) float64 {
+	if len(data) < 256 {
+		return 0
+	}
+	step := max(1, len(data)/1024)
+	var counts [256]int
+	samples := 0
+	for i := 0; i < len(data); i += step {
+		counts[data[i]]++
+		samples++
+	}
+	var entropy float64
+	for _, count := range counts {
+		if count == 0 {
+			continue
+		}
+		p := float64(count) / float64(samples)
+		entropy -= p * math.Log2(p)
+	}
+	return entropy
 }
 
 func TryDecompressPayload(data []byte, compType uint8) ([]byte, bool) {

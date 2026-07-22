@@ -10,6 +10,15 @@ data class CottenDnsTrafficStats(
     val uploadSpeedBytesPerSecond: Long,
     val lossPercent: Double = 0.0,
     val activeResolvers: Int = 0,
+	val transport: String = "",
+	val txQueueDepth: Int = 0,
+	val encodedQueueDepth: Int = 0,
+	val rxQueueDepth: Int = 0,
+	val rxDrops: Long = 0,
+	val txDrops: Long = 0,
+	val recoveries: Long = 0,
+	val streamDialFailures: Long = 0,
+	val streamWriteFailures: Long = 0,
 ) {
     fun hasTraffic(): Boolean {
         return downloadBytes > 0L ||
@@ -89,6 +98,15 @@ fun parseCottenDnsTrafficStatsLine(line: String): CottenDnsTrafficStats? {
         uploadSpeedBytesPerSecond = uploadSpeed,
         lossPercent = match.groupValues.getOrNull(9)?.toDoubleOrNull()?.coerceIn(0.0, 100.0) ?: 0.0,
         activeResolvers = match.groupValues.getOrNull(10)?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+		transport = TransportRegex.find(cleanLine)?.groupValues?.getOrNull(1).orEmpty(),
+		txQueueDepth = QueuesRegex.find(cleanLine)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0,
+		encodedQueueDepth = QueuesRegex.find(cleanLine)?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0,
+		rxQueueDepth = QueuesRegex.find(cleanLine)?.groupValues?.getOrNull(3)?.toIntOrNull() ?: 0,
+		rxDrops = DropsRegex.find(cleanLine)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0,
+		txDrops = DropsRegex.find(cleanLine)?.groupValues?.getOrNull(2)?.toLongOrNull() ?: 0,
+		recoveries = RecoveriesRegex.find(cleanLine)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0,
+		streamDialFailures = StreamFailuresRegex.find(cleanLine)?.groupValues?.getOrNull(1)?.toLongOrNull() ?: 0,
+		streamWriteFailures = StreamFailuresRegex.find(cleanLine)?.groupValues?.getOrNull(2)?.toLongOrNull() ?: 0,
     )
 }
 
@@ -112,6 +130,12 @@ fun formatTrafficNotificationText(stats: CottenDnsTrafficStats): String {
         if (stats.activeResolvers > 0) {
             append(" | DNS ${stats.activeResolvers}")
         }
+		if (stats.transport.isNotBlank()) {
+			append(" | ${stats.transport}")
+		}
+		if (stats.recoveries > 0) {
+			append(" | Recovery ${stats.recoveries}")
+		}
     }
 }
 
@@ -136,3 +160,9 @@ private val CottenDnsTrafficStatsRegex = Regex(
     """([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)/s\s*\(Total:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\)\s*\|\s*[^0-9]*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)/s\s*\(Total:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\)(?:.*?loss\s*([0-9]+(?:\.[0-9]+)?)%.*?resolvers\s*(\d+))?""",
     RegexOption.IGNORE_CASE,
 )
+
+private val TransportRegex = Regex("""transport\s+([^|\s]+)""", RegexOption.IGNORE_CASE)
+private val QueuesRegex = Regex("""queues\s+(\d+)/(\d+)/(\d+)""", RegexOption.IGNORE_CASE)
+private val DropsRegex = Regex("""drops\s+rx=(\d+)\s+tx=(\d+)""", RegexOption.IGNORE_CASE)
+private val RecoveriesRegex = Regex("""recoveries\s+(\d+)""", RegexOption.IGNORE_CASE)
+private val StreamFailuresRegex = Regex("""stream-fail\s+dial=(\d+)\s+write=(\d+)""", RegexOption.IGNORE_CASE)

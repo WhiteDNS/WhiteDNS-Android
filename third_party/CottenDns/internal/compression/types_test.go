@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -9,8 +9,20 @@ package compression
 
 import (
 	"bytes"
+	"math/rand"
 	"testing"
 )
+
+func TestCompressPayloadSkipsHighEntropyData(t *testing.T) {
+	data := make([]byte, 4096)
+	if _, err := rand.New(rand.NewSource(1)).Read(data); err != nil {
+		t.Fatal(err)
+	}
+	out, used := CompressPayload(data, TypeLZ4, 100)
+	if used != TypeOff || !bytes.Equal(out, data) {
+		t.Fatal("high-entropy payload should bypass compression")
+	}
+}
 
 func TestCompressPayloadKeepsSmallDataRaw(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), DefaultMinSize)

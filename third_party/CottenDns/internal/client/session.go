@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -11,6 +11,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -93,6 +94,8 @@ func (c *Client) initializeSessionOnce() error {
 	// Buffered to len(conns) so stragglers can always send their result and exit
 	// even after we have already returned on the first ACCEPT (no goroutine leak).
 	results := make(chan initResult, len(conns))
+	raceCtx, cancelRace := context.WithCancel(context.Background())
+	defer cancelRace()
 	for _, conn := range conns {
 		go func(conn Connection) {
 			query, buildErr := c.buildSessionQuery(conn.Domain, Enums.PACKET_SESSION_INIT, initPayload)
@@ -100,7 +103,7 @@ func (c *Client) initializeSessionOnce() error {
 				results <- initResult{}
 				return
 			}
-			packet, exErr := c.exchangeDNSOverConnection(conn, query, timeout)
+			packet, exErr := c.exchangeDNSOverConnectionContext(raceCtx, conn, query, timeout)
 			results <- initResult{packet: packet, ok: exErr == nil}
 		}(conn)
 	}
@@ -114,6 +117,7 @@ func (c *Client) initializeSessionOnce() error {
 		switch {
 		case res.packet.PacketType == Enums.PACKET_SESSION_ACCEPT:
 			if c.applySessionAccept(res.packet, initPayload, verifyCode) {
+				cancelRace()
 				return nil
 			}
 		case c.isSessionBusy(res.packet, verifyCode):

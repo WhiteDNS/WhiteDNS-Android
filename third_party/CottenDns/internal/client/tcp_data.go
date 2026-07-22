@@ -21,12 +21,19 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	Enums "cottendns-go/internal/enums"
 )
 
 const (
 	tcpDataDialTimeout  = 4 * time.Second
 	tcpDataWriteTimeout = 10 * time.Second
+	tcpDataWorkers      = 8
+	tcpDataStripes      = 2
+	tcpDataQueueCap     = 256
+	tcpControlQueueCap  = 64
 )
 
 // streamDataTransport is the data-plane contract shared by every persistent
@@ -37,20 +44,32 @@ const (
 type streamDataTransport interface {
 	Start(ctx context.Context)
 	Stop()
-	Send(serverKey string, addr *net.UDPAddr, packet []byte, now time.Time)
+	Send(serverKey string, addr *net.UDPAddr, packet []byte, priority int, now time.Time)
 }
 
 type tcpDataManager struct {
 	client *Client
 	ctx    context.Context
+	cancel context.CancelFunc
 	// dial opens one connection to a resolver. Swapping it is the only difference
 	// between plain TCP/53 and DoT, so both share every other line in this file.
 	dial      func(addr *net.UDPAddr) (net.Conn, error)
 	transport string // for logs: "TCP/53" or "DoT"
 
-	mu    sync.Mutex
-	conns map[string]*tcpDataConn // keyed by resolver address string
-	dead  bool
+	mu       sync.Mutex
+	conns    map[string]*tcpDataConn // keyed by resolver address string
+	dead     bool
+	controlQ chan tcpDataJob
+	dataQ    chan tcpDataJob
+	wg       sync.WaitGroup
+	next     atomic.Uint64
+}
+
+type tcpDataJob struct {
+	serverKey string
+	addr      *net.UDPAddr
+	packet    []byte
+	now       time.Time
 }
 
 type tcpDataConn struct {
@@ -67,6 +86,8 @@ func newTCPDataManager(c *Client) *tcpDataManager {
 	return &tcpDataManager{
 		client:    c,
 		conns:     make(map[string]*tcpDataConn),
+		controlQ:  make(chan tcpDataJob, tcpControlQueueCap),
+		dataQ:     make(chan tcpDataJob, tcpDataQueueCap),
 		transport: "TCP/53",
 		dial: func(addr *net.UDPAddr) (net.Conn, error) {
 			d := net.Dialer{Timeout: tcpDataDialTimeout}
@@ -82,6 +103,8 @@ func newDoTDataManager(c *Client) *tcpDataManager {
 	return &tcpDataManager{
 		client:    c,
 		conns:     make(map[string]*tcpDataConn),
+		controlQ:  make(chan tcpDataJob, tcpControlQueueCap),
+		dataQ:     make(chan tcpDataJob, tcpDataQueueCap),
 		transport: "DoT",
 		dial: func(addr *net.UDPAddr) (net.Conn, error) {
 			return c.dialDoTResolver(addr.String(), tcpDataDialTimeout)
@@ -90,10 +113,16 @@ func newDoTDataManager(c *Client) *tcpDataManager {
 }
 
 func (m *tcpDataManager) Start(ctx context.Context) {
+	workerCtx, cancel := context.WithCancel(ctx)
 	m.mu.Lock()
-	m.ctx = ctx
+	m.ctx = workerCtx
+	m.cancel = cancel
 	m.dead = false
 	m.mu.Unlock()
+	for i := 0; i < tcpDataWorkers; i++ {
+		m.wg.Add(1)
+		go m.worker(workerCtx)
+	}
 }
 
 // Stop closes every connection and prevents new ones.
@@ -103,45 +132,88 @@ func (m *tcpDataManager) Stop() {
 	}
 	m.mu.Lock()
 	m.dead = true
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
 	conns := m.conns
 	m.conns = make(map[string]*tcpDataConn)
 	m.mu.Unlock()
 	for _, dc := range conns {
 		dc.close()
 	}
+	m.wg.Wait()
 }
 
 // Send transmits one already-built DNS query to the resolver over its persistent
 // TCP connection, dialing lazily and re-dialing on failure. On success it mirrors
 // the UDP writer's bookkeeping (resolver send tracking + tx byte counter).
-func (m *tcpDataManager) Send(serverKey string, addr *net.UDPAddr, packet []byte, now time.Time) {
+func (m *tcpDataManager) Send(serverKey string, addr *net.UDPAddr, packet []byte, priority int, now time.Time) {
 	if m == nil || addr == nil || len(packet) == 0 {
 		return
 	}
-	dc, err := m.connFor(addr)
+	job := tcpDataJob{serverKey: serverKey, addr: addr, packet: append([]byte(nil), packet...), now: now}
+	queue := m.dataQ
+	if priority <= Enums.PacketPriorityHigh {
+		queue = m.controlQ
+	}
+	select {
+	case queue <- job:
+	default:
+		m.client.txAdmissionDrops.Add(1)
+	}
+}
+
+func (m *tcpDataManager) worker(ctx context.Context) {
+	defer m.wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-m.controlQ:
+			m.sendJob(job)
+			continue
+		default:
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-m.controlQ:
+			m.sendJob(job)
+		case job := <-m.dataQ:
+			m.sendJob(job)
+		}
+	}
+}
+
+func (m *tcpDataManager) sendJob(job tcpDataJob) {
+	slot := int(m.next.Add(1)-1) % tcpDataStripes
+	dc, err := m.connFor(job.addr, slot)
 	if err != nil || dc == nil {
+		m.client.streamDialFailures.Add(1)
 		return
 	}
 
 	dc.writeMu.Lock()
 	_ = dc.conn.SetWriteDeadline(time.Now().Add(tcpDataWriteTimeout))
-	werr := writeTCPDNSFramed(dc.conn, packet)
+	werr := writeTCPDNSFramed(dc.conn, job.packet)
 	dc.writeMu.Unlock()
 
 	if werr != nil {
+		m.client.streamWriteFailures.Add(1)
 		dc.close()
 		m.remove(dc)
 		return
 	}
 
-	m.client.trackResolverSend(packet, addr.String(), dc.localAddr, serverKey, now)
-	m.client.txTotalBytes.Add(uint64(len(packet)))
+	m.client.trackResolverSend(job.packet, job.addr.String(), dc.localAddr, job.serverKey, job.now)
+	m.client.txTotalBytes.Add(uint64(len(job.packet)))
 }
 
 // connFor returns the existing connection for a resolver or dials a new one and
 // starts its read loop.
-func (m *tcpDataManager) connFor(addr *net.UDPAddr) (*tcpDataConn, error) {
-	key := addr.String()
+func (m *tcpDataManager) connFor(addr *net.UDPAddr, slot int) (*tcpDataConn, error) {
+	key := addr.String() + "#" + itoaInt(slot)
 
 	m.mu.Lock()
 	if m.dead {
@@ -226,7 +298,7 @@ func (dc *tcpDataConn) readLoop(ctx context.Context) {
 			return
 		}
 		n := int(binary.BigEndian.Uint16(lenBuf[:]))
-		if n < 12 || n > RuntimeUDPReadBufferSize {
+		if n < 12 || n > dc.manager.client.runtimeDNSReadBufferSize() {
 			return
 		}
 

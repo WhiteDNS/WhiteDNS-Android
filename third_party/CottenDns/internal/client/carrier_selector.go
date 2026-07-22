@@ -46,7 +46,9 @@ type carrierSelector struct {
 	lastEvalNano atomic.Int64
 	evalMu       sync.Mutex
 
-	nowFn func() time.Time
+	nowFn  func() time.Time
+	pathMu sync.Mutex
+	paths  map[string]*carrierSelector
 }
 
 func newCarrierSelector(types []uint16, nowFn func() time.Time) *carrierSelector {
@@ -57,6 +59,7 @@ func newCarrierSelector(types []uint16, nowFn func() time.Time) *carrierSelector
 		sent:    make([]atomic.Uint64, len(norm)),
 		success: make([]atomic.Uint64, len(norm)),
 		nowFn:   nowFn,
+		paths:   make(map[string]*carrierSelector),
 	}
 	for i, t := range norm {
 		if _, dup := s.typeIdx[t]; !dup {
@@ -69,6 +72,39 @@ func newCarrierSelector(types []uint16, nowFn func() time.Time) *carrierSelector
 	}
 	s.active.Store(&all)
 	return s
+}
+
+func (s *carrierSelector) forPath(path string) *carrierSelector {
+	if s == nil || path == "" {
+		return s
+	}
+	s.pathMu.Lock()
+	defer s.pathMu.Unlock()
+	if child := s.paths[path]; child != nil {
+		return child
+	}
+	child := newCarrierSelector(s.types, s.nowFn)
+	// Child selectors never need grandchildren.
+	child.paths = nil
+	s.paths[path] = child
+	return child
+}
+
+func (s *carrierSelector) nextForPath(path string) uint16 {
+	if path == "" {
+		return s.next()
+	}
+	// Keep aggregate telemetry warm while the returned decision comes from the
+	// path-specific selector.
+	_ = s.next()
+	return s.forPath(path).next()
+}
+
+func (s *carrierSelector) recordSuccessForPath(path string, qType uint16) {
+	s.recordSuccess(qType)
+	if path != "" {
+		s.forPath(path).recordSuccess(qType)
+	}
 }
 
 func (s *carrierSelector) now() time.Time {

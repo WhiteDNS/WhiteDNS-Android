@@ -218,8 +218,8 @@ QUERY_TYPES = ["TXT"]
 	if cfg.UploadPacketDuplicationCount != 2 {
 		t.Fatalf("explicit upload duplication should win over preset, got %d", cfg.UploadPacketDuplicationCount)
 	}
-	if cfg.DownloadPacketDuplicationCount != 3 {
-		t.Fatalf("speed preset download duplication = %d, want 3", cfg.DownloadPacketDuplicationCount)
+	if cfg.DownloadPacketDuplicationCount != 1 {
+		t.Fatalf("speed preset download duplication = %d, want adaptive floor 1", cfg.DownloadPacketDuplicationCount)
 	}
 	if cfg.SessionInitRacingCount != 5 {
 		t.Fatalf("speed preset session init racing count = %d, want 5", cfg.SessionInitRacingCount)

@@ -58,6 +58,13 @@ func (c *Client) nextQueryType() uint16 {
 	return c.queryTypes[int(idx%uint32(len(c.queryTypes)))]
 }
 
+func (c *Client) nextQueryTypeForPath(path string) uint16 {
+	if c != nil && c.carrier != nil && path != "" {
+		return c.carrier.nextForPath(path)
+	}
+	return c.nextQueryType()
+}
+
 // queryShaping snapshots the client's per-query DNS-shaping settings for the
 // wire builder. All fields are client-only and server-transparent.
 func (c *Client) queryShaping() DnsParser.QueryShaping {

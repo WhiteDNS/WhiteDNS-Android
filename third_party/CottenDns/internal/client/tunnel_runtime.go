@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // CottenDNS
 // Author: tajirax
 // Github: https://github.com/TaJirax/CottenDns
@@ -12,6 +12,7 @@
 package client
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"net"
@@ -24,6 +25,7 @@ import (
 const (
 	// RuntimeUDPReadBufferSize defines the maximum size of the UDP read buffer.
 	RuntimeUDPReadBufferSize         = 65535
+	runtimeDNSReadBufferFloor        = 8192
 	runtimeUDPMaxMismatchedResponses = 64
 	runtimeUDPDrainGrace             = time.Millisecond
 
@@ -33,6 +35,24 @@ const (
 	// responses route to a dead port).
 	pooledConnMaxAge = 90 * time.Second
 )
+
+func runtimeDNSReadBufferSize(maxDownloadMTU int) int {
+	size := maxDownloadMTU + 2048 // DNS framing, TXT chunks and encryption slack.
+	if size < runtimeDNSReadBufferFloor {
+		size = runtimeDNSReadBufferFloor
+	}
+	if size > RuntimeUDPReadBufferSize {
+		size = RuntimeUDPReadBufferSize
+	}
+	return size
+}
+
+func (c *Client) runtimeDNSReadBufferSize() int {
+	if c == nil || c.runtimeReadBufferSize <= 0 {
+		return RuntimeUDPReadBufferSize
+	}
+	return c.runtimeReadBufferSize
+}
 
 type pooledUDPConn struct {
 	conn     *net.UDPConn
@@ -248,12 +268,13 @@ func (c *Client) getRuntimeUDPBuffer() []byte {
 		return make([]byte, RuntimeUDPReadBufferSize)
 	}
 
+	size := c.runtimeDNSReadBufferSize()
 	buf, _ := c.udpBufferPool.Get().([]byte)
-	if cap(buf) < RuntimeUDPReadBufferSize {
-		return make([]byte, RuntimeUDPReadBufferSize)
+	if cap(buf) < size {
+		return make([]byte, size)
 	}
 
-	return buf[:RuntimeUDPReadBufferSize]
+	return buf[:size]
 }
 
 // putRuntimeUDPBuffer returns a byte slice to the internal buffer pool.
@@ -261,11 +282,12 @@ func (c *Client) putRuntimeUDPBuffer(buf []byte) {
 	if c == nil || buf == nil {
 		return
 	}
-	if cap(buf) < RuntimeUDPReadBufferSize {
+	size := c.runtimeDNSReadBufferSize()
+	if cap(buf) < size {
 		return
 	}
 
-	c.udpBufferPool.Put(buf[:RuntimeUDPReadBufferSize])
+	c.udpBufferPool.Put(buf[:size])
 }
 
 // dialUDPResolver resolves the resolver address and establishes a new UDP connection.
@@ -340,4 +362,37 @@ func (c *Client) exchangeDNSOverConnection(conn Connection, query []byte, timeou
 	}
 
 	return packet, nil
+}
+
+// exchangeDNSOverConnectionContext is used by raced control exchanges. Each
+// racer owns its transport, so cancelling the race can close losing UDP/TCP/TLS
+// exchanges immediately instead of keeping sockets and HTTP streams alive until
+// their full timeout.
+func (c *Client) exchangeDNSOverConnectionContext(ctx context.Context, conn Connection, query []byte, timeout time.Duration) (VpnProto.Packet, error) {
+	transport, err := c.newQueryTransport(conn.ResolverLabel)
+	if err != nil {
+		return VpnProto.Packet{}, err
+	}
+	defer transport.Close()
+
+	type result struct {
+		response []byte
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		response, exchangeErr := transport.exchange(query, timeout)
+		done <- result{response: response, err: exchangeErr}
+	}()
+
+	select {
+	case <-ctx.Done():
+		_ = transport.Close()
+		return VpnProto.Packet{}, ctx.Err()
+	case res := <-done:
+		if res.err != nil {
+			return VpnProto.Packet{}, res.err
+		}
+		return dnsparser.ExtractVPNResponseMatching(res.response, c.responseMode == mtuProbeBase64Reply, c.cfg.Domains)
+	}
 }

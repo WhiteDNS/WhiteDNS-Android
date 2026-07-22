@@ -377,7 +377,7 @@ func defaultClientConfig() ClientConfig {
 		PingWarmThresholdSeconds:              5.0,
 		PingCoolThresholdSeconds:              15.0,
 		PingColdThresholdSeconds:              30.0,
-		PingWatchdogTimeoutSeconds:            300.0,
+		PingWatchdogTimeoutSeconds:            30.0,
 		TXChannelSize:                         2048,
 		RXChannelSize:                         2048,
 		ResolverUDPConnectionPoolSize:         256,
@@ -739,7 +739,7 @@ func finalizeClientConfig(cfg ClientConfig) (ClientConfig, error) {
 	cfg.PingWarmThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingWarmThresholdSeconds, 5.0), 0.1, 600.0)
 	cfg.PingCoolThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingCoolThresholdSeconds, 10.0), cfg.PingWarmThresholdSeconds, 1800.0)
 	cfg.PingColdThresholdSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingColdThresholdSeconds, 20.0), cfg.PingCoolThresholdSeconds, 3600.0)
-	cfg.PingWatchdogTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingWatchdogTimeoutSeconds, 300.0), 10.0, 3600.0)
+	cfg.PingWatchdogTimeoutSeconds = clampFloat(defaultFloatAtMostZero(cfg.PingWatchdogTimeoutSeconds, 30.0), 10.0, 3600.0)
 	cfg.TXChannelSize = clampInt(defaultIntBelow(cfg.TXChannelSize, 1, 2048), 64, 65536)
 	cfg.RXChannelSize = clampInt(defaultIntBelow(cfg.RXChannelSize, 1, 2048), 64, 65536)
 	cfg.ResolverUDPConnectionPoolSize = clampInt(defaultIntBelow(cfg.ResolverUDPConnectionPoolSize, 1, 64), 1, 1024)

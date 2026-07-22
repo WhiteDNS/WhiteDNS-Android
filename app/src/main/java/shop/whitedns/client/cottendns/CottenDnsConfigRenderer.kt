@@ -117,13 +117,11 @@ object CottenDnsConfigRenderer {
         // Compatibility explicitly disables them even when the app's global
         // settings currently name a CottenDns speed/survival preset.
         if (!isCompatibility) {
-            // Adaptive/domain-diverse duplication raise query volume under loss,
-            // which can push already-lossy resolvers into timeout-disable on
-            // filtered networks. The proven desktop config keeps both off; expose
-            // them via the survival preset where the extra redundancy is wanted.
-            val aggressiveDuplication = preset == "survival"
-            appendLine("ADAPTIVE_DUPLICATION = $aggressiveDuplication")
-            appendLine("DUPLICATION_PREFER_DISTINCT_DOMAINS = $aggressiveDuplication")
+			// Native clients begin at one copy and add independent-path copies only
+			// when measured loss justifies them. This preserves bandwidth on clean
+			// links while retaining survival behavior when filtering becomes lossy.
+			appendLine("ADAPTIVE_DUPLICATION = true")
+			appendLine("DUPLICATION_PREFER_DISTINCT_DOMAINS = true")
             appendLine("ADAPTIVE_DUPLICATION_TARGET_DELIVERY = ${adaptiveDuplicationTarget(preset)}")
             appendLine("DNS_EDNS_COOKIE = true")
             appendLine("EDNS_UDP_SIZE = ${ednsUdpSize(preset)}")

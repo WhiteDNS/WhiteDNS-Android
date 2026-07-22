@@ -505,7 +505,7 @@ class WhiteDnsModelsTest {
         val defaultSettings = savedSettings.selectAdvancedProfile(AdvancedSettingsProfile.DefaultId)
 
         assertEquals(AdvancedSettingsProfile.DefaultId, defaultSettings.selectedAdvancedProfileId)
-        assertEquals("3", defaultSettings.uploadDuplication)
+        assertEquals("1", defaultSettings.uploadDuplication)
         assertEquals("WARN", defaultSettings.logLevel)
         assertEquals(customProfileId, defaultSettings.advancedProfiles.single().id)
     }
@@ -619,7 +619,7 @@ class WhiteDnsModelsTest {
         val updatedSettings = savedSettings.deleteAdvancedProfile(selectedProfileId)
 
         assertEquals(AdvancedSettingsProfile.DefaultId, updatedSettings.selectedAdvancedProfileId)
-        assertEquals("3", updatedSettings.uploadDuplication)
+        assertEquals("1", updatedSettings.uploadDuplication)
         assertEquals("WARN", updatedSettings.logLevel)
         assertTrue(updatedSettings.advancedProfiles.none { it.id == selectedProfileId })
     }
@@ -732,8 +732,8 @@ class WhiteDnsModelsTest {
         assertEquals(3000, resolvedSettings.maxDownloadMtu)
         assertEquals(2.0, resolvedSettings.mtuTestTimeoutResolvers, 0.0)
         assertEquals(256, resolvedSettings.dnsResponseFragmentStoreCapacity)
-        assertEquals(3, resolvedSettings.uploadDuplication)
-        assertEquals(7, resolvedSettings.downloadDuplication)
+        assertEquals(1, resolvedSettings.uploadDuplication)
+        assertEquals(1, resolvedSettings.downloadDuplication)
         assertEquals(2, resolvedSettings.uploadCompression)
         assertEquals(2, resolvedSettings.downloadCompression)
     }
@@ -1066,8 +1066,8 @@ class WhiteDnsModelsTest {
         assertEquals("10886", importedSettings.listenPort)
         assertEquals(true, importedSettings.httpProxyEnabled)
         assertEquals(5, importedSettings.balancingStrategy)
-        assertEquals("3", importedSettings.uploadDuplication)
-        assertEquals("7", importedSettings.downloadDuplication)
+        assertEquals("1", importedSettings.uploadDuplication)
+        assertEquals("1", importedSettings.downloadDuplication)
         assertEquals("4", importedSettings.rxTxWorkers)
         assertEquals("resolvers", importedSettings.startupMode)
         assertEquals(false, importedSettings.trafficWarmupEnabled)

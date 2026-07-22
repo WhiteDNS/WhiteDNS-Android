@@ -75,7 +75,22 @@ func (c *Client) runtimePacketDuplicationCount(packetType uint8) int {
 	if c.cfg.AdaptiveDuplication {
 		count = c.adaptiveDuplicationCount(count)
 	}
+	// Recent FEC shards mean the server is already spending redundancy on the
+	// download leg. Keep ACK/NACK polling diverse, but do not multiply both FEC
+	// and DNS copies at full strength at the same time.
+	if (packetType == Enums.PACKET_STREAM_DATA_ACK || packetType == Enums.PACKET_STREAM_DATA_NACK) &&
+		c.fecRecentlyActive() && count > 2 {
+		count = 2
+	}
 	return count
+}
+
+func (c *Client) fecRecentlyActive() bool {
+	if c == nil {
+		return false
+	}
+	last := c.lastFECReceived.Load()
+	return last != 0 && c.now().Sub(time.Unix(0, last)) <= 10*time.Second
 }
 
 // adaptiveDuplicationCount raises base toward the number of copies needed to hit
