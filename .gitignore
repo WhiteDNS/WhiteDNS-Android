@@ -1,6 +1,7 @@
 .gradle/
 .gradle-home/
 .idea/
+.vscode/
 .DS_Store
 .kotlin/
 build/
@@ -14,9 +15,12 @@ captures/
 *.keystore
 *.p12
 *.pem
+keystore.properties
+keystore.properties.example
 id_ed25519*
 id_rsa*
 nemigam*
 
 /storm-dns/
 /StormDNS/
+/third_party/CottenDns/
