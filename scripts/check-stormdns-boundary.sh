@@ -9,9 +9,17 @@ if ! git rev-parse --verify "${base_ref}" >/dev/null 2>&1; then
   exit 2
 fi
 
-changed_files="$(
-  git diff --name-only "${base_ref}...${head_ref}" -- 'third_party/StormDNS' || true
-)"
+if ! git rev-parse --verify "${head_ref}" >/dev/null 2>&1; then
+  echo "Head ref '${head_ref}' is not available." >&2
+  exit 2
+fi
+
+if ! changed_files="$(
+  git diff --name-only "${base_ref}...${head_ref}" -- 'third_party/StormDNS' '.gitmodules'
+)"; then
+  echo "Unable to diff '${base_ref}...${head_ref}' for StormDNS boundary changes." >&2
+  exit 2
+fi
 
 if [[ -z "${changed_files}" ]]; then
   echo "No StormDNS upstream changes detected."
@@ -21,6 +29,6 @@ fi
 echo "StormDNS upstream changes detected:" >&2
 echo "${changed_files}" >&2
 echo >&2
-echo "WhiteDNS treats third_party/StormDNS as a black-box upstream engine." >&2
+echo "WhiteDNS treats third_party/StormDNS and its submodule metadata as a black-box upstream engine." >&2
 echo "Add the 'allow-stormdns-upstream' pull request label only when these changes are intentional upstream maintenance." >&2
 exit 1
