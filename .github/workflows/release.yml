@@ -39,6 +39,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android SDK packages
         run: |
@@ -131,6 +134,9 @@ jobs:
 
           cp THIRD_PARTY_NOTICES.md "dist/WhiteDNS-${TAG_NAME}-THIRD_PARTY_NOTICES.md"
           (cd dist && shasum -a 256 * > SHA256SUMS.txt)
+
+      - name: Verify packaged CottenDNS cores
+        run: python3 scripts/verify-cottendns-apks.py dist
 
       - name: Publish GitHub Release
         env:

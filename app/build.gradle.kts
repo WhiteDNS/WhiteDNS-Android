@@ -61,6 +61,8 @@ android {
 
     packaging {
         jniLibs {
+            // Go clients are already stripped; retain their verified executable bytes.
+            keepDebugSymbols += "**/libcottendns_client.so"
             useLegacyPackaging = true
         }
         resources {

@@ -26,6 +26,8 @@ internal object CottenDnsSettingsRenderer {
         // default base (explicit keys always win over the preset in the engine).
         appendLine("CONFIG_PRESET = \"${escape(enginePresetBase(preset, isCompatibility))}\"")
         appendLine("LEGACY_SESSION_ID = $isCompatibility")
+        appendLine("TERMINAL_UI = \"plain\"")
+        appendLine("RESOLVER_IP_MODE = \"auto\"")
 
         val transport = when {
             isCompatibility -> "udp"

@@ -19,7 +19,8 @@ COTTENDNS_BUILD_DIR := $(COTTENDNS_DIR)/build/android
 JNI_LIBS_DIR := app/src/main/jniLibs
 GO_CACHE := $(STORMDNS_DIR)/.gocache
 STORMDNS_LDFLAGS := -s -w -linkmode external -extldflags "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
-COTTENDNS_LDFLAGS := $(STORMDNS_LDFLAGS)
+COTTENDNS_VERSION := $(shell git -C "$(COTTENDNS_DIR)" rev-parse HEAD)
+COTTENDNS_LDFLAGS := $(STORMDNS_LDFLAGS) -X cottendns-go/internal/version.BuildVersion=$(COTTENDNS_VERSION)
 
 .PHONY: all debug stormdns stormdns-arm64 stormdns-armv7 stormdns-x86_64 stormdns-x86 cottendns cottendns-arm64 cottendns-armv7 cottendns-x86_64 cottendns-x86 clean clean-stormdns clean-cottendns clean-app check-ndk debug-outputs
 

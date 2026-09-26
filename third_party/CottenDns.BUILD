@@ -1,0 +1,6 @@
+repository=WhiteDNS/CottenDNS
+commit=cdf084f528c5833eeb77f1b9a29ecf0ceae89f86
+version=v2026.09.26.185102-cdf084f
+android_api=26
+asset=CottenDNS-Android-v2026.09.26.185102-cdf084f.zip
+sha256=490056df77b62d93500c0ab53c3f1913093a64a3809685b8c518018c0d27ed99

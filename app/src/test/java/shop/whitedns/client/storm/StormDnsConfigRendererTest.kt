@@ -237,7 +237,7 @@ class StormDnsConfigRendererTest {
         val toml = render(cottenProfile(cotten = loaded).copy(engine = DnsClientEngine.StormDns))
 
         val cottenOnlyKeys = listOf(
-            "CONFIG_PRESET", "LEGACY_SESSION_ID", "RESOLVER_TRANSPORT", "QUERY_TYPES",
+            "TERMINAL_UI", "RESOLVER_IP_MODE", "CONFIG_PRESET", "LEGACY_SESSION_ID", "RESOLVER_TRANSPORT", "QUERY_TYPES",
             "QNAME_LABEL_LENGTH", "FAST_CONNECT", "RESOLVER_RATE_LIMIT_ENABLED",
             "DNS_RANDOMIZE_QUERY_ID", "DNS_QNAME_CASE_RANDOMIZATION",
             "RESOLVER_IGNORE_INJECTED_NXDOMAIN", "ADAPTIVE_DUPLICATION",
@@ -280,6 +280,8 @@ class StormDnsConfigRendererTest {
     fun backgroundScanParallelismIsCottenDnsOnly() {
         val cotten = render(cottenProfile())
         assertTrue(cotten.contains("MTU_BACKGROUND_PARALLELISM = 1"))
+        assertTrue(cotten.contains("TERMINAL_UI = \"plain\""))
+        assertTrue(cotten.contains("RESOLVER_IP_MODE = \"auto\""))
 
         val tuned = render(
             cottenProfile(cotten = CottenDnsProfileSettings(backgroundScanParallelism = 6)),

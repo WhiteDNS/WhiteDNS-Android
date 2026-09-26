@@ -38,6 +38,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android SDK packages
         run: |
@@ -77,16 +80,8 @@ jobs:
       - name: Build debug APKs
         run: ./gradlew :app:assembleDebug
 
-      - name: Confirm both engine binaries are packaged
-        run: |
-          set -euo pipefail
-          apk="$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)"
-          echo "Inspecting ${apk}"
-          for lib in libstormdns_client.so libcottendns_client.so; do
-            unzip -l "${apk}" | grep -q "${lib}" \
-              || { echo "::error::${lib} missing from the debug APK"; exit 1; }
-            echo "  ok ${lib}"
-          done
+      - name: Verify packaged CottenDNS cores
+        run: python3 scripts/verify-cottendns-apks.py app/build/outputs/apk/debug
 
       - name: Upload debug APKs
         uses: actions/upload-artifact@v4
