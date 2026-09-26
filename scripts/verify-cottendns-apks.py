@@ -14,7 +14,8 @@ expected = {}
 for abi in sorted(abis):
     binary = root / "app/src/main/jniLibs" / abi / "libcottendns_client.so"
     metadata = subprocess.check_output(["go", "version", "-m", str(binary)], text=True)
-    if "cottendns-go/internal/version.BuildVersion=" + pin not in metadata:
+    # Go omits linker flags from build info with -trimpath; VCS records the source pin.
+    if "vcs.revision=" + pin not in metadata:
         raise SystemExit(f"{abi}: core build does not identify pinned commit {pin}")
     expected[abi] = hashlib.sha256(binary.read_bytes()).digest()
 
