@@ -370,6 +370,7 @@ object WhiteDnsL10n {
     val profileFieldConfigPreset: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldConfigPreset
     val profileFieldTransportMode: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldTransportMode
     val profileFieldDeliveryMode: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldDeliveryMode
+    val profileFieldIpMode: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldIpMode
     val profileFieldQnameMode: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldQnameMode
     val profileFieldResolverTlsServerName: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldResolverTlsServerName
     val profileFieldResolverTlsPin: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldResolverTlsPin
@@ -392,7 +393,12 @@ object WhiteDnsL10n {
     val cottenDeliveryTxt: String @Composable get() = LocalWhiteDnsStrings.current.cottenDeliveryTxt
     val cottenDeliveryTxtCname: String @Composable get() = LocalWhiteDnsStrings.current.cottenDeliveryTxtCname
     val cottenDeliveryTxtHttps: String @Composable get() = LocalWhiteDnsStrings.current.cottenDeliveryTxtHttps
+    val cottenDeliveryTxtAaaa: String @Composable get() = LocalWhiteDnsStrings.current.cottenDeliveryTxtAaaa
     val cottenDeliveryAll: String @Composable get() = LocalWhiteDnsStrings.current.cottenDeliveryAll
+    val cottenIpAuto: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpAuto
+    val cottenIpDual: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpDual
+    val cottenIpv4Only: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpv4Only
+    val cottenIpv6Only: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpv6Only
     val cottenQnameOff: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameOff
     val cottenQnameModerate: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameModerate
     val cottenQnameAggressive: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameAggressive

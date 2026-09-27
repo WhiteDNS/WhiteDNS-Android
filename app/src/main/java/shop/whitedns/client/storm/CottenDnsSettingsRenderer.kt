@@ -27,7 +27,7 @@ internal object CottenDnsSettingsRenderer {
         appendLine("CONFIG_PRESET = \"${escape(enginePresetBase(preset, isCompatibility))}\"")
         appendLine("LEGACY_SESSION_ID = $isCompatibility")
         appendLine("TERMINAL_UI = \"plain\"")
-        appendLine("RESOLVER_IP_MODE = \"auto\"")
+        appendLine("RESOLVER_IP_MODE = \"${resolverIpMode(cotten)}\"")
 
         val transport = when {
             isCompatibility -> "udp"
@@ -103,6 +103,7 @@ internal object CottenDnsSettingsRenderer {
     data class Summary(
         val transport: String,
         val delivery: String,
+        val ipMode: String,
         val mtu: String,
     )
 
@@ -135,6 +136,13 @@ internal object CottenDnsSettingsRenderer {
         }
         val deliveryText = if (types.size == 1) "${types.first()} only" else types.joinToString(" + ")
 
+        val ipModeText = when (resolverIpMode(cotten)) {
+            "dual" -> "IPv4 + IPv6"
+            "ipv4" -> "IPv4 only"
+            "ipv6" -> "IPv6 only"
+            else -> "IPv4, IPv6 fallback"
+        }
+
         val qnameLen = when {
             compat -> 63
             cotten.qnameMode == "off" -> 63
@@ -149,7 +157,19 @@ internal object CottenDnsSettingsRenderer {
                 "${mtuMaxLoss(preset)} max loss, ${qnameLen}-char labels"
         }
 
-        return Summary(transport = transportText, delivery = deliveryText, mtu = mtuText)
+        return Summary(transport = transportText, delivery = deliveryText, ipMode = ipModeText, mtu = mtuText)
+    }
+
+    /**
+     * RESOLVER_IP_MODE. Compatibility forces "auto": a legacy MasterDNS/StormDNS
+     * server may publish no IPv6 resolvers, and pinning "ipv6"/"dual" there would
+     * strand the client on an empty pool. Otherwise an explicit user choice wins,
+     * and "preset" defers to the engine default of "auto".
+     */
+    private fun resolverIpMode(cotten: CottenDnsProfileSettings): String = when {
+        cotten.isCompatibility -> "auto"
+        cotten.ipMode != CottenDnsProfileSettings.ModePreset -> cotten.ipMode
+        else -> "auto"
     }
 
     private fun StringBuilder.appendEncryptedResolverToml(
@@ -219,7 +239,11 @@ internal object CottenDnsSettingsRenderer {
         "txt" -> listOf("TXT")
         "txt-cname" -> listOf("TXT", "CNAME")
         "txt-https" -> listOf("TXT", "HTTPS")
-        "all" -> listOf("TXT", "CNAME", "NULL", "HTTPS")
+        // AAAA is a dense IPv6 download carrier (15 data bytes/record). It rides
+        // the resolver hop even when that hop is IPv4, and the server enables
+        // AAAA delivery by default. Oversized frames fall back to CNAME/TXT.
+        "txt-aaaa" -> listOf("TXT", "AAAA")
+        "all" -> listOf("TXT", "CNAME", "NULL", "HTTPS", "AAAA")
         else -> listOf("TXT")
     }
 

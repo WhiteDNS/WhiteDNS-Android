@@ -67,6 +67,12 @@ data class CottenDnsProfileSettings(
     val transportMode: String = ModePreset,
     val deliveryMode: String = ModePreset,
     val qnameMode: String = ModePreset,
+    // RESOLVER_IP_MODE: which address family carries DNS queries. "auto" prefers
+    // IPv4 and fails over to a warm IPv6 pool without a restart; "dual" balances
+    // both families; "ipv4"/"ipv6" pin one. Compatibility forces "auto" so a
+    // legacy server that may have no IPv6 resolvers is never pinned to an empty
+    // pool. CottenDNS-only; StormDNS/MasterDNS never see this key.
+    val ipMode: String = ModePreset,
     // Resolvers probed at once by the FastConnect *background* sweep — the one
     // that keeps probing the fleet after the tunnel is already carrying traffic.
     // The initial pre-connection scan is not affected: it uses the app-wide
@@ -99,6 +105,7 @@ data class CottenDnsProfileSettings(
         transportMode = normalizeChoice(transportMode, TransportModeValues),
         deliveryMode = normalizeChoice(deliveryMode, DeliveryModeValues),
         qnameMode = normalizeChoice(qnameMode, QnameModeValues),
+        ipMode = normalizeChoice(ipMode, IpModeValues),
         backgroundScanParallelism = backgroundScanParallelism
             .coerceIn(MinBackgroundScanParallelism, MaxBackgroundScanParallelism),
         resolverDoTPort = normalizePort(resolverDoTPort, "853"),
@@ -119,8 +126,9 @@ data class CottenDnsProfileSettings(
 
         val ConfigPresetValues = listOf("default", "speed", "survival", "tcp-survival", "master-storm")
         val TransportModeValues = listOf(ModePreset, "auto", "udp", "tcp", "dot", "doh")
-        val DeliveryModeValues = listOf(ModePreset, "txt", "txt-cname", "txt-https", "all")
+        val DeliveryModeValues = listOf(ModePreset, "txt", "txt-cname", "txt-https", "txt-aaaa", "all")
         val QnameModeValues = listOf(ModePreset, "off", "moderate", "aggressive")
+        val IpModeValues = listOf(ModePreset, "auto", "dual", "ipv4", "ipv6")
 
         fun normalizeConfigPreset(value: String): String {
             return when (value.trim().lowercase()) {
@@ -152,6 +160,7 @@ fun CottenDnsProfileSettings.toJson(): JSONObject {
         .put("transportMode", n.transportMode)
         .put("deliveryMode", n.deliveryMode)
         .put("qnameMode", n.qnameMode)
+        .put("ipMode", n.ipMode)
         .put("backgroundScanParallelism", n.backgroundScanParallelism)
         .put("resolverTlsServerName", n.resolverTlsServerName)
         .put("resolverTlsPin", n.resolverTlsPin)
@@ -171,6 +180,7 @@ fun cottenDnsProfileSettingsFromJson(json: JSONObject?): CottenDnsProfileSetting
         transportMode = json.optString("transportMode", defaults.transportMode),
         deliveryMode = json.optString("deliveryMode", defaults.deliveryMode),
         qnameMode = json.optString("qnameMode", defaults.qnameMode),
+        ipMode = json.optString("ipMode", defaults.ipMode),
         backgroundScanParallelism = json.optInt(
             "backgroundScanParallelism",
             defaults.backgroundScanParallelism,
