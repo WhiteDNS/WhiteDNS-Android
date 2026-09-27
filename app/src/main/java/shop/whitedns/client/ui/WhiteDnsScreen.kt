@@ -5355,6 +5355,12 @@ private fun ConnectionProfileDialog(
                             onValueChange = { cotten = cotten.copy(deliveryMode = it) },
                         )
                         WhiteDnsDropdownField(
+                            label = WhiteDnsL10n.profileFieldIpMode,
+                            value = cotten.ipMode,
+                            options = localizedCottenIpModes(),
+                            onValueChange = { cotten = cotten.copy(ipMode = it) },
+                        )
+                        WhiteDnsDropdownField(
                             label = WhiteDnsL10n.profileFieldQnameMode,
                             value = cotten.qnameMode,
                             options = localizedCottenQnameModes(),
@@ -9491,6 +9497,7 @@ private fun CottenDnsPresetSummaryPanel(settings: CottenDnsProfileSettings) {
     ) {
         CottenDnsFeatureLine(WhiteDnsL10n.profileFieldTransportMode, summary.transport)
         CottenDnsFeatureLine(WhiteDnsL10n.profileFieldDeliveryMode, summary.delivery)
+        CottenDnsFeatureLine(WhiteDnsL10n.profileFieldIpMode, summary.ipMode)
         CottenDnsFeatureLine(WhiteDnsL10n.cottenSummaryMtu, summary.mtu)
         CottenDnsFeatureLine(WhiteDnsL10n.cottenSummaryHardening, WhiteDnsL10n.cottenSummaryHardeningValue)
     }
@@ -9549,7 +9556,17 @@ private fun localizedCottenDeliveryModes(): List<Choice<String>> = listOf(
     Choice("txt", WhiteDnsL10n.cottenDeliveryTxt),
     Choice("txt-cname", WhiteDnsL10n.cottenDeliveryTxtCname),
     Choice("txt-https", WhiteDnsL10n.cottenDeliveryTxtHttps),
+    Choice("txt-aaaa", WhiteDnsL10n.cottenDeliveryTxtAaaa),
     Choice("all", WhiteDnsL10n.cottenDeliveryAll),
+)
+
+@Composable
+private fun localizedCottenIpModes(): List<Choice<String>> = listOf(
+    Choice(CottenDnsProfileSettings.ModePreset, WhiteDnsL10n.cottenFromPreset),
+    Choice("auto", WhiteDnsL10n.cottenIpAuto),
+    Choice("dual", WhiteDnsL10n.cottenIpDual),
+    Choice("ipv4", WhiteDnsL10n.cottenIpv4Only),
+    Choice("ipv6", WhiteDnsL10n.cottenIpv6Only),
 )
 
 @Composable

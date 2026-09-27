@@ -224,6 +224,7 @@ interface WhiteDnsStrings {
     val profileFieldConfigPreset: String
     val profileFieldTransportMode: String
     val profileFieldDeliveryMode: String
+    val profileFieldIpMode: String
     val profileFieldQnameMode: String
     val profileFieldResolverTlsServerName: String
     val profileFieldResolverTlsPin: String
@@ -246,7 +247,12 @@ interface WhiteDnsStrings {
     val cottenDeliveryTxt: String
     val cottenDeliveryTxtCname: String
     val cottenDeliveryTxtHttps: String
+    val cottenDeliveryTxtAaaa: String
     val cottenDeliveryAll: String
+    val cottenIpAuto: String
+    val cottenIpDual: String
+    val cottenIpv4Only: String
+    val cottenIpv6Only: String
     val cottenQnameOff: String
     val cottenQnameModerate: String
     val cottenQnameAggressive: String
@@ -952,6 +958,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val profileFieldConfigPreset = "Preset"
     override val profileFieldTransportMode = "Transport"
     override val profileFieldDeliveryMode = "Delivery"
+    override val profileFieldIpMode = "IP mode"
     override val profileFieldQnameMode = "QNAME Reshaping"
     override val profileFieldResolverTlsServerName = "TLS Server Name"
     override val profileFieldResolverTlsPin = "TLS Pin"
@@ -974,7 +981,12 @@ object EnglishStrings : WhiteDnsStrings {
     override val cottenDeliveryTxt = "TXT only"
     override val cottenDeliveryTxtCname = "TXT + CNAME"
     override val cottenDeliveryTxtHttps = "TXT + HTTPS"
-    override val cottenDeliveryAll = "All (TXT / CNAME / NULL / HTTPS)"
+    override val cottenDeliveryTxtAaaa = "TXT + AAAA (IPv6)"
+    override val cottenDeliveryAll = "All (TXT / CNAME / NULL / HTTPS / AAAA)"
+    override val cottenIpAuto = "Auto (IPv4, IPv6 fallback)"
+    override val cottenIpDual = "IPv4 + IPv6"
+    override val cottenIpv4Only = "IPv4 only"
+    override val cottenIpv6Only = "IPv6 only"
     override val cottenQnameOff = "Off (max capacity, 63)"
     override val cottenQnameModerate = "Moderate (42)"
     override val cottenQnameAggressive = "Aggressive (32)"
@@ -1657,6 +1669,7 @@ object PersianStrings : WhiteDnsStrings {
     override val profileFieldConfigPreset = "پیش‌تنظیم"
     override val profileFieldTransportMode = "ترابری"
     override val profileFieldDeliveryMode = "روش تحویل"
+    override val profileFieldIpMode = "حالت IP"
     override val profileFieldQnameMode = "بازشکل‌دهی QNAME"
     override val profileFieldResolverTlsServerName = "نام سرور TLS"
     override val profileFieldResolverTlsPin = "پین TLS"
@@ -1679,7 +1692,12 @@ object PersianStrings : WhiteDnsStrings {
     override val cottenDeliveryTxt = "فقط TXT"
     override val cottenDeliveryTxtCname = "TXT + CNAME"
     override val cottenDeliveryTxtHttps = "TXT + HTTPS"
-    override val cottenDeliveryAll = "همه (TXT / CNAME / NULL / HTTPS)"
+    override val cottenDeliveryTxtAaaa = "TXT + AAAA (IPv6)"
+    override val cottenDeliveryAll = "همه (TXT / CNAME / NULL / HTTPS / AAAA)"
+    override val cottenIpAuto = "خودکار (IPv4 با بازگشت به IPv6)"
+    override val cottenIpDual = "IPv4 و IPv6"
+    override val cottenIpv4Only = "فقط IPv4"
+    override val cottenIpv6Only = "فقط IPv6"
     override val cottenQnameOff = "خاموش (بیشترین ظرفیت، ۶۳)"
     override val cottenQnameModerate = "متوسط (۴۲)"
     override val cottenQnameAggressive = "تهاجمی (۳۲)"

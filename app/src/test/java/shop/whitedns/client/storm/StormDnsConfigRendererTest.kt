@@ -295,6 +295,47 @@ class StormDnsConfigRendererTest {
         assertFalse("background key leaked to StormDNS", storm.contains("MTU_BACKGROUND_PARALLELISM"))
     }
 
+    /**
+     * IP mode and the AAAA delivery carrier are CottenDNS-only. An explicit
+     * choice is emitted; Compatibility pins "auto" and TXT so a legacy server is
+     * never asked for IPv6 resolvers or an AAAA answer it cannot make.
+     */
+    @Test
+    fun ipModeAndAaaaDeliveryAreUserSelectableAndGated() {
+        val ipv6 = render(cottenProfile(cotten = CottenDnsProfileSettings(ipMode = "ipv6")))
+        assertTrue(ipv6.contains("RESOLVER_IP_MODE = \"ipv6\""))
+
+        val dual = render(cottenProfile(cotten = CottenDnsProfileSettings(ipMode = "dual")))
+        assertTrue(dual.contains("RESOLVER_IP_MODE = \"dual\""))
+
+        val aaaa = render(cottenProfile(cotten = CottenDnsProfileSettings(deliveryMode = "txt-aaaa")))
+        assertTrue(aaaa.contains("""QUERY_TYPES = ["TXT", "AAAA"]"""))
+
+        val all = render(cottenProfile(cotten = CottenDnsProfileSettings(deliveryMode = "all")))
+        assertTrue(all.contains("""QUERY_TYPES = ["TXT", "CNAME", "NULL", "HTTPS", "AAAA"]"""))
+
+        // Compatibility forces the legacy-safe subset regardless of the request.
+        val compat = render(
+            cottenProfile(
+                cotten = CottenDnsProfileSettings(
+                    configPreset = CottenDnsProfileSettings.PresetMasterStorm,
+                    ipMode = "ipv6",
+                    deliveryMode = "txt-aaaa",
+                ),
+            ),
+        )
+        assertTrue(compat.contains("RESOLVER_IP_MODE = \"auto\""))
+        assertTrue(compat.contains("""QUERY_TYPES = ["TXT"]"""))
+
+        // Never leak to a StormDNS profile.
+        val storm = render(
+            cottenProfile(cotten = CottenDnsProfileSettings(ipMode = "ipv6", deliveryMode = "txt-aaaa"))
+                .copy(engine = DnsClientEngine.StormDns),
+        )
+        assertFalse("AAAA carrier leaked to StormDNS", storm.contains("AAAA"))
+        assertFalse("IP mode leaked to StormDNS", storm.contains("RESOLVER_IP_MODE"))
+    }
+
     @Test
     fun backgroundScanParallelismStaysClamped() {
         val tooLow = render(
