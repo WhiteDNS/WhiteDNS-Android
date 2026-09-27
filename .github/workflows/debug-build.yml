@@ -74,6 +74,9 @@ jobs:
             NDK_HOST=linux-x86_64 \
             NDK_ROOT="${ANDROID_HOME}/ndk/${STORMDNS_ANDROID_NDK_VERSION}"
 
+      - name: Verify native core versions
+        run: python3 scripts/verify-cottendns-apks.py --native-only
+
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest
 

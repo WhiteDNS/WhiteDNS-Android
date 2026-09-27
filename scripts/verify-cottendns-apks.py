@@ -9,15 +9,27 @@ root = Path(__file__).resolve().parents[1]
 pin = subprocess.check_output(
     ["git", "-C", str(root / "third_party/CottenDns"), "rev-parse", "HEAD"], text=True
 ).strip()
-abis = {"arm64-v8a", "armeabi-v7a", "x86", "x86_64"}
+architectures = {"arm64-v8a": "arm64", "armeabi-v7a": "arm", "x86": "386", "x86_64": "amd64"}
+abis = set(architectures)
 expected = {}
 for abi in sorted(abis):
     binary = root / "app/src/main/jniLibs" / abi / "libcottendns_client.so"
     metadata = subprocess.check_output(["go", "version", "-m", str(binary)], text=True)
-    # Go omits linker flags from build info with -trimpath; VCS records the source pin.
-    if "vcs.revision=" + pin not in metadata:
-        raise SystemExit(f"{abi}: core build does not identify pinned commit {pin}")
-    expected[abi] = hashlib.sha256(binary.read_bytes()).digest()
+    raw = binary.read_bytes()
+    # -trimpath omits linker flags, and automatic VCS stamping can be absent.
+    # The explicit -X BuildVersion string is null-terminated by the Go linker.
+    if pin.encode("ascii") + b"\x00" not in raw:
+        raise SystemExit(f"{abi}: explicit core version stamp does not match {pin}\n{metadata}")
+    settings = set(metadata.splitlines())
+    required = {"\tpath\tcottendns-go/cmd/client", "\tbuild\tGOOS=android",
+                "\tbuild\tGOARCH=" + architectures[abi]}
+    if not required.issubset(settings):
+        raise SystemExit(f"{abi}: wrong native core target\n{metadata}")
+    expected[abi] = hashlib.sha256(raw).digest()
+    print(f"Native {abi}: verified version stamp and Android target at {pin}")
+
+if sys.argv[1:] == ["--native-only"]:
+    raise SystemExit(0)
 
 apks = sorted((root / sys.argv[1]).glob("*.apk"))
 if not apks:
