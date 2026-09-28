@@ -34,11 +34,11 @@ Changes under `third_party/StormDNS` are allowed only when they are intentional 
 - Syncing a reviewed upstream fix.
 - Refreshing native binaries from a documented upstream commit.
 
-Any pull request that changes `third_party/StormDNS` must include the label:
+Any pull request that changes `third_party/StormDNS` or `.gitmodules` must include the label:
 
 `allow-stormdns-upstream`
 
-Without that label, CI fails before review to prevent accidental local edits to the upstream engine.
+Without that label, CI fails before review to prevent accidental local edits to the upstream engine or its submodule metadata.
 
 ## Review Checklist
 
@@ -49,4 +49,4 @@ For any pull request touching StormDNS integration:
 - Confirm telemetry parsing is tolerant of unknown or changed output.
 - Confirm optional behavior is gated by executable version/capability detection when needed.
 - Confirm no Android app code imports, parses, or depends on StormDNS Go internals.
-- Confirm `third_party/StormDNS` changes are either absent or intentionally labeled and explained.
+- Confirm `third_party/StormDNS` and `.gitmodules` changes are either absent or intentionally labeled and explained.
