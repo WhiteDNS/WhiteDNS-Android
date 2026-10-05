@@ -5,9 +5,9 @@ plugins {
 
 val whiteDnsVersionCode = providers.gradleProperty("WHITE_DNS_VERSION_CODE")
     .map { it.toInt() }
-    .orElse(17)
+    .orElse(18)
 val whiteDnsVersionName = providers.gradleProperty("WHITE_DNS_VERSION_NAME")
-    .orElse("1.6.3")
+    .orElse("1.6.4")
 
 android {
     namespace = "shop.whitedns.client"
