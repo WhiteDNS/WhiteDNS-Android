@@ -5339,6 +5339,34 @@ private fun ConnectionProfileDialog(
                         parallelism = cotten.backgroundScanParallelism,
                         onParallelismChange = { cotten = cotten.copy(backgroundScanParallelism = it) },
                     )
+                    // Client-side only, so it stays available in Compatibility too.
+                    WhiteDnsDropdownField(
+                        label = WhiteDnsL10n.profileFieldQueryRateLimit,
+                        value = cotten.queryRateLimit,
+                        options = localizedCottenQueryRateLimits(),
+                        onValueChange = { cotten = cotten.copy(queryRateLimit = it) },
+                    )
+                    if (cotten.queryRateLimit != CottenDnsProfileSettings.RateOff) {
+                        WhiteDnsDropdownField(
+                            label = WhiteDnsL10n.profileFieldQueryRateScope,
+                            value = cotten.queryRateScope,
+                            options = localizedCottenQueryRateScopes(),
+                            onValueChange = { cotten = cotten.copy(queryRateScope = it) },
+                        )
+                    }
+                    WhiteDnsDropdownField(
+                        label = WhiteDnsL10n.profileFieldTimingMask,
+                        value = cotten.timingMask,
+                        options = localizedCottenTimingMasks(),
+                        onValueChange = { cotten = cotten.copy(timingMask = it) },
+                    )
+                    Text(
+                        text = WhiteDnsL10n.cottenRateLimitHint,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            color = WhiteDnsPalette.Muted,
+                        ),
+                    )
                     // Compatibility pins TXT/UDP/63 regardless, so the overrides
                     // below would be misleading if they stayed interactive.
                     if (!cotten.isCompatibility) {
@@ -9567,6 +9595,30 @@ private fun localizedCottenIpModes(): List<Choice<String>> = listOf(
     Choice("dual", WhiteDnsL10n.cottenIpDual),
     Choice("ipv4", WhiteDnsL10n.cottenIpv4Only),
     Choice("ipv6", WhiteDnsL10n.cottenIpv6Only),
+)
+
+@Composable
+private fun localizedCottenQueryRateLimits(): List<Choice<String>> =
+    CottenDnsProfileSettings.QueryRateLimitValues.map { value ->
+        if (value == CottenDnsProfileSettings.RateOff) {
+            Choice(value, WhiteDnsL10n.cottenRateOff)
+        } else {
+            Choice(value, WhiteDnsL10n.cottenRatePerSecond.format(value.toInt()))
+        }
+    }
+
+@Composable
+private fun localizedCottenQueryRateScopes(): List<Choice<String>> = listOf(
+    Choice("total", WhiteDnsL10n.cottenRateScopeTotal),
+    Choice("resolver", WhiteDnsL10n.cottenRateScopeResolver),
+    Choice("domain", WhiteDnsL10n.cottenRateScopeDomain),
+)
+
+@Composable
+private fun localizedCottenTimingMasks(): List<Choice<String>> = listOf(
+    Choice("off", WhiteDnsL10n.cottenRateOff),
+    Choice("light", WhiteDnsL10n.cottenMaskLight),
+    Choice("strong", WhiteDnsL10n.cottenMaskStrong),
 )
 
 @Composable

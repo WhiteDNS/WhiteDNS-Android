@@ -399,6 +399,17 @@ object WhiteDnsL10n {
     val cottenIpDual: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpDual
     val cottenIpv4Only: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpv4Only
     val cottenIpv6Only: String @Composable get() = LocalWhiteDnsStrings.current.cottenIpv6Only
+    val profileFieldQueryRateLimit: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldQueryRateLimit
+    val profileFieldQueryRateScope: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldQueryRateScope
+    val profileFieldTimingMask: String @Composable get() = LocalWhiteDnsStrings.current.profileFieldTimingMask
+    val cottenRateOff: String @Composable get() = LocalWhiteDnsStrings.current.cottenRateOff
+    val cottenRatePerSecond: String @Composable get() = LocalWhiteDnsStrings.current.cottenRatePerSecond
+    val cottenRateScopeTotal: String @Composable get() = LocalWhiteDnsStrings.current.cottenRateScopeTotal
+    val cottenRateScopeResolver: String @Composable get() = LocalWhiteDnsStrings.current.cottenRateScopeResolver
+    val cottenRateScopeDomain: String @Composable get() = LocalWhiteDnsStrings.current.cottenRateScopeDomain
+    val cottenMaskLight: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaskLight
+    val cottenMaskStrong: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaskStrong
+    val cottenRateLimitHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenRateLimitHint
     val cottenQnameOff: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameOff
     val cottenQnameModerate: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameModerate
     val cottenQnameAggressive: String @Composable get() = LocalWhiteDnsStrings.current.cottenQnameAggressive

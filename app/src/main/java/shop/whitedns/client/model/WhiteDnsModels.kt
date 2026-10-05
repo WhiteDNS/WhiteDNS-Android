@@ -73,6 +73,14 @@ data class CottenDnsProfileSettings(
     // legacy server that may have no IPv6 resolvers is never pinned to an empty
     // pool. CottenDNS-only; StormDNS/MasterDNS never see this key.
     val ipMode: String = ModePreset,
+    // QUERY_RATE_LIMIT_*: hard cap on DNS queries per second, for networks that
+    // block DNS above a fixed rate. "off" or a rate; [queryRateScope] picks what
+    // the firewall is assumed to count (all queries, per resolver, per domain).
+    // Client-only, so it applies to legacy servers too. Older engines ignore it.
+    val queryRateLimit: String = RateOff,
+    val queryRateScope: String = "total",
+    // QUERY_TIMING_JITTER: randomizes query/ping timing so it has no fixed rhythm.
+    val timingMask: String = "off",
     // Resolvers probed at once by the FastConnect *background* sweep — the one
     // that keeps probing the fleet after the tunnel is already carrying traffic.
     // The initial pre-connection scan is not affected: it uses the app-wide
@@ -106,6 +114,9 @@ data class CottenDnsProfileSettings(
         deliveryMode = normalizeChoice(deliveryMode, DeliveryModeValues),
         qnameMode = normalizeChoice(qnameMode, QnameModeValues),
         ipMode = normalizeChoice(ipMode, IpModeValues),
+        queryRateLimit = normalizeOr(queryRateLimit, QueryRateLimitValues, RateOff),
+        queryRateScope = normalizeOr(queryRateScope, QueryRateScopeValues, "total"),
+        timingMask = normalizeOr(timingMask, TimingMaskValues, "off"),
         backgroundScanParallelism = backgroundScanParallelism
             .coerceIn(MinBackgroundScanParallelism, MaxBackgroundScanParallelism),
         resolverDoTPort = normalizePort(resolverDoTPort, "853"),
@@ -129,6 +140,10 @@ data class CottenDnsProfileSettings(
         val DeliveryModeValues = listOf(ModePreset, "txt", "txt-cname", "txt-https", "txt-aaaa", "all")
         val QnameModeValues = listOf(ModePreset, "off", "moderate", "aggressive")
         val IpModeValues = listOf(ModePreset, "auto", "dual", "ipv4", "ipv6")
+        const val RateOff = "off"
+        val QueryRateLimitValues = listOf(RateOff, "2", "3", "5", "8", "10")
+        val QueryRateScopeValues = listOf("total", "resolver", "domain")
+        val TimingMaskValues = listOf("off", "light", "strong")
 
         fun normalizeConfigPreset(value: String): String {
             return when (value.trim().lowercase()) {
@@ -143,6 +158,11 @@ data class CottenDnsProfileSettings(
         private fun normalizeChoice(value: String, allowed: List<String>): String {
             val candidate = value.trim().lowercase()
             return if (candidate in allowed) candidate else ModePreset
+        }
+
+        private fun normalizeOr(value: String, allowed: List<String>, fallback: String): String {
+            val candidate = value.trim().lowercase()
+            return if (candidate in allowed) candidate else fallback
         }
 
         private fun normalizePort(value: String, fallback: String): String {
@@ -161,6 +181,9 @@ fun CottenDnsProfileSettings.toJson(): JSONObject {
         .put("deliveryMode", n.deliveryMode)
         .put("qnameMode", n.qnameMode)
         .put("ipMode", n.ipMode)
+        .put("queryRateLimit", n.queryRateLimit)
+        .put("queryRateScope", n.queryRateScope)
+        .put("timingMask", n.timingMask)
         .put("backgroundScanParallelism", n.backgroundScanParallelism)
         .put("resolverTlsServerName", n.resolverTlsServerName)
         .put("resolverTlsPin", n.resolverTlsPin)
@@ -181,6 +204,9 @@ fun cottenDnsProfileSettingsFromJson(json: JSONObject?): CottenDnsProfileSetting
         deliveryMode = json.optString("deliveryMode", defaults.deliveryMode),
         qnameMode = json.optString("qnameMode", defaults.qnameMode),
         ipMode = json.optString("ipMode", defaults.ipMode),
+        queryRateLimit = json.optString("queryRateLimit", defaults.queryRateLimit),
+        queryRateScope = json.optString("queryRateScope", defaults.queryRateScope),
+        timingMask = json.optString("timingMask", defaults.timingMask),
         backgroundScanParallelism = json.optInt(
             "backgroundScanParallelism",
             defaults.backgroundScanParallelism,

@@ -337,6 +337,44 @@ class StormDnsConfigRendererTest {
     }
 
     @Test
+    fun queryRateLimitAndTimingMaskRenderPerScope() {
+        val off = render(cottenProfile(cotten = CottenDnsProfileSettings()))
+        assertTrue(off.contains("QUERY_RATE_LIMIT_PER_SECOND = 0"))
+        assertTrue(off.contains("QUERY_TIMING_JITTER = 0.0"))
+
+        val total = render(cottenProfile(cotten = CottenDnsProfileSettings(queryRateLimit = "5", timingMask = "light")))
+        assertTrue(total.contains("QUERY_RATE_LIMIT_PER_SECOND = 5"))
+        assertTrue(total.contains("QUERY_RATE_LIMIT_PER_RESOLVER_PER_SECOND = 0"))
+        assertTrue(total.contains("QUERY_TIMING_JITTER = 0.3"))
+
+        val perResolver = render(
+            cottenProfile(cotten = CottenDnsProfileSettings(queryRateLimit = "3", queryRateScope = "resolver")),
+        )
+        assertTrue(perResolver.contains("QUERY_RATE_LIMIT_PER_SECOND = 0"))
+        assertTrue(perResolver.contains("QUERY_RATE_LIMIT_PER_RESOLVER_PER_SECOND = 3"))
+
+        // Client-only, so Compatibility keeps it.
+        val compat = render(
+            cottenProfile(
+                cotten = CottenDnsProfileSettings(
+                    configPreset = CottenDnsProfileSettings.PresetMasterStorm,
+                    queryRateLimit = "3",
+                ),
+            ),
+        )
+        assertTrue(compat.contains("QUERY_RATE_LIMIT_PER_SECOND = 3"))
+
+        // Garbage falls back to off; StormDNS never sees the keys.
+        val bad = render(cottenProfile(cotten = CottenDnsProfileSettings(queryRateLimit = "999")))
+        assertTrue(bad.contains("QUERY_RATE_LIMIT_PER_SECOND = 0"))
+        val storm = render(
+            cottenProfile(cotten = CottenDnsProfileSettings(queryRateLimit = "5"))
+                .copy(engine = DnsClientEngine.StormDns),
+        )
+        assertFalse("rate limit leaked to StormDNS", storm.contains("QUERY_RATE_LIMIT"))
+    }
+
+    @Test
     fun backgroundScanParallelismStaysClamped() {
         val tooLow = render(
             cottenProfile(cotten = CottenDnsProfileSettings(backgroundScanParallelism = 0)),

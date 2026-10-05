@@ -253,6 +253,17 @@ interface WhiteDnsStrings {
     val cottenIpDual: String
     val cottenIpv4Only: String
     val cottenIpv6Only: String
+    val profileFieldQueryRateLimit: String
+    val profileFieldQueryRateScope: String
+    val profileFieldTimingMask: String
+    val cottenRateOff: String
+    val cottenRatePerSecond: String
+    val cottenRateScopeTotal: String
+    val cottenRateScopeResolver: String
+    val cottenRateScopeDomain: String
+    val cottenMaskLight: String
+    val cottenMaskStrong: String
+    val cottenRateLimitHint: String
     val cottenQnameOff: String
     val cottenQnameModerate: String
     val cottenQnameAggressive: String
@@ -987,6 +998,17 @@ object EnglishStrings : WhiteDnsStrings {
     override val cottenIpDual = "IPv4 + IPv6"
     override val cottenIpv4Only = "IPv4 only"
     override val cottenIpv6Only = "IPv6 only"
+    override val profileFieldQueryRateLimit = "Query rate limit"
+    override val profileFieldQueryRateScope = "Rate limit counts"
+    override val profileFieldTimingMask = "Timing mask"
+    override val cottenRateOff = "Off"
+    override val cottenRatePerSecond = "%d per second"
+    override val cottenRateScopeTotal = "All queries"
+    override val cottenRateScopeResolver = "Per resolver"
+    override val cottenRateScopeDomain = "Per domain"
+    override val cottenMaskLight = "Light"
+    override val cottenMaskStrong = "Strong"
+    override val cottenRateLimitHint = "Use when the network blocks DNS above a fixed rate (for example 6 per second). Slower, but the connection stays up. Start with 3 per second; if adding resolvers makes it faster, switch to per resolver. Timing mask randomizes query timing so it has no fixed rhythm."
     override val cottenQnameOff = "Off (max capacity, 63)"
     override val cottenQnameModerate = "Moderate (42)"
     override val cottenQnameAggressive = "Aggressive (32)"
@@ -1698,6 +1720,17 @@ object PersianStrings : WhiteDnsStrings {
     override val cottenIpDual = "IPv4 و IPv6"
     override val cottenIpv4Only = "فقط IPv4"
     override val cottenIpv6Only = "فقط IPv6"
+    override val profileFieldQueryRateLimit = "محدودیت نرخ کوئری"
+    override val profileFieldQueryRateScope = "شمارش محدودیت"
+    override val profileFieldTimingMask = "پوشش زمان‌بندی"
+    override val cottenRateOff = "خاموش"
+    override val cottenRatePerSecond = "%d در ثانیه"
+    override val cottenRateScopeTotal = "همه کوئری‌ها"
+    override val cottenRateScopeResolver = "به ازای هر ریزالور"
+    override val cottenRateScopeDomain = "به ازای هر دامنه"
+    override val cottenMaskLight = "ملایم"
+    override val cottenMaskStrong = "قوی"
+    override val cottenRateLimitHint = "وقتی شبکه DNS را بالاتر از یک نرخ ثابت (مثلاً ۶ در ثانیه) مسدود می‌کند از این گزینه استفاده کنید. کندتر است اما اتصال برقرار می‌ماند. با ۳ در ثانیه شروع کنید؛ اگر با افزودن ریزالور سریع‌تر شد، «به ازای هر ریزالور» را انتخاب کنید. پوشش زمان‌بندی، زمان ارسال کوئری‌ها را تصادفی می‌کند تا الگوی ثابتی نداشته باشد."
     override val cottenQnameOff = "خاموش (بیشترین ظرفیت، ۶۳)"
     override val cottenQnameModerate = "متوسط (۴۲)"
     override val cottenQnameAggressive = "تهاجمی (۳۲)"
