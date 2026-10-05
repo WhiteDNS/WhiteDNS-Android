@@ -29,6 +29,20 @@ internal object CottenDnsSettingsRenderer {
         appendLine("TERMINAL_UI = \"plain\"")
         appendLine("RESOLVER_IP_MODE = \"${resolverIpMode(cotten)}\"")
 
+        // Query rate limit and timing mask. Client-side only (no wire change),
+        // so Compatibility keeps them: a rate-limited network blocks legacy
+        // servers just the same. Any cap makes the engine drop duplication to 1.
+        val rate = cotten.queryRateLimit.toIntOrNull() ?: 0
+        appendLine("QUERY_RATE_LIMIT_PER_SECOND = ${if (cotten.queryRateScope == "total") rate else 0}")
+        appendLine("QUERY_RATE_LIMIT_PER_RESOLVER_PER_SECOND = ${if (cotten.queryRateScope == "resolver") rate else 0}")
+        appendLine("QUERY_RATE_LIMIT_PER_DOMAIN_PER_SECOND = ${if (cotten.queryRateScope == "domain") rate else 0}")
+        val jitter = when (cotten.timingMask) {
+            "light" -> 0.3
+            "strong" -> 0.6
+            else -> 0.0
+        }
+        appendLine("QUERY_TIMING_JITTER = $jitter")
+
         val transport = when {
             isCompatibility -> "udp"
             cotten.transportMode != CottenDnsProfileSettings.ModePreset -> cotten.transportMode
