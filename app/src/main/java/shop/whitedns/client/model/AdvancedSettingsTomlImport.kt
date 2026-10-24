@@ -279,6 +279,9 @@ private val CottenConnectionOptionKeys = setOf(
     "COTTENMAX_MAX_ANSWER",
     "COTTENMAX_MAX_PATH_WINDOW",
     "COTTENMAX_MAX_INFLIGHT",
+    "COTTENMAX_FEC_DOWNLOAD_ENABLED",
+    "COTTENMAX_FEC_DATA_SHARDS",
+    "COTTENMAX_FEC_PARITY_SHARDS",
     "COTTENMAX_SESSION_IDLE_MILLISECONDS",
     "COTTENMAX_HOLD_MILLISECONDS",
     "DNS_PADDING_BLOCK_SIZE",
@@ -326,12 +329,15 @@ private fun WhiteDnsSettings.importCottenConnectionOptions(assignments: Map<Stri
     assignments["COTTENMAX_MAX_QNAME"]?.let { options = options.copy(maxQName = it.intValue("COTTENMAX_MAX_QNAME", 64, 253)) }
     assignments["COTTENMAX_MAX_ANSWER"]?.let { options = options.copy(maxAnswer = it.intValue("COTTENMAX_MAX_ANSWER", 512, 1232)) }
     assignments["COTTENMAX_MAX_PATH_WINDOW"]?.let { options = options.copy(maxPathWindow = it.intValue("COTTENMAX_MAX_PATH_WINDOW", 1, 1024)) }
-    assignments["COTTENMAX_MAX_INFLIGHT"]?.let { options = options.copy(maxInflight = it.intValue("COTTENMAX_MAX_INFLIGHT", 1, 1024)) }
+    assignments["COTTENMAX_MAX_INFLIGHT"]?.let { options = options.copy(maxInflight = it.intValue("COTTENMAX_MAX_INFLIGHT", 1, 4096)) }
+    assignments["COTTENMAX_FEC_DOWNLOAD_ENABLED"]?.let { options = options.copy(fecDownloadEnabled = it.booleanValue("COTTENMAX_FEC_DOWNLOAD_ENABLED")) }
+    assignments["COTTENMAX_FEC_DATA_SHARDS"]?.let { options = options.copy(fecDataShards = it.intValue("COTTENMAX_FEC_DATA_SHARDS", 2, 16)) }
+    assignments["COTTENMAX_FEC_PARITY_SHARDS"]?.let { options = options.copy(fecParityShards = it.intValue("COTTENMAX_FEC_PARITY_SHARDS", 1, 4)) }
     assignments["COTTENMAX_SESSION_IDLE_MILLISECONDS"]?.let { options = options.copy(sessionIdleMs = it.intValue("COTTENMAX_SESSION_IDLE_MILLISECONDS", 1000, 90000)) }
     assignments["COTTENMAX_HOLD_MILLISECONDS"]?.let { options = options.copy(holdMs = it.intValue("COTTENMAX_HOLD_MILLISECONDS", 0, 1500)) }
     assignments["DNS_PADDING_BLOCK_SIZE"]?.let { options = options.copy(dnsPaddingBlockSize = it.intValue("DNS_PADDING_BLOCK_SIZE", 0, 4096)) }
     assignments["RESOLVER_DISCOVERY_SAMPLE_RANGES"]?.let { options = options.copy(discoverySampleRanges = it.intValue("RESOLVER_DISCOVERY_SAMPLE_RANGES", 0, 4096)) }
-    assignments["RESOLVER_DISCOVERY_WANT"]?.let { options = options.copy(discoveryWant = it.intValue("RESOLVER_DISCOVERY_WANT", 1, 64)) }
+    assignments["RESOLVER_DISCOVERY_WANT"]?.let { options = options.copy(discoveryWant = it.intValue("RESOLVER_DISCOVERY_WANT", 1, 4096)) }
     assignments["RESOLVER_DISCOVERY_CONCURRENCY"]?.let { options = options.copy(discoveryConcurrency = it.intValue("RESOLVER_DISCOVERY_CONCURRENCY", 1, 64)) }
     assignments["RESOLVER_DISCOVERY_PACE_MILLISECONDS"]?.let { options = options.copy(discoveryPaceMs = it.intValue("RESOLVER_DISCOVERY_PACE_MILLISECONDS", 1, 60000)) }
     assignments["RESOLVER_DISCOVERY_ENABLED"]?.let { options = options.copy(discoveryEnabled = it.booleanValue("RESOLVER_DISCOVERY_ENABLED")) }

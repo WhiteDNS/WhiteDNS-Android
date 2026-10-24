@@ -495,7 +495,9 @@ class StormDnsConfigRendererTest {
             engine = DnsClientEngine.CottenDns,
             cottenSettings = CottenDnsProfileSettings(tunnelMode = "cottenmax", transportMode = "tcp",
                 cottenMaxOptions = shop.whitedns.client.model.CottenMaxOptions(standbyDomains = "a.example, b.example",
-                    discoveryEnabled = true, discoveryCandidates = "1.1.1.1:5353", qnameLossGuard = true)))
+                    discoveryEnabled = true, discoveryCandidates = "1.1.1.1:5353", qnameLossGuard = true,
+                    fecDownloadEnabled = true, fecDataShards = 8, fecParityShards = 2,
+                    discoveryWant = 4096, maxInflight = 4096)))
         for (toml in listOf(StormDnsConfigRenderer.renderClientToml(profile, WhiteDnsSettings()),
             StormDnsConfigRenderer.renderScanClientToml(profile, WhiteDnsSettings()))) {
             assertTrue(toml.contains("TUNNEL_MODE = \"cottenmax\""))
@@ -504,6 +506,11 @@ class StormDnsConfigRendererTest {
             assertTrue(toml.contains("STANDBY_DOMAINS = [\"b.example\"]"))
             assertTrue(toml.contains("RESOLVER_DISCOVERY_CANDIDATES = [\"1.1.1.1:5353\"]"))
             assertTrue(toml.contains("COTTENMAX_QNAME_LOSS_GUARD = true"))
+            assertTrue(toml.contains("COTTENMAX_FEC_DOWNLOAD_ENABLED = true"))
+            assertTrue(toml.contains("COTTENMAX_FEC_DATA_SHARDS = 8"))
+            assertTrue(toml.contains("COTTENMAX_FEC_PARITY_SHARDS = 2"))
+            assertTrue(toml.contains("RESOLVER_DISCOVERY_WANT = 4096"))
+            assertTrue(toml.contains("COTTENMAX_MAX_INFLIGHT = 4096"))
         }
         val storm = StormDnsConfigRenderer.renderClientToml(profile.copy(engine = DnsClientEngine.StormDns), WhiteDnsSettings())
         assertFalse(storm.contains("COTTENMAX"))
@@ -512,6 +519,8 @@ class StormDnsConfigRendererTest {
         assertFalse(compat.contains("COTTENMAX"))
         assertFalse(compat.contains("TUNNEL_MODE"))
         assertTrue(compat.contains("RESOLVER_TRANSPORT = \"udp\""))
+        val normal = StormDnsConfigRenderer.renderClientToml(profile.copy(cottenSettings = profile.cottenSettings.copy(tunnelMode = "legacy")), WhiteDnsSettings())
+        assertFalse(normal.contains("COTTENMAX_FEC"))
     }
 
     @Test

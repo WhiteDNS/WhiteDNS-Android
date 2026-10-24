@@ -9578,7 +9578,7 @@ private fun CottenDnsOptionalConnectionFields(
         }
         CottenMaxNumberField(profileId, "Address-range samples (0 disables)", options.discoverySampleRanges, 0, 4096) { update(options.copy(discoverySampleRanges = it)) }
         Text(text = "Discovery tests additional DNS endpoints. Range sampling is opt-in; cached candidates authenticate again on every connection.", style = MaterialTheme.typography.bodySmall)
-        CottenMaxNumberField(profileId, "Desired verified resolvers", options.discoveryWant, 1, 64) { update(options.copy(discoveryWant = it)) }
+        CottenMaxNumberField(profileId, "Desired verified resolvers", options.discoveryWant, 1, 4096) { update(options.copy(discoveryWant = it)) }
         CottenMaxNumberField(profileId, "Discovery concurrency", options.discoveryConcurrency, 1, 64) { update(options.copy(discoveryConcurrency = it)) }
         CottenMaxNumberField(profileId, "Discovery pace (ms)", options.discoveryPaceMs, 1, 60000) { update(options.copy(discoveryPaceMs = it)) }
     }
@@ -9586,7 +9586,15 @@ private fun CottenDnsOptionalConnectionFields(
     CottenMaxNumberField(profileId, "Maximum QNAME size", options.maxQName, 64, 253) { update(options.copy(maxQName = it)) }
     CottenMaxNumberField(profileId, "Maximum DNS answer size", options.maxAnswer, 512, 1232) { update(options.copy(maxAnswer = it)) }
     CottenMaxNumberField(profileId, "Per-path query window", options.maxPathWindow, 1, 1024) { update(options.copy(maxPathWindow = it)) }
-    CottenMaxNumberField(profileId, "Total in-flight queries", options.maxInflight, 1, 1024) { update(options.copy(maxInflight = it)) }
+    CottenMaxNumberField(profileId, "Total in-flight queries", options.maxInflight, 1, 4096) { update(options.copy(maxInflight = it)) }
+    ToggleRow("Download forward error correction (FEC)", options.fecDownloadEnabled) {
+        update(options.copy(fecDownloadEnabled = !options.fecDownloadEnabled))
+    }
+    Text(text = "FEC adds recovery data and uses extra bandwidth. Enabling it requires a server with CottenMax FEC support. Leave it off to connect to older servers.", style = MaterialTheme.typography.bodySmall)
+    if (options.fecDownloadEnabled) {
+        CottenMaxNumberField(profileId, "FEC data shards per block", options.fecDataShards, 2, 16) { update(options.copy(fecDataShards = it)) }
+        CottenMaxNumberField(profileId, "FEC recovery shards per block", options.fecParityShards, 1, 4) { update(options.copy(fecParityShards = it)) }
+    }
     CottenMaxNumberField(profileId, "Idle session retirement (ms)", options.sessionIdleMs, 1000, 90000) { update(options.copy(sessionIdleMs = it)) }
     WhiteDnsDropdownField("Held poll interval", options.holdMs,
         (0..1500 step 100).map { Choice(it, if (it == 0) "Off" else "$it ms") },

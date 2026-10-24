@@ -13,6 +13,9 @@ data class CottenMaxOptions(
     val maxAnswer: Int = 1232,
     val maxPathWindow: Int = 256,
     val maxInflight: Int = 256,
+    val fecDownloadEnabled: Boolean = false,
+    val fecDataShards: Int = 4,
+    val fecParityShards: Int = 1,
     val sessionIdleMs: Int = 90000,
     val holdMs: Int = 500,
     val discoveryEnabled: Boolean = false,
@@ -36,14 +39,16 @@ data class CottenMaxOptions(
         maxQName = maxQName.coerceIn(safeQName.coerceIn(64, 253), 253),
         maxAnswer = maxAnswer.coerceIn(512, 1232),
         maxPathWindow = maxPathWindow.coerceIn(1, 1024),
-        maxInflight = maxInflight.coerceIn(1, 1024),
+        maxInflight = maxInflight.coerceIn(1, 4096),
+        fecDataShards = fecDataShards.coerceIn(2, 16),
+        fecParityShards = fecParityShards.coerceIn(1, 4),
         sessionIdleMs = sessionIdleMs.coerceIn(1000, 90000),
         holdMs = holdMs.coerceIn(0, 1500) / 100 * 100,
         discoveryCountry = discoveryCountry.trim().lowercase().takeIf { it.matches(Regex("[a-z]{2}")) }.orEmpty(),
         discoverySampleRanges = discoverySampleRanges.coerceIn(0, 4096),
         discoveryNetworkId = discoveryNetworkId.take(256),
         discoveryCandidates = entries(discoveryCandidates).take(256).joinToString(", "),
-        discoveryWant = discoveryWant.coerceIn(1, 64),
+        discoveryWant = discoveryWant.coerceIn(1, 4096),
         discoveryConcurrency = discoveryConcurrency.coerceIn(1, 64),
         discoveryPaceMs = discoveryPaceMs.coerceIn(1, 60000),
         dnsPaddingBlockSize = if (dnsPaddingBlockSize <= 0) 0 else dnsPaddingBlockSize.coerceIn(16, 4096),
@@ -57,6 +62,9 @@ data class CottenMaxOptions(
         put("maxAnswer", maxAnswer)
         put("maxPathWindow", maxPathWindow)
         put("maxInflight", maxInflight)
+        put("fecDownloadEnabled", fecDownloadEnabled)
+        put("fecDataShards", fecDataShards)
+        put("fecParityShards", fecParityShards)
         put("sessionIdleMs", sessionIdleMs)
         put("holdMs", holdMs)
         put("discoveryEnabled", discoveryEnabled)
@@ -89,6 +97,9 @@ data class CottenMaxOptions(
                 maxAnswer = json.optInt("maxAnswer", defaults.maxAnswer),
                 maxPathWindow = json.optInt("maxPathWindow", defaults.maxPathWindow),
                 maxInflight = json.optInt("maxInflight", defaults.maxInflight),
+                fecDownloadEnabled = json.optBoolean("fecDownloadEnabled", defaults.fecDownloadEnabled),
+                fecDataShards = json.optInt("fecDataShards", defaults.fecDataShards),
+                fecParityShards = json.optInt("fecParityShards", defaults.fecParityShards),
                 sessionIdleMs = json.optInt("sessionIdleMs", defaults.sessionIdleMs),
                 holdMs = json.optInt("holdMs", defaults.holdMs),
                 discoveryEnabled = json.optBoolean("discoveryEnabled", defaults.discoveryEnabled),
