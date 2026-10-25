@@ -9,6 +9,21 @@ import shop.whitedns.client.storm.StormDnsConfigRenderer
 
 class CottenMaxOptionsTest {
     @Test
+    fun panelDomainsAndStandbysFitInitialHandshakeWithoutChangingSavedOptions() {
+        val standby = "cot.abcdefghijklmnopqrstuvwxyz.backup.example.org"
+        val options = CottenMaxOptions(standbyDomains = standby, maxQName = 101, labelCountJitter = true)
+        val profile = maxProfile(options).copy(
+            customServerDomain = "cot.abcdefghijklmnopqrstuvwxyz.soar.example.org",
+            cottenSettings = maxProfile(options).cottenSettings.copy(qnameMode = "aggressive"),
+        )
+        val toml = StormDnsConfigRenderer.renderClientToml(profile, settings(profile))
+        val required = "cottenmax-v1.$standby".length + 1 + 55 + 1 + 3
+        org.junit.Assert.assertTrue(toml.contains("COTTENMAX_SAFE_QNAME = $required"))
+        org.junit.Assert.assertTrue(toml.contains("COTTENMAX_MAX_QNAME = $required"))
+        assertEquals(101, profile.cottenSettings.cottenMaxOptions.safeQName)
+    }
+
+    @Test
     fun olderProfilesKeepFecOffAndExistingBudgets() {
         for (json in listOf(null, JSONObject())) {
             val options = CottenMaxOptions.fromJson(json)

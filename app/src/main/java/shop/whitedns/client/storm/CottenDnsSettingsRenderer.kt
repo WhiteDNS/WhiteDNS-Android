@@ -137,8 +137,23 @@ internal object CottenDnsSettingsRenderer {
         val standbys = CottenMaxOptions.entries(options.standbyDomains).filterNot { it in primary }.take((8 - primary.size).coerceAtLeast(0))
         if (standbys.isNotEmpty()) appendLine("STANDBY_DOMAINS = ${standbys.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
         appendLine("COTTENMAX_FAILOVER_AFTER_MILLISECONDS = ${options.failoverAfterMs}")
-        appendLine("COTTENMAX_SAFE_QNAME = ${options.safeQName}")
-        appendLine("COTTENMAX_MAX_QNAME = ${options.maxQName}")
+        val labelLength = when (cotten.qnameMode) {
+            "off" -> 63
+            "moderate" -> 42
+            "aggressive" -> 32
+            else -> qnameLabelLength(cotten.configPreset)
+        }
+        // Max's initial HELLO needs 55 base32 characters plus its reserved
+        // subtree and shaping separators. Panel account domains can exceed
+        // the capacity of the engine's 101-character starting budget.
+        val handshakeLength = (primary + standbys).maxOfOrNull {
+            "cottenmax-v1.$it".length + 1 + 55 + 54 / labelLength +
+                if (options.labelCountJitter) 3 else 0
+        } ?: 101
+        require(handshakeLength <= 253) { "CottenMax domain leaves insufficient DNS handshake capacity" }
+        val safeQName = maxOf(options.safeQName, handshakeLength)
+        appendLine("COTTENMAX_SAFE_QNAME = $safeQName")
+        appendLine("COTTENMAX_MAX_QNAME = ${maxOf(options.maxQName, safeQName)}")
         appendLine("COTTENMAX_MAX_ANSWER = ${options.maxAnswer}")
         appendLine("COTTENMAX_MAX_PATH_WINDOW = ${options.maxPathWindow}")
         appendLine("COTTENMAX_MAX_INFLIGHT = ${options.maxInflight}")
