@@ -5534,6 +5534,18 @@ private fun ConnectionProfileDialog(
                         Text(WhiteDnsL10n.cottenMaxSharedCredentialHint, style = MaterialTheme.typography.bodySmall)
                         Text(WhiteDnsL10n.cottenMaxReconnectHint, style = MaterialTheme.typography.bodySmall)
                         if (cotten.usesCottenMax) {
+                            WhiteDnsDropdownField(
+                                label = WhiteDnsL10n.cottenMaxTrafficProfileLabel,
+                                value = cotten.cottenMaxOptions.trafficProfile,
+                                options = listOf(Choice("full", WhiteDnsL10n.cottenMaxTrafficFull), Choice("low", WhiteDnsL10n.cottenMaxTrafficLow)),
+                                onValueChange = { cotten = cotten.copy(cottenMaxOptions = cotten.cottenMaxOptions.copy(trafficProfile = it)) },
+                            )
+                            Text(WhiteDnsL10n.cottenMaxTrafficProfileHint, style = MaterialTheme.typography.bodySmall)
+                            if (cotten.cottenMaxOptions.trafficProfile == "low") {
+                                CottenMaxLowReductionSlider(cotten.cottenMaxOptions.lowReductionPercent) {
+                                    cotten = cotten.copy(cottenMaxOptions = cotten.cottenMaxOptions.copy(lowReductionPercent = it))
+                                }
+                            }
                             Text(WhiteDnsL10n.cottenMaxCipherHint, style = MaterialTheme.typography.bodySmall)
                             Text(WhiteDnsL10n.cottenMaxAdaptiveHint, style = MaterialTheme.typography.bodySmall)
                         }
@@ -8926,7 +8938,14 @@ private fun buildDiagnosticsText(
         appendLine("Mode: ${WhiteDnsOptions.connectionModeLabel(resolvedSettings.connectionMode)}")
         appendLine("Profile: ${selectedProfile.name.ifBlank { selectedProfile.id }}")
         appendLine("Server: ${selectedProfile.customServerDomain.ifBlank { "not configured" }}")
-        if (selectedProfile.engine == DnsClientEngine.CottenDns) appendLine("CottenDNS mode: ${selectedProfile.cottenSettings.normalized().tunnelMode}")
+        if (selectedProfile.engine == DnsClientEngine.CottenDns) {
+            val cotten = selectedProfile.cottenSettings.normalized()
+            appendLine("CottenDNS mode: ${cotten.tunnelMode}")
+            if (cotten.usesCottenMax) {
+                appendLine("CottenMax traffic profile: ${cotten.cottenMaxOptions.trafficProfile}")
+                if (cotten.cottenMaxOptions.trafficProfile == "low") appendLine("CottenMax speed reduction target: ${cotten.cottenMaxOptions.lowReductionPercent}%")
+            }
+        }
         appendLine("Encryption key: ${selectedProfile.customServerEncryptionKey.ifBlank { "not configured" }}")
         appendLine("Resolver profile: ${resolverProfile?.name ?: "Manual resolvers"}")
         appendLine("Resolvers: ${resolvedSettings.resolverEntries.size}")
@@ -9475,6 +9494,33 @@ private fun localizedDnsClientEngines(): List<Choice<String>> = listOf(
     Choice(DnsClientEngine.CottenDns, WhiteDnsL10n.profileEngineCottenDns),
     Choice(DnsClientEngine.Soar, "Soar (experimental)"),
 )
+
+@Composable
+private fun CottenMaxLowReductionSlider(
+    percent: Int,
+    onPercentChange: (Int) -> Unit,
+) {
+    var sliderValue by remember(percent) { mutableStateOf(percent.coerceIn(10, 90).toFloat()) }
+    val displayed = sliderValue.roundToInt().coerceIn(10, 90)
+    val label = WhiteDnsL10n.cottenMaxLowReductionLabel
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SliderLabelValue(label, "$displayed%")
+        Slider(
+            modifier = Modifier.semantics { contentDescription = label },
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = { onPercentChange(displayed) },
+            valueRange = 10f..90f,
+            steps = 79,
+            colors = SliderDefaults.colors(
+                thumbColor = WhiteDnsPalette.Accent,
+                activeTrackColor = WhiteDnsPalette.Accent,
+                inactiveTrackColor = WhiteDnsPalette.ControlBorder,
+            ),
+        )
+        Text(WhiteDnsL10n.cottenMaxLowReductionHint, style = MaterialTheme.typography.bodySmall)
+    }
+}
 
 /**
  * CottenDNS-only: how many resolvers the background sweep probes at once after

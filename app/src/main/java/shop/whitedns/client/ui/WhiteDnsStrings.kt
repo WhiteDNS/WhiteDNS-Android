@@ -224,6 +224,12 @@ interface WhiteDnsStrings {
     val cottenMaxBetaMode: String
     val cottenMaxSharedCredentialHint: String
     val cottenMaxReconnectHint: String
+    val cottenMaxTrafficProfileLabel: String
+    val cottenMaxTrafficFull: String
+    val cottenMaxTrafficLow: String
+    val cottenMaxTrafficProfileHint: String
+    val cottenMaxLowReductionLabel: String
+    val cottenMaxLowReductionHint: String
     val cottenMaxCipherHint: String
     val cottenMaxAdaptiveHint: String
     val profileCottenSectionTitle: String
@@ -975,6 +981,12 @@ object EnglishStrings : WhiteDnsStrings {
     override val cottenMaxBetaMode = "CottenMax (beta)"
     override val cottenMaxSharedCredentialHint = "Both modes use this connection’s domain and key. Update the CottenDNS server once to enable Max; the updated server accepts both modes."
     override val cottenMaxReconnectHint = "Save changes, then disconnect and reconnect. If Max cannot connect, select Normal CottenDNS and reconnect with the same profile."
+    override val cottenMaxTrafficProfileLabel = "CottenMax traffic"
+    override val cottenMaxTrafficFull = "Full — maximum speed"
+    override val cottenMaxTrafficLow = "Low — reduced traffic"
+    override val cottenMaxTrafficProfileHint = "Low reduces DNS query bursts, resolver discovery and new connection attempts. Full keeps the current maximum-speed behavior. Save, then disconnect and reconnect to apply. Both use the same server."
+    override val cottenMaxLowReductionLabel = "Speed reduction target"
+    override val cottenMaxLowReductionHint = "Choose 10–90% (default 35%). This is an approximate reduction target relative to Full; actual speed depends on the network. Full ignores this setting."
     override val cottenMaxCipherHint = "Max uses its own Soar-compatible ChaCha20-Poly1305 encryption. Your normal-mode cipher setting is kept for switching back."
     override val cottenMaxAdaptiveHint = "Max adapts TXT/AAAA delivery and packet sizes automatically. Legacy delivery, compression and duplication settings do not control Max; use Advanced CottenMax options."
     override val profileCottenSectionTitle = "COTTENDNS SETTINGS"
@@ -1703,6 +1715,12 @@ object PersianStrings : WhiteDnsStrings {
     override val cottenMaxBetaMode = "CottenMax (بتا)"
     override val cottenMaxSharedCredentialHint = "هر دو حالت از دامنه و کلید همین اتصال استفاده می‌کنند. برای فعال شدن Max، سرور CottenDNS را یک بار به‌روز کنید؛ سرور جدید هر دو حالت را می‌پذیرد."
     override val cottenMaxReconnectHint = "تغییرات را ذخیره کنید، سپس اتصال را قطع و دوباره وصل کنید. اگر Max وصل نشد، CottenDNS معمولی را انتخاب کنید و با همین پروفایل دوباره وصل شوید."
+    override val cottenMaxTrafficProfileLabel = "ترافیک CottenMax"
+    override val cottenMaxTrafficFull = "کامل — بیشترین سرعت"
+    override val cottenMaxTrafficLow = "کم — ترافیک کمتر"
+    override val cottenMaxTrafficProfileHint = "حالت کم، جهش درخواست‌های DNS، جست‌وجوی resolver و تلاش برای اتصال‌های جدید را کاهش می‌دهد. حالت کامل رفتار فعلی با بیشترین سرعت را حفظ می‌کند. برای اعمال، ذخیره کنید و اتصال را قطع و دوباره وصل کنید. هر دو با همان سرور کار می‌کنند."
+    override val cottenMaxLowReductionLabel = "هدف کاهش سرعت"
+    override val cottenMaxLowReductionHint = "بین ۱۰ تا ۹۰٪ انتخاب کنید (پیش‌فرض ۳۵٪). این هدف تقریبی کاهش نسبت به حالت کامل است؛ سرعت واقعی به شبکه بستگی دارد. حالت کامل این تنظیم را نادیده می‌گیرد."
     override val cottenMaxCipherHint = "Max از رمزنگاری ChaCha20-Poly1305 سازگار با Soar استفاده می‌کند. تنظیم رمزنگاری حالت معمولی برای بازگشت شما حفظ می‌شود."
     override val cottenMaxAdaptiveHint = "Max نوع پاسخ TXT/AAAA و اندازه بسته‌ها را خودکار تنظیم می‌کند. تنظیمات قدیمی نوع پاسخ، فشرده‌سازی و تکثیر بر Max اثر ندارند؛ از گزینه‌های پیشرفته CottenMax استفاده کنید."
     override val profileCottenSectionTitle = "تنظیمات CottenDNS"

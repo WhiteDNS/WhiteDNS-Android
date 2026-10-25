@@ -399,6 +399,12 @@ object WhiteDnsL10n {
     val cottenMaxBetaMode: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxBetaMode
     val cottenMaxSharedCredentialHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxSharedCredentialHint
     val cottenMaxReconnectHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxReconnectHint
+    val cottenMaxTrafficProfileLabel: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxTrafficProfileLabel
+    val cottenMaxTrafficFull: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxTrafficFull
+    val cottenMaxTrafficLow: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxTrafficLow
+    val cottenMaxTrafficProfileHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxTrafficProfileHint
+    val cottenMaxLowReductionLabel: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxLowReductionLabel
+    val cottenMaxLowReductionHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxLowReductionHint
     val cottenMaxCipherHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxCipherHint
     val cottenMaxAdaptiveHint: String @Composable get() = LocalWhiteDnsStrings.current.cottenMaxAdaptiveHint
     val profileCottenSectionTitle: String @Composable get() = LocalWhiteDnsStrings.current.profileCottenSectionTitle

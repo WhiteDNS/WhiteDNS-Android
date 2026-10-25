@@ -6,6 +6,8 @@ import org.json.JSONObject
 // Optional settings belong to the existing CottenDNS connection. They never
 // introduce another engine, domain registration, credential or launch config.
 data class CottenMaxOptions(
+    val trafficProfile: String = "full",
+    val lowReductionPercent: Int = 35,
     val standbyDomains: String = "",
     val failoverAfterMs: Int = 3000,
     val safeQName: Int = 101,
@@ -33,6 +35,8 @@ data class CottenMaxOptions(
     val doh3FallbackToDoh: Boolean = false,
 ) : Serializable {
     fun normalized(): CottenMaxOptions = copy(
+        trafficProfile = if (trafficProfile.trim().equals("low", ignoreCase = true)) "low" else "full",
+        lowReductionPercent = lowReductionPercent.coerceIn(10, 90),
         standbyDomains = entries(standbyDomains).map { it.trimEnd('.').lowercase() }.distinct().take(7).joinToString(", "),
         failoverAfterMs = failoverAfterMs.coerceIn(100, 60000),
         safeQName = safeQName.coerceIn(64, 253),
@@ -55,6 +59,8 @@ data class CottenMaxOptions(
     )
 
     fun toJson(): JSONObject = JSONObject().apply {
+        put("trafficProfile", trafficProfile)
+        put("lowReductionPercent", lowReductionPercent)
         put("standbyDomains", standbyDomains)
         put("failoverAfterMs", failoverAfterMs)
         put("safeQName", safeQName)
@@ -90,6 +96,8 @@ data class CottenMaxOptions(
             if (json == null) return CottenMaxOptions()
             val defaults = CottenMaxOptions()
             return CottenMaxOptions(
+                trafficProfile = json.optString("trafficProfile", defaults.trafficProfile),
+                lowReductionPercent = json.optInt("lowReductionPercent", defaults.lowReductionPercent),
                 standbyDomains = json.optString("standbyDomains"),
                 failoverAfterMs = json.optInt("failoverAfterMs", defaults.failoverAfterMs),
                 safeQName = json.optInt("safeQName", defaults.safeQName),

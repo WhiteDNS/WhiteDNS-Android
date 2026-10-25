@@ -133,6 +133,8 @@ internal object CottenDnsSettingsRenderer {
             appendLine("RESOLVER_HTTP3_FALLBACK = true")
         }
         if (!cotten.usesCottenMax) return
+        appendLine("COTTENMAX_TRAFFIC_PROFILE = \"${options.trafficProfile}\"")
+        appendLine("COTTENMAX_LOW_REDUCTION_PERCENT = ${options.lowReductionPercent}")
         val primary = primaryDomain.split(',').map { it.trim().trimEnd('.').lowercase() }.distinct()
         val standbys = CottenMaxOptions.entries(options.standbyDomains).filterNot { it in primary }.take((8 - primary.size).coerceAtLeast(0))
         if (standbys.isNotEmpty()) appendLine("STANDBY_DOMAINS = ${standbys.joinToString(prefix = "[", postfix = "]") { "\"${escape(it)}\"" }}")
