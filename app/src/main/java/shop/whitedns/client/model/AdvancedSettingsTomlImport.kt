@@ -273,6 +273,8 @@ private fun parseAdvancedSettingsProfileFromToml(
 }
 
 private val CottenConnectionOptionKeys = setOf(
+    "COTTENMAX_TRAFFIC_PROFILE",
+    "COTTENMAX_LOW_REDUCTION_PERCENT",
     "COTTENMAX_FAILOVER_AFTER_MILLISECONDS",
     "COTTENMAX_SAFE_QNAME",
     "COTTENMAX_MAX_QNAME",
@@ -324,6 +326,12 @@ private fun WhiteDnsSettings.importCottenConnectionOptions(assignments: Map<Stri
     assignments["RESOLVER_DOH_PORT"]?.let { cotten = cotten.copy(resolverDoHPort = it.intValue("RESOLVER_DOH_PORT", 1, 65535).toString()) }
     assignments["RESOLVER_DOH_PATH"]?.let { cotten = cotten.copy(resolverDoHPath = it.stringValue("RESOLVER_DOH_PATH")) }
     var options = cotten.cottenMaxOptions
+    assignments["COTTENMAX_TRAFFIC_PROFILE"]?.let {
+        options = options.copy(trafficProfile = it.enumStringValue("COTTENMAX_TRAFFIC_PROFILE", setOf("FULL", "LOW")).lowercase(Locale.US))
+    }
+    assignments["COTTENMAX_LOW_REDUCTION_PERCENT"]?.let {
+        options = options.copy(lowReductionPercent = it.intValue("COTTENMAX_LOW_REDUCTION_PERCENT", 10, 90))
+    }
     assignments["COTTENMAX_FAILOVER_AFTER_MILLISECONDS"]?.let { options = options.copy(failoverAfterMs = it.intValue("COTTENMAX_FAILOVER_AFTER_MILLISECONDS", 100, 60000)) }
     assignments["COTTENMAX_SAFE_QNAME"]?.let { options = options.copy(safeQName = it.intValue("COTTENMAX_SAFE_QNAME", 64, 253)) }
     assignments["COTTENMAX_MAX_QNAME"]?.let { options = options.copy(maxQName = it.intValue("COTTENMAX_MAX_QNAME", 64, 253)) }

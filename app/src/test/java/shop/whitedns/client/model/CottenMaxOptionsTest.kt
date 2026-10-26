@@ -9,6 +9,57 @@ import shop.whitedns.client.storm.StormDnsConfigRenderer
 
 class CottenMaxOptionsTest {
     @Test
+    fun trafficProfileDefaultsToFullAndNormalizesStoredValues() {
+        for (json in listOf(null, JSONObject(), JSONObject().put("trafficProfile", "unknown"))) {
+            assertEquals("full", CottenMaxOptions.fromJson(json).trafficProfile)
+            assertEquals(35, CottenMaxOptions.fromJson(json).lowReductionPercent)
+        }
+        assertEquals("low", CottenMaxOptions.fromJson(JSONObject().put("trafficProfile", " LOW ")).trafficProfile)
+        assertEquals(10, CottenMaxOptions(lowReductionPercent = 0).normalized().lowReductionPercent)
+        assertEquals(90, CottenMaxOptions(lowReductionPercent = 100).normalized().lowReductionPercent)
+    }
+
+    @Test
+    fun trafficProfileSurvivesJsonProfileLinksAndToml() {
+        for (mode in listOf("full", "low")) {
+            val options = CottenMaxOptions(trafficProfile = mode, lowReductionPercent = 65, fecDownloadEnabled = true)
+            assertEquals(options, CottenMaxOptions.fromJson(options.toJson()))
+            val profile = maxProfile(options)
+            val settings = settings(profile)
+            val linked = WhiteDnsSettings().importStormDnsProfileLink(settings.exportStormDnsProfileLink(profile))
+            assertEquals(options, linked.selectedConnectionProfile().cottenSettings.cottenMaxOptions)
+            val toml = StormDnsConfigRenderer.renderClientToml(profile, settings)
+            org.junit.Assert.assertTrue(toml.contains("COTTENMAX_TRAFFIC_PROFILE = \"$mode\""))
+            org.junit.Assert.assertTrue(toml.contains("COTTENMAX_LOW_REDUCTION_PERCENT = 65"))
+            val imported = settings.importAdvancedSettingsProfileFromToml("Max traffic", toml)
+            assertEquals(options, imported.selectedConnectionProfile().cottenSettings.cottenMaxOptions)
+        }
+    }
+
+    @Test
+    fun normalModeDoesNotEmitMaxTrafficProfile() {
+        val profile = maxProfile(CottenMaxOptions(trafficProfile = "low")).let {
+            it.copy(cottenSettings = it.cottenSettings.copy(tunnelMode = "legacy"))
+        }
+        assertFalse(StormDnsConfigRenderer.renderClientToml(profile, settings(profile)).contains("COTTENMAX_TRAFFIC_PROFILE"))
+    }
+
+    @Test
+    fun tomlRejectsUnknownTrafficProfileRatherThanSilentlyRemovingTheLimit() {
+        val settings = settings(maxProfile(CottenMaxOptions(trafficProfile = "low")))
+        assertThrows(IllegalArgumentException::class.java) {
+            settings.importAdvancedSettingsProfileFromToml("Invalid Max", "COTTENMAX_TRAFFIC_PROFILE = \"turbo\"")
+        }
+        val imported = settings.importAdvancedSettingsProfileFromToml("Full Max", "COTTENMAX_TRAFFIC_PROFILE = \"FULL\"")
+        assertEquals("full", imported.selectedConnectionProfile().cottenSettings.cottenMaxOptions.trafficProfile)
+        for (value in listOf(9, 91)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                settings.importAdvancedSettingsProfileFromToml("Invalid target", "COTTENMAX_LOW_REDUCTION_PERCENT = $value")
+            }
+        }
+    }
+
+    @Test
     fun panelDomainsAndStandbysFitInitialHandshakeWithoutChangingSavedOptions() {
         val standby = "cot.abcdefghijklmnopqrstuvwxyz.backup.example.org"
         val options = CottenMaxOptions(standbyDomains = standby, maxQName = 101, labelCountJitter = true)
