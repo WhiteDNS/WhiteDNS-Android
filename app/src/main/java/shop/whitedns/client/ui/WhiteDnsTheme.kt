@@ -819,6 +819,25 @@ object WhiteDnsL10n {
     val qrScanNoCode: String @Composable get() = LocalWhiteDnsStrings.current.qrScanNoCode
     val qrScanCancelled: String @Composable get() = LocalWhiteDnsStrings.current.qrScanCancelled
 
+    val btnAdd: String @Composable get() = LocalWhiteDnsStrings.current.btnAdd
+    val scanManualEntry: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntry
+    val scanManualEntryTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryTitle
+    val scanManualEntryBody: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryBody
+    val scanManualEntryPlaceholder: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryPlaceholder
+    val scanManualEntryPaste: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryPaste
+    val scanManualEntryReadySuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryReadySuffix
+    val scanManualEntryInvalidSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryInvalidSuffix
+    val scanManualEntryEmpty: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryEmpty
+    val scanManualEntryClipboardEmpty: String @Composable get() = LocalWhiteDnsStrings.current.scanManualEntryClipboardEmpty
+    val scanReachabilityTitle: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityTitle
+    val scanReachabilityHint: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityHint
+    val scanReachabilityChecking: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityChecking
+    val scanReachabilityNoResponse: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityNoResponse
+    val scanReachabilityAgain: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityAgain
+    val scanReachabilityReachableSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityReachableSuffix
+    val scanReachabilityUnreachableSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityUnreachableSuffix
+    val scanReachabilityTestedSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityTestedSuffix
+
 }
 
 object WhiteDnsPalette {

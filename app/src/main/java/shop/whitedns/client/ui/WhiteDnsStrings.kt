@@ -32,6 +32,7 @@ interface WhiteDnsStrings {
     val btnDelete: String
     val btnCopy: String
     val btnShare: String
+    val btnAdd: String
 
     // App Settings dialog
     val appSettingsTitle: String
@@ -143,6 +144,23 @@ interface WhiteDnsStrings {
     val scanLabelWorkers: String
     val scanLabelProgress: String
     val scanAutoSave: String
+    val scanManualEntry: String
+    val scanManualEntryTitle: String
+    val scanManualEntryBody: String
+    val scanManualEntryPlaceholder: String
+    val scanManualEntryPaste: String
+    val scanManualEntryReadySuffix: String
+    val scanManualEntryInvalidSuffix: String
+    val scanManualEntryEmpty: String
+    val scanManualEntryClipboardEmpty: String
+    val scanReachabilityTitle: String
+    val scanReachabilityHint: String
+    val scanReachabilityChecking: String
+    val scanReachabilityNoResponse: String
+    val scanReachabilityAgain: String
+    val scanReachabilityReachableSuffix: String
+    val scanReachabilityUnreachableSuffix: String
+    val scanReachabilityTestedSuffix: String
 
     // Validation / error
     val serverRouteMissing: String
@@ -1392,6 +1410,25 @@ object EnglishStrings : WhiteDnsStrings {
     override val qrScanNoCode = "No WhiteDNS QR profile found"
     override val qrScanCancelled = "QR scan cancelled"
 
+    override val btnAdd = "Add"
+    override val scanManualEntry = "Enter servers manually"
+    override val scanManualEntryTitle = "Manual DNS servers"
+    override val scanManualEntryBody = "Type one DNS server per line, or paste a list from the clipboard. Ports and comma-separated entries are accepted."
+    override val scanManualEntryPlaceholder = "8.8.8.8\n1.1.1.1\n9.9.9.9:53"
+    override val scanManualEntryPaste = "Paste from clipboard"
+    override val scanManualEntryReadySuffix = "ready to scan"
+    override val scanManualEntryInvalidSuffix = "invalid"
+    override val scanManualEntryEmpty = "No valid DNS server found in the text"
+    override val scanManualEntryClipboardEmpty = "Clipboard has no text to paste"
+    override val scanReachabilityTitle = "Reachability from this network"
+    override val scanReachabilityHint = "Measured with a DNS query sent from this device; this is not an ICMP ping."
+    override val scanReachabilityChecking = "Checking…"
+    override val scanReachabilityNoResponse = "no response"
+    override val scanReachabilityAgain = "Test again"
+    override val scanReachabilityReachableSuffix = "reachable"
+    override val scanReachabilityUnreachableSuffix = "unreachable"
+    override val scanReachabilityTestedSuffix = "tested"
+
 }
 
 object PersianStrings : WhiteDnsStrings {
@@ -2124,5 +2161,24 @@ object PersianStrings : WhiteDnsStrings {
     override val profileBtnScanQr = "اسکن QR"
     override val qrScanNoCode = "هیچ پروفایل QR برای WhiteDNS پیدا نشد"
     override val qrScanCancelled = "اسکن QR لغو شد"
+
+    override val btnAdd = "افزودن"
+    override val scanManualEntry = "ورود دستی سرورها"
+    override val scanManualEntryTitle = "سرورهای DNS دستی"
+    override val scanManualEntryBody = "هر خط یک سرور DNS بنویسید یا فهرست را از کلیپ‌بورد بچسبانید. پورت و ورودی‌های جدا‌شده با ویرگول هم پذیرفته می‌شود."
+    override val scanManualEntryPlaceholder = "8.8.8.8\n1.1.1.1\n9.9.9.9:53"
+    override val scanManualEntryPaste = "چسباندن از کلیپ‌بورد"
+    override val scanManualEntryReadySuffix = "آماده برای اسکن"
+    override val scanManualEntryInvalidSuffix = "نامعتبر"
+    override val scanManualEntryEmpty = "هیچ سرور DNS معتبری در متن پیدا نشد"
+    override val scanManualEntryClipboardEmpty = "کلیپ‌بورد متنی برای چسباندن ندارد"
+    override val scanReachabilityTitle = "دسترسی از شبکه فعلی"
+    override val scanReachabilityHint = "با یک پرسش‌وجوی DNS از همین دستگاه سنجیده می‌شود؛ پینگ ICMP نیست."
+    override val scanReachabilityChecking = "در حال بررسی…"
+    override val scanReachabilityNoResponse = "بدون پاسخ"
+    override val scanReachabilityAgain = "آزمایش دوباره"
+    override val scanReachabilityReachableSuffix = "در دسترس"
+    override val scanReachabilityUnreachableSuffix = "در دسترس نیست"
+    override val scanReachabilityTestedSuffix = "آزمایش‌شده"
 
 }

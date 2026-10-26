@@ -125,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onScanFileSelected = viewModel::beginScanFromFile,
                     onScanDefaultListSelected = viewModel::beginScanFromDefaultResolvers,
+                    onScanManualEntriesSelected = viewModel::beginScanFromManualResolvers,
                     onScanStartClick = viewModel::startPreparedScan,
                     onScanConnectionProfileChange = viewModel::updateScanConnectionProfile,
                     onScanWorkerCountChange = viewModel::updateScanWorkerCount,

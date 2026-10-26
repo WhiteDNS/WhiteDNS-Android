@@ -1714,6 +1714,12 @@ class WhiteDnsViewModel(
         }
     }
 
+    fun beginScanFromManualResolvers(rawText: String) {
+        beginScanFromSource(sourceName = ManualScanSourceName) { sessionId ->
+            importManualScanResolvers(rawText, sessionId)
+        }
+    }
+
     private fun beginScanFromSource(
         sourceName: String,
         importSource: (String) -> ImportedScanResolverFile,
@@ -2478,6 +2484,30 @@ class WhiteDnsViewModel(
         )
     }
 
+    private fun importManualScanResolvers(rawText: String, sessionId: String): ImportedScanResolverFile {
+        val scanDir = File(File(appContext.noBackupFilesDir, "${selectedScanEngine()}/scan"), sessionId).apply {
+            mkdirs()
+        }
+        val resolverFile = File(scanDir, "manual.resolvers")
+        val summary = rawText.lineSequence().let { lines ->
+            WhiteDnsScannerResultStore.writePendingScanResolverFile(
+                lines = lines,
+                outputFile = resolverFile,
+            )
+        }
+        if (summary.totalResolverCount == 0) {
+            throw IllegalArgumentException("No valid resolver entries found in manual entry")
+        }
+        return ImportedScanResolverFile(
+            file = resolverFile,
+            sourceName = ManualScanSourceName,
+            pendingResolverCount = summary.pendingResolverCount,
+            totalResolverCount = summary.totalResolverCount,
+            alreadyValidResolverCount = summary.alreadyValidResolverCount,
+            invalidEntryCount = summary.invalidEntryCount,
+        )
+    }
+
     private fun buildPreparedScanMessage(imported: ImportedScanResolverFile): String {
         val parts = mutableListOf<String>()
         parts += "Imported ${imported.totalResolverCount} resolver${if (imported.totalResolverCount == 1) "" else "s"}"
@@ -3052,6 +3082,7 @@ class WhiteDnsViewModel(
         const val StaleScanStateTimeoutMillis = 15_000L
         const val ScannerResultProfileName = "Scanner result"
         const val DefaultScanResolverAssetName = "default_resolvers.txt"
+        const val ManualScanSourceName = "Manual entry"
         const val UidTrafficSourcePrefix = "uid:"
         const val VpnTrafficSourcePrefix = "vpn:"
         val ParallelTestConnectionModes = setOf(
