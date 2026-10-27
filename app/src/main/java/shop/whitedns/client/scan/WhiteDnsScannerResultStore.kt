@@ -77,23 +77,6 @@ object WhiteDnsScannerResultStore {
         }
     }
 
-    /** Reflows pasted text to one entry per line. Display only: no validation, dedupe or sort. */
-    fun formatResolverPaste(rawText: String): String {
-        return rawText.replace("\r\n", "\n").replace('\r', '\n')
-            .lineSequence()
-            .flatMap { rawLine ->
-                val line = rawLine.trim()
-                when {
-                    line.isEmpty() -> emptySequence()
-                    line.startsWith("#") -> sequenceOf(line)
-                    else -> line.split(',', ';', '\t').asSequence()
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                }
-            }
-            .joinToString("\n")
-    }
-
     fun normalizeResolverText(rawText: String): List<String> {
         return normalizeScanResolverText(rawText).normalizedResolvers
     }

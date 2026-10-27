@@ -837,8 +837,9 @@ object WhiteDnsL10n {
     val scanReachabilityReachableSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityReachableSuffix
     val scanReachabilityUnreachableSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityUnreachableSuffix
     val scanReachabilityTestedSuffix: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityTestedSuffix
-    val scanReachabilityGateHint: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityGateHint
     val scanReachabilityNoneReachable: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityNoneReachable
+    val scanReachabilityGateNote: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityGateNote
+    val scanReachabilityPending: String @Composable get() = LocalWhiteDnsStrings.current.scanReachabilityPending
 
 }
 

@@ -259,6 +259,7 @@ import shop.whitedns.client.model.syncSelectedConnectionProfileFields
 import shop.whitedns.client.scan.ResolverReachability
 import shop.whitedns.client.scan.ResolverReachabilityProbe
 import shop.whitedns.client.scan.WhiteDnsScannerResultStore
+import shop.whitedns.client.scan.tidyManualResolverText
 import shop.whitedns.client.storm.CottenDnsSettingsRenderer
 import shop.whitedns.client.storm.StormDnsConfigRenderer
 import com.google.zxing.BinaryBitmap
@@ -2115,32 +2116,30 @@ private fun ScanManualEntryDialog(
         }
     }
     var probeRequest by remember { mutableIntStateOf(0) }
+    val probeTargets = validation.normalizedResolvers.take(ResolverReachabilityProbe.MaxProbeCount)
     val reachability by produceState(
         initialValue = emptyMap<String, ResolverReachability>(),
-        text,
-        validation.normalizedResolvers,
+        probeTargets,
         probeRequest,
     ) {
-        val servers = validation.normalizedResolvers.take(ResolverReachabilityProbe.MaxProbeCount)
-        if (servers.isEmpty()) {
+        if (probeTargets.isEmpty()) {
             value = emptyMap()
             return@produceState
         }
         value = emptyMap()
         delay(ReachabilityDebounceMillis)
         value = ResolverReachabilityProbe.probeAll(
-            resolvers = servers,
-            maxConcurrency = 12,
+            resolvers = probeTargets,
             onResult = { result -> value = value + (result.resolver to result) },
         ).associateBy { it.resolver }
     }
-    val probeServers = remember(validation.normalizedResolvers) {
-        validation.normalizedResolvers.take(ResolverReachabilityProbe.MaxProbeCount)
-    }
-    val probing = probeServers.isNotEmpty() && reachability.size < probeServers.size
-    val reachableServers = probeServers.filter { reachability[it]?.reachable == true }
+    val probeRows = probeTargets.take(ResolverReachabilityProbe.MaxDisplayedRows)
+    val reachableServers = probeTargets.filter { reachability[it]?.reachable == true }
+    val probesFinished = probeTargets.isEmpty() || reachability.size >= probeTargets.size
+    val canAddResolvers = reachableServers.isNotEmpty() && probesFinished
     val validCount = validation.normalizedResolvers.size
-    val readyCount = if (probeServers.isNotEmpty() && !probing) reachableServers.size else validCount
+    val readyCount =
+        if (probeTargets.isNotEmpty() && probesFinished) reachableServers.size else validCount
     val invalidCount = validation.invalidEntries.size
     val summarySeparator = " · "
     val clipboardEmptyMessage = WhiteDnsL10n.scanManualEntryClipboardEmpty
@@ -2177,14 +2176,14 @@ private fun ScanManualEntryDialog(
                 value = text,
                 onValueChange = { newValue ->
                     text = if (newValue.contains(',') || newValue.contains(';')) {
-                        val formatted = WhiteDnsScannerResultStore.formatResolverPaste(newValue)
+                        val tidied = tidyManualResolverText(newValue)
                         val trimmed = newValue.trimEnd()
-                        if (formatted.isNotEmpty() &&
+                        if (tidied.isNotEmpty() &&
                             (trimmed.endsWith(',') || trimmed.endsWith(';'))
                         ) {
-                            "$formatted\n"
+                            "$tidied\n"
                         } else {
-                            formatted
+                            tidied
                         }
                     } else {
                         newValue
@@ -2222,9 +2221,8 @@ private fun ScanManualEntryDialog(
                     if (pasted.isEmpty()) {
                         pasteMessage = clipboardEmptyMessage
                     } else {
-                        val block = WhiteDnsScannerResultStore.formatResolverPaste(pasted)
-                        val combined = if (text.isBlank()) block else "${text.trimEnd()}\n$block"
-                        text = WhiteDnsScannerResultStore.formatResolverPaste(combined)
+                        val merged = if (text.isBlank()) pasted else "${text.trimEnd()}\n$pasted"
+                        text = tidyManualResolverText(merged)
                         pasteMessage = ""
                     }
                 },
@@ -2270,24 +2268,7 @@ private fun ScanManualEntryDialog(
                 ),
             )
             Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
-            Text(
-                text = WhiteDnsL10n.scanReachabilityGateHint,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 16.sp,
-                    color = WhiteDnsPalette.Muted,
-                ),
-            )
-            if (probing) {
-                Text(
-                    text = "${reachability.size}/${probeServers.size} ${WhiteDnsL10n.scanReachabilityTestedSuffix}",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.sp,
-                        color = WhiteDnsPalette.Muted,
-                    ),
-                )
-            }
-            probeServers.forEach { server ->
+            probeRows.forEach { server ->
                 val result = reachability[server]
                 val reachable = result?.reachable == true
                 val detail = when {
@@ -2307,9 +2288,35 @@ private fun ScanManualEntryDialog(
                     ),
                 )
             }
-            if (probeServers.isNotEmpty() && reachability.size >= probeServers.size) {
-                val reachableCount = probeServers.count { reachability[it]?.reachable == true }
-                val unreachableCount = probeServers.size - reachableCount
+            Text(
+                text = WhiteDnsL10n.scanReachabilityGateNote,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = WhiteDnsPalette.Muted,
+                ),
+            )
+            if (probeTargets.isNotEmpty() && !probesFinished) {
+                Text(
+                    text = WhiteDnsL10n.scanReachabilityPending,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                )
+            }
+            if (probeTargets.isNotEmpty() && probesFinished && reachableServers.isEmpty()) {
+                Text(
+                    text = WhiteDnsL10n.scanReachabilityNoneReachable,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Error,
+                    ),
+                )
+            }
+            if (probeTargets.isNotEmpty() && probesFinished) {
+                val reachableCount = probeTargets.count { reachability[it]?.reachable == true }
+                val unreachableCount = probeTargets.size - reachableCount
                 Text(
                     text = "$reachableCount ${WhiteDnsL10n.scanReachabilityReachableSuffix}" +
                         summarySeparator +
@@ -2320,18 +2327,9 @@ private fun ScanManualEntryDialog(
                     ),
                 )
             }
-            if (!probing && probeServers.isNotEmpty() && reachableServers.isEmpty()) {
+            if (probeTargets.size < validation.normalizedResolvers.size) {
                 Text(
-                    text = WhiteDnsL10n.scanReachabilityNoneReachable,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        color = WhiteDnsPalette.Error,
-                    ),
-                )
-            }
-            if (probeServers.size < validation.normalizedResolvers.size) {
-                Text(
-                    text = "${probeServers.size}/${validation.normalizedResolvers.size} " +
+                    text = "${probeTargets.size}/${validation.normalizedResolvers.size} " +
                         WhiteDnsL10n.scanReachabilityTestedSuffix,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.sp,
@@ -2339,13 +2337,13 @@ private fun ScanManualEntryDialog(
                     ),
                 )
             }
-            if (probeServers.isNotEmpty()) {
+            if (probeTargets.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
                 CompactActionButton(
                     modifier = Modifier.fillMaxWidth(),
                     label = WhiteDnsL10n.scanReachabilityAgain,
                     emphasized = false,
-                    enabled = !probing,
+                    enabled = probesFinished,
                     onClick = { probeRequest += 1 },
                 )
             }
@@ -2365,8 +2363,8 @@ private fun ScanManualEntryDialog(
                     modifier = Modifier.weight(1f),
                     label = WhiteDnsL10n.btnAdd,
                     emphasized = true,
-                    enabled = !probing && reachableServers.isNotEmpty(),
-                    onClick = { onSubmit(reachableServers.joinToString("\n")) },
+                    enabled = canAddResolvers,
+                    onClick = { onSubmit(reachableServers.joinToString(separator = "\n")) },
                 )
             }
         }

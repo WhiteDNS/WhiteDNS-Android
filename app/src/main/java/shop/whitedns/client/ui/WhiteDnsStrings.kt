@@ -161,8 +161,9 @@ interface WhiteDnsStrings {
     val scanReachabilityReachableSuffix: String
     val scanReachabilityUnreachableSuffix: String
     val scanReachabilityTestedSuffix: String
-    val scanReachabilityGateHint: String
     val scanReachabilityNoneReachable: String
+    val scanReachabilityGateNote: String
+    val scanReachabilityPending: String
 
     // Validation / error
     val serverRouteMissing: String
@@ -1430,8 +1431,9 @@ object EnglishStrings : WhiteDnsStrings {
     override val scanReachabilityReachableSuffix = "reachable"
     override val scanReachabilityUnreachableSuffix = "unreachable"
     override val scanReachabilityTestedSuffix = "tested"
-    override val scanReachabilityGateHint = "Only servers that answer from this network are added to the scan list."
-    override val scanReachabilityNoneReachable = "No server answered from this network, so nothing can be added."
+    override val scanReachabilityNoneReachable = "No server answers from this network"
+    override val scanReachabilityGateNote = "Only servers that answer from this network are added."
+    override val scanReachabilityPending = "Waiting for the reachability test…"
 
 }
 
@@ -2184,7 +2186,8 @@ object PersianStrings : WhiteDnsStrings {
     override val scanReachabilityReachableSuffix = "در دسترس"
     override val scanReachabilityUnreachableSuffix = "در دسترس نیست"
     override val scanReachabilityTestedSuffix = "آزمایش‌شده"
-    override val scanReachabilityGateHint = "فقط سرورهایی که از همین شبکه پاسخ می‌دهند به فهرست اسکن اضافه می‌شوند."
-    override val scanReachabilityNoneReachable = "هیچ سروری از همین شبکه پاسخ نداد؛ چیزی قابل افزودن نیست."
+    override val scanReachabilityNoneReachable = "هیچ سروری از این شبکه جواب نمی‌دهد"
+    override val scanReachabilityGateNote = "فقط سرورهایی که از همین شبکه جواب می‌دهند اضافه می‌شوند."
+    override val scanReachabilityPending = "در انتظار نتیجه آزمایش دسترسی…"
 
 }
