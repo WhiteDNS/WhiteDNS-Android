@@ -161,6 +161,8 @@ interface WhiteDnsStrings {
     val scanReachabilityReachableSuffix: String
     val scanReachabilityUnreachableSuffix: String
     val scanReachabilityTestedSuffix: String
+    val scanReachabilityGateHint: String
+    val scanReachabilityNoneReachable: String
 
     // Validation / error
     val serverRouteMissing: String
@@ -1413,7 +1415,7 @@ object EnglishStrings : WhiteDnsStrings {
     override val btnAdd = "Add"
     override val scanManualEntry = "Enter servers manually"
     override val scanManualEntryTitle = "Manual DNS servers"
-    override val scanManualEntryBody = "Type one DNS server per line, or paste a list from the clipboard. Ports and comma-separated entries are accepted."
+    override val scanManualEntryBody = "Type one DNS server per line, or paste a list from the clipboard. Comma-separated entries are split into one server per line automatically."
     override val scanManualEntryPlaceholder = "8.8.8.8\n1.1.1.1\n9.9.9.9:53"
     override val scanManualEntryPaste = "Paste from clipboard"
     override val scanManualEntryReadySuffix = "ready to scan"
@@ -1428,6 +1430,8 @@ object EnglishStrings : WhiteDnsStrings {
     override val scanReachabilityReachableSuffix = "reachable"
     override val scanReachabilityUnreachableSuffix = "unreachable"
     override val scanReachabilityTestedSuffix = "tested"
+    override val scanReachabilityGateHint = "Only servers that answer from this network are added to the scan list."
+    override val scanReachabilityNoneReachable = "No server answered from this network, so nothing can be added."
 
 }
 
@@ -2165,7 +2169,7 @@ object PersianStrings : WhiteDnsStrings {
     override val btnAdd = "افزودن"
     override val scanManualEntry = "ورود دستی سرورها"
     override val scanManualEntryTitle = "سرورهای DNS دستی"
-    override val scanManualEntryBody = "هر خط یک سرور DNS بنویسید یا فهرست را از کلیپ‌بورد بچسبانید. پورت و ورودی‌های جدا‌شده با ویرگول هم پذیرفته می‌شود."
+    override val scanManualEntryBody = "هر خط یک سرور DNS بنویسید یا فهرست را از کلیپ‌بورد بچسبانید. ورودی‌هایی که با ویرگول از هم جدا شده‌اند خودکار به یک سرور در هر خط تبدیل می‌شوند."
     override val scanManualEntryPlaceholder = "8.8.8.8\n1.1.1.1\n9.9.9.9:53"
     override val scanManualEntryPaste = "چسباندن از کلیپ‌بورد"
     override val scanManualEntryReadySuffix = "آماده برای اسکن"
@@ -2180,5 +2184,7 @@ object PersianStrings : WhiteDnsStrings {
     override val scanReachabilityReachableSuffix = "در دسترس"
     override val scanReachabilityUnreachableSuffix = "در دسترس نیست"
     override val scanReachabilityTestedSuffix = "آزمایش‌شده"
+    override val scanReachabilityGateHint = "فقط سرورهایی که از همین شبکه پاسخ می‌دهند به فهرست اسکن اضافه می‌شوند."
+    override val scanReachabilityNoneReachable = "هیچ سروری از همین شبکه پاسخ نداد؛ چیزی قابل افزودن نیست."
 
 }

@@ -2117,6 +2117,7 @@ private fun ScanManualEntryDialog(
     var probeRequest by remember { mutableIntStateOf(0) }
     val reachability by produceState(
         initialValue = emptyMap<String, ResolverReachability>(),
+        text,
         validation.normalizedResolvers,
         probeRequest,
     ) {
@@ -2127,12 +2128,19 @@ private fun ScanManualEntryDialog(
         }
         value = emptyMap()
         delay(ReachabilityDebounceMillis)
-        value = ResolverReachabilityProbe.probeAll(servers).associateBy { it.resolver }
+        value = ResolverReachabilityProbe.probeAll(
+            resolvers = servers,
+            maxConcurrency = 12,
+            onResult = { result -> value = value + (result.resolver to result) },
+        ).associateBy { it.resolver }
     }
     val probeServers = remember(validation.normalizedResolvers) {
         validation.normalizedResolvers.take(ResolverReachabilityProbe.MaxProbeCount)
     }
-    val readyCount = validation.normalizedResolvers.size
+    val probing = probeServers.isNotEmpty() && reachability.size < probeServers.size
+    val reachableServers = probeServers.filter { reachability[it]?.reachable == true }
+    val validCount = validation.normalizedResolvers.size
+    val readyCount = if (probeServers.isNotEmpty() && !probing) reachableServers.size else validCount
     val invalidCount = validation.invalidEntries.size
     val summarySeparator = " · "
     val clipboardEmptyMessage = WhiteDnsL10n.scanManualEntryClipboardEmpty
@@ -2167,8 +2175,20 @@ private fun ScanManualEntryDialog(
             WhiteDnsTextField(
                 label = WhiteDnsL10n.scanManualEntryTitle,
                 value = text,
-                onValueChange = {
-                    text = it
+                onValueChange = { newValue ->
+                    text = if (newValue.contains(',') || newValue.contains(';')) {
+                        val formatted = WhiteDnsScannerResultStore.formatResolverPaste(newValue)
+                        val trimmed = newValue.trimEnd()
+                        if (formatted.isNotEmpty() &&
+                            (trimmed.endsWith(',') || trimmed.endsWith(';'))
+                        ) {
+                            "$formatted\n"
+                        } else {
+                            formatted
+                        }
+                    } else {
+                        newValue
+                    }
                     pasteMessage = ""
                 },
                 placeholder = WhiteDnsL10n.scanManualEntryPlaceholder,
@@ -2202,8 +2222,9 @@ private fun ScanManualEntryDialog(
                     if (pasted.isEmpty()) {
                         pasteMessage = clipboardEmptyMessage
                     } else {
-                        val block = pasted.replace('\t', '\n')
-                        text = if (text.isBlank()) block else "${text.trimEnd()}\n$block"
+                        val block = WhiteDnsScannerResultStore.formatResolverPaste(pasted)
+                        val combined = if (text.isBlank()) block else "${text.trimEnd()}\n$block"
+                        text = WhiteDnsScannerResultStore.formatResolverPaste(combined)
                         pasteMessage = ""
                     }
                 },
@@ -2222,7 +2243,7 @@ private fun ScanManualEntryDialog(
             val countsText = "$readyCount ${WhiteDnsL10n.scanManualEntryReadySuffix}" +
                 summarySeparator +
                 "$invalidCount ${WhiteDnsL10n.scanManualEntryInvalidSuffix}"
-            val nothingParsed = text.isNotBlank() && readyCount == 0
+            val nothingParsed = text.isNotBlank() && validCount == 0
             Text(
                 text = if (nothingParsed) WhiteDnsL10n.scanManualEntryEmpty else countsText,
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -2248,6 +2269,24 @@ private fun ScanManualEntryDialog(
                     color = WhiteDnsPalette.Muted,
                 ),
             )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
+            Text(
+                text = WhiteDnsL10n.scanReachabilityGateHint,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = WhiteDnsPalette.Muted,
+                ),
+            )
+            if (probing) {
+                Text(
+                    text = "${reachability.size}/${probeServers.size} ${WhiteDnsL10n.scanReachabilityTestedSuffix}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                )
+            }
             probeServers.forEach { server ->
                 val result = reachability[server]
                 val reachable = result?.reachable == true
@@ -2281,6 +2320,15 @@ private fun ScanManualEntryDialog(
                     ),
                 )
             }
+            if (!probing && probeServers.isNotEmpty() && reachableServers.isEmpty()) {
+                Text(
+                    text = WhiteDnsL10n.scanReachabilityNoneReachable,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Error,
+                    ),
+                )
+            }
             if (probeServers.size < validation.normalizedResolvers.size) {
                 Text(
                     text = "${probeServers.size}/${validation.normalizedResolvers.size} " +
@@ -2297,7 +2345,7 @@ private fun ScanManualEntryDialog(
                     modifier = Modifier.fillMaxWidth(),
                     label = WhiteDnsL10n.scanReachabilityAgain,
                     emphasized = false,
-                    enabled = true,
+                    enabled = !probing,
                     onClick = { probeRequest += 1 },
                 )
             }
@@ -2317,8 +2365,8 @@ private fun ScanManualEntryDialog(
                     modifier = Modifier.weight(1f),
                     label = WhiteDnsL10n.btnAdd,
                     emphasized = true,
-                    enabled = readyCount > 0,
-                    onClick = { onSubmit(text) },
+                    enabled = !probing && reachableServers.isNotEmpty(),
+                    onClick = { onSubmit(reachableServers.joinToString("\n")) },
                 )
             }
         }

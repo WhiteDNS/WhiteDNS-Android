@@ -9,8 +9,12 @@ unreachable resolver is visible before it costs scan time.
 
 1. Open **Scan** and choose **Enter servers manually**.
 2. Type one server per line, or press **Paste from clipboard** to fill the box from
-   the clipboard.
-3. Confirming with **Add** prepares the scan exactly like the other two sources:
+   the clipboard. A comma-, semicolon- or tab-separated list is reflowed into one
+   server per line automatically, in the order it was pasted.
+3. The dialog probes every listed server from the current network. **Add** stays
+   disabled while the probe runs, and only servers that answered are submitted.
+   Entries marked `no response` never reach the scan list.
+4. Confirming with **Add** prepares the scan exactly like the other two sources:
    the status card shows `Source: Manual entry`, and **Start** begins the scan.
 
 The counter under the box reports how many valid servers the text contains and how
@@ -37,7 +41,15 @@ and its result is listed under **Reachability from this network**:
 - `no response` — it did not answer over UDP and did not accept a TCP connection.
 
 **Test again** repeats the run for the whole set, for example after switching between
-Wi-Fi and mobile data.
+Wi-Fi and mobile data. It is disabled while a run is in progress, and the progress
+line shows how many servers have been tested so far.
+
+### Only reachable servers are added
+
+**Add** submits only the servers whose probe answered, one per line; every
+`no response` entry is left out. Because of that, the button is disabled while the
+probe is still running and also when no server answered at all. The per-server list
+and the summary line show exactly which entries will be added.
 
 ### What the probe actually measures
 
@@ -47,9 +59,9 @@ Wi-Fi and mobile data.
   host and port is attempted; a successful handshake also counts as reachable.
 - There is **no ICMP ping**. Android does not allow ordinary apps to send ICMP, so a
   DNS round trip is the honest equivalent of "is this resolver usable from here".
-- At most 24 servers are probed per run, in batches of 8, to keep the dialog responsive
-  and avoid hammering the network. When the list is longer, the dialog shows how many
-  entries were tested.
+- At most 256 servers are probed per run, in batches of 12, to keep the dialog
+  responsive and avoid hammering the network. When the list is longer, the dialog
+  shows how many entries were tested, and only those tested entries can be added.
 - Closing the dialog cancels the run; a probe already in flight ends with its own
   1.5-second timeout. The text is re-parsed 600 ms after the last keystroke, so fast
   typing does not start a probe per character.
