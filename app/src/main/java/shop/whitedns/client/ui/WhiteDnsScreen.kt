@@ -121,7 +121,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
 import androidx.compose.runtime.withFrameNanos
@@ -207,6 +209,7 @@ import shop.whitedns.client.model.isValidSoarServer
 import shop.whitedns.client.model.DnsClientEngine
 import shop.whitedns.client.model.ResolverProfile
 import shop.whitedns.client.model.ResolverRuntimeState
+import shop.whitedns.client.model.ResolverTextValidation
 import shop.whitedns.client.model.ServerDomains
 import shop.whitedns.client.model.ServerTestResult
 import shop.whitedns.client.model.ServerTestState
@@ -253,6 +256,10 @@ import shop.whitedns.client.model.validateResolverText
 import shop.whitedns.client.model.WhiteDnsAutoTunePresets
 import shop.whitedns.client.model.WhiteDnsParallelTest
 import shop.whitedns.client.model.syncSelectedConnectionProfileFields
+import shop.whitedns.client.scan.ResolverReachability
+import shop.whitedns.client.scan.ResolverReachabilityProbe
+import shop.whitedns.client.scan.WhiteDnsScannerResultStore
+import shop.whitedns.client.scan.tidyManualResolverText
 import shop.whitedns.client.storm.CottenDnsSettingsRenderer
 import shop.whitedns.client.storm.StormDnsConfigRenderer
 import com.google.zxing.BinaryBitmap
@@ -268,6 +275,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -282,6 +290,7 @@ fun WhiteDnsScreen(
     onConnectClick: () -> Unit,
     onScanFileSelected: (Uri) -> Unit,
     onScanDefaultListSelected: () -> Unit,
+    onScanManualEntriesSelected: (String) -> Unit,
     onScanStartClick: () -> Unit,
     onScanConnectionProfileChange: (String) -> Unit,
     onScanWorkerCountChange: (String) -> Unit,
@@ -370,6 +379,7 @@ fun WhiteDnsScreen(
                                 uiState = uiState,
                                 onScanFileSelected = onScanFileSelected,
                                 onScanDefaultListSelected = onScanDefaultListSelected,
+                                onScanManualEntriesSelected = onScanManualEntriesSelected,
                                 onScanStartClick = onScanStartClick,
                                 onScanConnectionProfileChange = onScanConnectionProfileChange,
                                 onScanWorkerCountChange = onScanWorkerCountChange,
@@ -431,6 +441,7 @@ private const val MtuParallelismMin = 50
 private const val MtuParallelismMax = 1000
 private const val MtuParallelismStep = 50
 private const val MtuParallelismDefault = 100
+private const val ReachabilityDebounceMillis = 600L
 
 private enum class CompactActionTone {
     Default,
@@ -1768,6 +1779,7 @@ private fun ScanTabContent(
     uiState: WhiteDnsUiState,
     onScanFileSelected: (Uri) -> Unit,
     onScanDefaultListSelected: () -> Unit,
+    onScanManualEntriesSelected: (String) -> Unit,
     onScanStartClick: () -> Unit,
     onScanConnectionProfileChange: (String) -> Unit,
     onScanWorkerCountChange: (String) -> Unit,
@@ -1797,6 +1809,7 @@ private fun ScanTabContent(
         selectedScanConnectionProfile.customServerEncryptionKey.isBlank()
     var showScanInfoNotice by rememberSaveable { mutableStateOf(true) }
     var showSaveAsDialog by rememberSaveable(scanState.sessionId) { mutableStateOf(false) }
+    var showManualEntryDialog by rememberSaveable { mutableStateOf(false) }
     val saveAsResolverEntries = remember(scanState.validResolverEntries) {
         scanState.validResolverEntries
             .map(String::trim)
@@ -1852,6 +1865,13 @@ private fun ScanTabContent(
                     },
                 )
             }
+            CompactActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                label = WhiteDnsL10n.scanManualEntry,
+                emphasized = false,
+                enabled = !scanState.isRunning,
+                onClick = { showManualEntryDialog = true },
+            )
             ScanWorkerSlider(
                 workerCount = workerCount,
                 enabled = !scanState.isRunning,
@@ -1990,6 +2010,16 @@ private fun ScanTabContent(
             },
         )
     }
+
+    if (showManualEntryDialog) {
+        ScanManualEntryDialog(
+            onDismiss = { showManualEntryDialog = false },
+            onSubmit = { text ->
+                showManualEntryDialog = false
+                onScanManualEntriesSelected(text)
+            },
+        )
+    }
 }
 
 private fun scanCanResume(scanState: WhiteDnsScanState): Boolean {
@@ -2069,6 +2099,275 @@ private fun ScanInfoNotice(
         }
         WhiteDnsCloseButton(onClick = onDismiss,
             contentDescription = WhiteDnsL10n.cdDismissScannerInfo, tint = WhiteDnsPalette.AccentText)
+    }
+}
+
+@Composable
+private fun ScanManualEntryDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
+) {
+    var text by rememberSaveable { mutableStateOf("") }
+    var pasteMessage by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val validation by produceState(ResolverTextValidation(emptyList(), emptyList()), text) {
+        value = withContext(Dispatchers.Default) {
+            WhiteDnsScannerResultStore.normalizeScanResolverLines(text.lineSequence())
+        }
+    }
+    var probeRequest by remember { mutableIntStateOf(0) }
+    val probeTargets = validation.normalizedResolvers.take(ResolverReachabilityProbe.MaxProbeCount)
+    val reachability by produceState(
+        initialValue = emptyMap<String, ResolverReachability>(),
+        probeTargets,
+        probeRequest,
+    ) {
+        if (probeTargets.isEmpty()) {
+            value = emptyMap()
+            return@produceState
+        }
+        value = emptyMap()
+        delay(ReachabilityDebounceMillis)
+        value = ResolverReachabilityProbe.probeAll(
+            resolvers = probeTargets,
+            onResult = { result -> value = value + (result.resolver to result) },
+        ).associateBy { it.resolver }
+    }
+    val probeRows = probeTargets.take(ResolverReachabilityProbe.MaxDisplayedRows)
+    val reachableServers = probeTargets.filter { reachability[it]?.reachable == true }
+    val probesFinished = probeTargets.isEmpty() || reachability.size >= probeTargets.size
+    val canAddResolvers = reachableServers.isNotEmpty() && probesFinished
+    val validCount = validation.normalizedResolvers.size
+    val readyCount =
+        if (probeTargets.isNotEmpty() && probesFinished) reachableServers.size else validCount
+    val invalidCount = validation.invalidEntries.size
+    val summarySeparator = " · "
+    val clipboardEmptyMessage = WhiteDnsL10n.scanManualEntryClipboardEmpty
+
+    WhiteDnsDialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(WhiteDnsRadii.dialog))
+                .background(WhiteDnsPalette.Surface)
+                .border(1.dp, WhiteDnsPalette.Border, RoundedCornerShape(WhiteDnsRadii.dialog))
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+        ) {
+            Text(
+                text = WhiteDnsL10n.scanManualEntryTitle,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    color = WhiteDnsPalette.Ink,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            Text(
+                text = WhiteDnsL10n.scanManualEntryBody,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = WhiteDnsPalette.Muted,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            WhiteDnsTextField(
+                label = WhiteDnsL10n.scanManualEntryTitle,
+                value = text,
+                onValueChange = { newValue ->
+                    text = if (newValue.contains(',') || newValue.contains(';')) {
+                        val tidied = tidyManualResolverText(newValue)
+                        val trimmed = newValue.trimEnd()
+                        if (tidied.isNotEmpty() &&
+                            (trimmed.endsWith(',') || trimmed.endsWith(';'))
+                        ) {
+                            "$tidied\n"
+                        } else {
+                            tidied
+                        }
+                    } else {
+                        newValue
+                    }
+                    pasteMessage = ""
+                },
+                placeholder = WhiteDnsL10n.scanManualEntryPlaceholder,
+                singleLine = false,
+                minLines = 6,
+                maxLines = 10,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    capitalization = KeyboardCapitalization.None,
+                ),
+                rawValue = true,
+                showLabel = false,
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.sm))
+            CompactActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                label = WhiteDnsL10n.scanManualEntryPaste,
+                emphasized = false,
+                enabled = true,
+                onClick = {
+                    val pasted = runCatching {
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.primaryClip
+                            ?.takeIf { clip ->
+                                clip.itemCount > 0 && clip.description?.hasMimeType("text/*") == true
+                            }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                    }.getOrNull()?.trim().orEmpty()
+                    if (pasted.isEmpty()) {
+                        pasteMessage = clipboardEmptyMessage
+                    } else {
+                        val merged = if (text.isBlank()) pasted else "${text.trimEnd()}\n$pasted"
+                        text = tidyManualResolverText(merged)
+                        pasteMessage = ""
+                    }
+                },
+            )
+            if (pasteMessage.isNotBlank()) {
+                Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
+                Text(
+                    text = pasteMessage,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Error,
+                    ),
+                )
+            }
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            val countsText = "$readyCount ${WhiteDnsL10n.scanManualEntryReadySuffix}" +
+                summarySeparator +
+                "$invalidCount ${WhiteDnsL10n.scanManualEntryInvalidSuffix}"
+            val nothingParsed = text.isNotBlank() && validCount == 0
+            Text(
+                text = if (nothingParsed) WhiteDnsL10n.scanManualEntryEmpty else countsText,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 13.sp,
+                    color = if (nothingParsed) WhiteDnsPalette.Error else WhiteDnsPalette.Muted,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            Text(
+                text = WhiteDnsL10n.scanReachabilityTitle,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = WhiteDnsPalette.Ink,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
+            Text(
+                text = WhiteDnsL10n.scanReachabilityHint,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = WhiteDnsPalette.Muted,
+                ),
+            )
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
+            probeRows.forEach { server ->
+                val result = reachability[server]
+                val reachable = result?.reachable == true
+                val detail = when {
+                    result == null -> WhiteDnsL10n.scanReachabilityChecking
+                    reachable -> "${result.latencyMillis ?: 0} ms"
+                    else -> WhiteDnsL10n.scanReachabilityNoResponse
+                }
+                Text(
+                    text = "$server · $detail",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = when {
+                            result == null -> WhiteDnsPalette.Muted
+                            reachable -> WhiteDnsPalette.AccentText
+                            else -> WhiteDnsPalette.Error
+                        },
+                    ),
+                )
+            }
+            Text(
+                text = WhiteDnsL10n.scanReachabilityGateNote,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = WhiteDnsPalette.Muted,
+                ),
+            )
+            if (probeTargets.isNotEmpty() && !probesFinished) {
+                Text(
+                    text = WhiteDnsL10n.scanReachabilityPending,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                )
+            }
+            if (probeTargets.isNotEmpty() && probesFinished && reachableServers.isEmpty()) {
+                Text(
+                    text = WhiteDnsL10n.scanReachabilityNoneReachable,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Error,
+                    ),
+                )
+            }
+            if (probeTargets.isNotEmpty() && probesFinished) {
+                val reachableCount = probeTargets.count { reachability[it]?.reachable == true }
+                val unreachableCount = probeTargets.size - reachableCount
+                Text(
+                    text = "$reachableCount ${WhiteDnsL10n.scanReachabilityReachableSuffix}" +
+                        summarySeparator +
+                        "$unreachableCount ${WhiteDnsL10n.scanReachabilityUnreachableSuffix}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                )
+            }
+            if (probeTargets.size < validation.normalizedResolvers.size) {
+                Text(
+                    text = "${probeTargets.size}/${validation.normalizedResolvers.size} " +
+                        WhiteDnsL10n.scanReachabilityTestedSuffix,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        color = WhiteDnsPalette.Muted,
+                    ),
+                )
+            }
+            if (probeTargets.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(WhiteDnsSpacing.xs))
+                CompactActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    label = WhiteDnsL10n.scanReachabilityAgain,
+                    emphasized = false,
+                    enabled = probesFinished,
+                    onClick = { probeRequest += 1 },
+                )
+            }
+            Spacer(modifier = Modifier.height(WhiteDnsSpacing.md))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CompactActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = WhiteDnsL10n.btnCancel,
+                    emphasized = false,
+                    enabled = true,
+                    onClick = onDismiss,
+                )
+                CompactActionButton(
+                    modifier = Modifier.weight(1f),
+                    label = WhiteDnsL10n.btnAdd,
+                    emphasized = true,
+                    enabled = canAddResolvers,
+                    onClick = { onSubmit(reachableServers.joinToString(separator = "\n")) },
+                )
+            }
+        }
     }
 }
 

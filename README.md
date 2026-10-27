@@ -46,6 +46,9 @@ Edit a CottenDNS connection profile, keep the same domain and key, and select **
 - `stormdns://` and `soar://` profile import/export; tap a connection card to select it.
 - HTTP/HTTPS subscription import and refresh, with stable profiles, quota/expiry snapshots and automatic due refresh while disconnected.
 - Resolver profile management with validation and default resolver assets.
+- Scan tab accepts the default list, a resolver file, or DNS servers typed and pasted
+  by hand, and reports each manual server's reachability and latency from the current
+  network before scanning. See [docs/MANUAL_SCAN.md](docs/MANUAL_SCAN.md).
 - Split tunnel options for VPN routing.
 - Runtime connection logs, resolver state, progress, and traffic statistics.
 - Foreground service notifications for long-running proxy and VPN sessions.
