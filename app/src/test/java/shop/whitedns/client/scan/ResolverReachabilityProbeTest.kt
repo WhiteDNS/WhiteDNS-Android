@@ -135,6 +135,22 @@ class ResolverReachabilityProbeTest {
         assertFalse(results[1].reachable)
     }
 
+    @Test
+    fun probeAllInvokesOnResultOncePerResolverInInputOrder() = runBlocking {
+        val resolvers = listOf("127.0.0.1:1", "1.1.1.1:abc", "127.0.0.1:2")
+        val reported = mutableListOf<String>()
+
+        val results = ResolverReachabilityProbe.probeAll(
+            resolvers,
+            timeoutMillis = 100,
+            maxConcurrency = 2,
+            onResult = { reported += it.resolver },
+        )
+
+        assertEquals(resolvers, reported)
+        assertEquals(resolvers, results.map { it.resolver })
+    }
+
     private fun word(bytes: ByteArray, offset: Int): Int =
         ((bytes[offset].toInt() and 0xFF) shl 8) or (bytes[offset + 1].toInt() and 0xFF)
 }

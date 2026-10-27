@@ -22,7 +22,7 @@ data class ResolverReachability(
 )
 
 object ResolverReachabilityProbe {
-    const val MaxProbeCount = 24
+    const val MaxProbeCount = 256
     const val DefaultTimeoutMillis = 1_500
     private const val ProbeName = "example.com"
 
@@ -30,11 +30,14 @@ object ResolverReachabilityProbe {
         resolvers: List<String>,
         timeoutMillis: Int = DefaultTimeoutMillis,
         maxConcurrency: Int = 8,
+        onResult: (ResolverReachability) -> Unit = {},
     ): List<ResolverReachability> = coroutineScope {
         resolvers.chunked(maxConcurrency.coerceAtLeast(1)).flatMap { chunk ->
-            chunk.map { resolver ->
+            val batch = chunk.map { resolver ->
                 async(Dispatchers.IO) { probe(resolver, timeoutMillis) }
             }.awaitAll()
+            batch.forEach(onResult)
+            batch
         }
     }
 
