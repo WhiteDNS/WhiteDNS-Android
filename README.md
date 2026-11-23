@@ -10,13 +10,20 @@
   <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases/download/1.6.8/WhiteDNS-1.6.8-universal.apk">Android APK 1.6.8 — all architectures</a>
 </p>
 
+<p align="center">
+  <a href="https://whitedns.github.io/WhiteDNS-F-Droid/">
+    <img src="https://f-droid.org/assets/fdroid-logo.svg" alt="" width="40" align="middle">
+    <strong>Add the WhiteDNS repository to F-Droid / افزودن مخزن WhiteDNS به F-Droid</strong>
+  </a>
+</p>
+
 **[All releases / همهٔ نسخه‌ها](https://github.com/WhiteDNS/WhiteDNS-Android/releases)**
 
 WhiteDNS is an Android application for running a local DNS tunneling client with proxy and VPN modes.
 
 > **NOTICE:** WhiteDNS is source-available proprietary software. The code is published for transparency, review, and contribution to this official project only. You may not copy the app into a separate product, publish modified builds, repackage APKs, redistribute binaries, clone the branding, or reuse the WhiteDNS name, logo, icon, design, or visual identity.
 
-> **APP STORE WARNING:** WhiteDNS does not have any publication on Google Play. Any WhiteDNS APK, listing, or package found on Google Play or another app marketplace is not an official release from this project and may be modified, outdated, or unsafe. Use only this repository and the official Telegram channel for project updates.
+> **APP STORE WARNING:** WhiteDNS does not have any publication on Google Play. The official distribution channels are this repository, the WhiteDNS F-Droid repository linked above, and the official Telegram channel. APKs and listings elsewhere may be modified, outdated, or unsafe.
 
 Official channel: [https://t.me/whitedns](https://t.me/whitedns)
 
