@@ -1,3 +1,5 @@
+import com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -5,9 +7,9 @@ plugins {
 
 val whiteDnsVersionCode = providers.gradleProperty("WHITE_DNS_VERSION_CODE")
     .map { it.toInt() }
-    .orElse(40)
+    .orElse(41)
 val whiteDnsVersionName = providers.gradleProperty("WHITE_DNS_VERSION_NAME")
-    .orElse("1.6.16")
+    .orElse("1.6.17")
 
 android {
     namespace = "shop.whitedns.client"
@@ -19,7 +21,8 @@ android {
         minSdk = 26
         targetSdk = 34
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = whiteDnsVersionCode.get()
+        // Reserve the last digit for APK architecture.
+        versionCode = whiteDnsVersionCode.get() * 10
         versionName = whiteDnsVersionName.get()
 
         vectorDrawables {
@@ -70,6 +73,16 @@ android {
         }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86" to 3, "x86_64" to 4)
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == ABI }?.identifier ?: return@forEach
+            output.versionCode.set(output.versionCode.get() + abiCodes.getValue(abi))
         }
     }
 }

@@ -142,6 +142,7 @@ jobs:
           mkdir -p dist
 
           shopt -s nullglob
+          declare -A abi_codes=([universal]=0 [armeabi-v7a]=1 [arm64-v8a]=2 [x86]=3 [x86_64]=4)
           unsigned_apks=(app/build/outputs/apk/release/*-release-unsigned.apk)
           if (( ${#unsigned_apks[@]} == 0 )); then
             echo "::error::No unsigned release APKs found."
@@ -163,6 +164,12 @@ jobs:
               --out "${signed_apk}" \
               "${aligned_apk}"
             "${BUILD_TOOLS_DIR}/apksigner" verify --verbose "${signed_apk}"
+            expected_version_code=$((GITHUB_RUN_NUMBER * 10 + abi_codes[$abi_name]))
+            badging="$("${BUILD_TOOLS_DIR}/aapt" dump badging "${signed_apk}")"
+            grep -Fq "versionCode='$expected_version_code'" <<< "$badging"
+            if [[ "$abi_name" != universal ]]; then
+              grep -Eq "^native-code: '$abi_name'[[:space:]]*$" <<< "$badging"
+            fi
           done
 
           cp THIRD_PARTY_NOTICES.md "dist/WhiteDNS-${TAG_NAME}-THIRD_PARTY_NOTICES.md"
